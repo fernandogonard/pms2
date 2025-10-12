@@ -1,0 +1,148 @@
+/* Estilos modernos y responsivos para el formulario de reserva */
+.room-reservation-form {
+  margin-top: 16px;
+  background: #18191A;
+  padding: 24px 20px 16px 20px;
+  border-radius: 16px;
+  box-shadow: 0 2px 16px 0 #00000033;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.room-reservation-form .form-row {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.room-reservation-form input {
+  background: #23272F;
+  color: #fff;
+  border: 1.5px solid #35363A;
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 1rem;
+  outline: none;
+  transition: border 0.2s;
+  flex: 1 1 140px;
+}
+.room-reservation-form input:focus {
+  border: 1.5px solid #2563eb;
+  background: #23272F;
+}
+.room-reservation-form button {
+  background: linear-gradient(90deg, #2563eb 60%, #1e40af 100%);
+  color: #fff;
+  border: none;
+  padding: 12px 0;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 1.08rem;
+  cursor: pointer;
+  margin-top: 8px;
+  transition: background 0.2s;
+}
+.room-reservation-form button:disabled {
+  background: #35363A;
+  color: #aaa;
+  cursor: not-allowed;
+}
+.room-reservation-form .message {
+  color: #22c55e;
+  margin-top: 10px;
+  font-weight: 600;
+  font-size: 1rem;
+}
+.room-reservation-form .error {
+  color: #ef4444;
+  margin-top: 10px;
+  font-weight: 600;
+  font-size: 1rem;
+}
+/* Estilos para información de precios */
+.pricing-info {
+  background: #1e2026;
+  padding: 16px;
+  border-radius: 12px;
+  border: 1px solid #35363A;
+  margin-bottom: 8px;
+}
+
+.pricing-info h4 {
+  color: #fff;
+  margin: 0 0 12px 0;
+  font-size: 1.1rem;
+}
+
+.pricing-details {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.pricing-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: #bbb;
+  font-size: 0.95rem;
+}
+
+.pricing-row.total {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid #35363A;
+  color: #fff;
+  font-size: 1.1rem;
+}
+
+.loading-price {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #bbb;
+  font-size: 0.9rem;
+  padding: 8px 0;
+}
+
+.loading-price .spinner {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border: 2px solid #35363A;
+  border-top: 2px solid #2563eb;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+@media (max-width: 700px) {
+  .room-reservation-form {
+    padding: 14px 6px 10px 6px;
+    border-radius: 10px;
+  }
+  .room-reservation-form .form-row {
+    flex-direction: column;
+    gap: 8px;
+  }
+  .room-reservation-form input {
+    font-size: 0.98rem;
+    padding: 8px 8px;
+  }
+  .room-reservation-form button {
+    font-size: 1rem;
+    padding: 10px 0;
+  }
+  .pricing-info {
+    padding: 12px;
+  }
+  .pricing-info h4 {
+    font-size: 1rem;
+  }
+  .pricing-row {
+    font-size: 0.9rem;
+  }
+}

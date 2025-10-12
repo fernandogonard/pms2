@@ -1,0 +1,199 @@
+/* frontend/src/styles/performance.css */
+/* CSS optimizado para resolver warnings de Bootstrap y mejorar rendimiento */
+
+/* Suprimir warnings específicos de Bootstrap - vendor prefixes modernos */
+@supports (-webkit-appearance: none) {
+  /* Webkit specific styles */
+  .form-control::-webkit-input-placeholder { color: #6c757d; }
+  .form-select::-webkit-inner-spin-button { -webkit-appearance: none; }
+  .btn::-webkit-focus-inner { border: 0; }
+}
+
+@supports (-moz-appearance: none) {
+  /* Firefox specific styles */
+  .form-control::-moz-placeholder { color: #6c757d; opacity: 1; }
+  .form-select { 
+    -moz-appearance: none;
+    appearance: none;
+  }
+  .btn::-moz-focus-inner { border: 0; padding: 0; }
+}
+
+/* CSS moderno que reemplaza prefijos obsoletos */
+.row {
+  --bs-gutter-x: 1.5rem;
+  --bs-gutter-y: 0;
+  column-gap: var(--bs-gutter-x);
+  row-gap: var(--bs-gutter-y);
+}
+
+/* Optimizaciones específicas para el CRM */
+.crm-container {
+  contain: layout style paint;
+  will-change: auto;
+}
+
+/* Lazy loading optimizations */
+.lazy-component {
+  content-visibility: auto;
+  contain-intrinsic-size: 300px;
+}
+
+/* Suprimir animaciones en reducción de movimiento */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Optimización de renders para tablas grandes */
+.data-table {
+  contain: layout;
+  transform: translateZ(0);
+}
+
+.data-table tbody tr {
+  contain: layout style;
+}
+
+/* Optimización de memoria para listas virtualizadas */
+.virtual-list-item {
+  contain: strict;
+  content-visibility: auto;
+}
+
+/* Crítico: CSS para error boundaries */
+.error-boundary {
+  padding: 20px;
+  border: 2px solid #dc3545;
+  border-radius: 8px;
+  background: #f8d7da;
+  color: #721c24;
+  text-align: center;
+}
+
+.error-boundary h2 {
+  color: #721c24;
+  margin-bottom: 16px;
+}
+
+.error-boundary button {
+  background: #dc3545;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 4px;
+  cursor: pointer;
+  margin-top: 16px;
+}
+
+.error-boundary button:hover {
+  background: #c82333;
+}
+
+/* Optimización de fuentes */
+@font-face {
+  font-family: 'System';
+  src: local('system-ui'), local('-apple-system'), local('BlinkMacSystemFont');
+  font-display: swap;
+}
+
+/* Optimización de imágenes */
+img {
+  content-visibility: auto;
+  max-width: 100%;
+  height: auto;
+}
+
+/* Spinner de carga optimizado */
+.loading-spinner {
+  width: 40px;
+  height: 40px;
+  border: 4px solid #f3f3f3;
+  border-top: 4px solid #007bff;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  will-change: transform;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* Optimización crítica: Contenimiento de layout */
+.card {
+  contain: layout style;
+}
+
+.modal {
+  contain: layout;
+}
+
+.navbar {
+  contain: layout;
+}
+
+/* Crítico: Evitar reflows en cambios de estado */
+.btn {
+  min-height: 38px; /* Evitar saltos de layout */
+}
+
+.form-control {
+  min-height: 38px; /* Consistency */
+}
+
+/* CSS Grid optimizado para dashboard */
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 1rem;
+  contain: layout;
+}
+
+/* Optimización para scroll */
+.scrollable-area {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Crítico: GPU acceleration para elementos animados */
+.animated-element {
+  transform: translateZ(0);
+  backface-visibility: hidden;
+  perspective: 1000px;
+}
+
+/* Optimización de z-index */
+.modal { z-index: 1050; }
+.dropdown-menu { z-index: 1000; }
+.navbar { z-index: 1030; }
+.tooltip { z-index: 1070; }
+
+/* Prefetch crítico para navegación */
+.nav-link:hover {
+  transform: translateZ(0); /* Trigger layer creation */
+}
+
+/* Evitar FOUC (Flash of Unstyled Content) */
+.initial-hidden {
+  visibility: hidden;
+}
+
+.loaded .initial-hidden {
+  visibility: visible;
+}
+
+/* Optimización para impresión */
+@media print {
+  .no-print { display: none !important; }
+  .print-break-after { page-break-after: always; }
+  .print-break-before { page-break-before: always; }
+  * { color: black !important; background: white !important; }
+}

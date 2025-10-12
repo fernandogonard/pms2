@@ -1,0 +1,68 @@
+{
+  "short_name": "Hotel DIVA",
+  "name": "Hotel DIVA - Sistema de Gestión Hotelera",
+  "icons": [
+    {
+      "src": "favicon.ico",
+      "sizes": "64x64 32x32 24x24 16x16",
+      "type": "image/x-icon"
+    },
+    {
+      "src": "icons/icon-16x16.png",
+      "type": "image/png",
+      "sizes": "16x16"
+    },
+    {
+      "src": "icons/icon-72x72.png",
+      "type": "image/png",
+      "sizes": "72x72"
+    },
+    {
+      "src": "icons/icon-192x192.png",
+      "type": "image/png",
+      "sizes": "192x192",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icons/icon-512x512.png",
+      "type": "image/png",
+      "sizes": "512x512",
+      "purpose": "any maskable"
+    }
+  ],
+  "id": "/",
+  "start_url": "/",
+  "display": "standalone",
+  "theme_color": "#0088cc",
+  "background_color": "#ffffff",
+  "description": "Sistema de gestión hotelera para Hotel DIVA",
+  "orientation": "any",
+  "shortcuts": [
+    {
+      "name": "Reservas",
+      "short_name": "Reservas",
+      "url": "/reception",
+      "icons": [
+        {
+          "src": "icons/icon-192x192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "Habitaciones",
+      "short_name": "Habitaciones",
+      "url": "/rooms",
+      "icons": [
+        {
+          "src": "icons/icon-192x192.png",
+          "sizes": "192x192"
+        }
+      ]
+    }
+  ],
+  "categories": ["business", "productivity"],
+  "lang": "es",
+  "scope": "/",
+  "prefer_related_applications": false
+}

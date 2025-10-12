@@ -1,0 +1,797 @@
+{
+  "metadata": {
+    "createdAt": "2025-10-11T12:36:05.656Z",
+    "version": "1.0",
+    "collections": [
+      "rooms",
+      "users",
+      "clients",
+      "reservations"
+    ]
+  },
+  "rooms": [
+    {
+      "_id": "68d2c2ddeb89f27b61344c1d",
+      "number": 101,
+      "floor": 1,
+      "type": "doble",
+      "price": 50,
+      "status": "ocupada",
+      "__v": 1,
+      "maintenanceHistory": [],
+      "updatedAt": "2025-10-11T02:30:00.052Z"
+    },
+    {
+      "_id": "68d2c2f5eb89f27b61344c21",
+      "number": 102,
+      "floor": 1,
+      "type": "doble",
+      "price": 50,
+      "status": "ocupada",
+      "__v": 1,
+      "maintenanceHistory": [],
+      "updatedAt": "2025-10-11T02:30:00.064Z"
+    },
+    {
+      "_id": "68d2c311eb89f27b61344c25",
+      "number": 103,
+      "floor": 1,
+      "type": "triple",
+      "price": 72,
+      "status": "ocupada",
+      "__v": 1,
+      "maintenanceHistory": [],
+      "updatedAt": "2025-10-11T02:30:00.066Z"
+    },
+    {
+      "_id": "68d2c33aeb89f27b61344c29",
+      "number": 110,
+      "floor": 1,
+      "type": "cuadruple",
+      "price": 85,
+      "status": "ocupada",
+      "__v": 1,
+      "maintenanceHistory": [],
+      "updatedAt": "2025-10-11T11:30:00.032Z"
+    },
+    {
+      "_id": "68d2c387eb89f27b61344c3f",
+      "number": 104,
+      "floor": 1,
+      "type": "doble",
+      "price": 50,
+      "status": "ocupada",
+      "__v": 1,
+      "maintenanceHistory": [],
+      "updatedAt": "2025-10-11T02:30:00.068Z"
+    },
+    {
+      "_id": "68d2c39feb89f27b61344c43",
+      "number": 105,
+      "floor": 1,
+      "type": "doble",
+      "price": 50,
+      "status": "ocupada",
+      "__v": 1,
+      "maintenanceHistory": [],
+      "updatedAt": "2025-10-11T02:30:00.069Z"
+    },
+    {
+      "_id": "68d5443dafc898836e2ad7d1",
+      "number": 106,
+      "floor": 1,
+      "type": "doble",
+      "price": 50,
+      "status": "ocupada",
+      "__v": 1,
+      "maintenanceHistory": [],
+      "updatedAt": "2025-10-11T02:30:00.071Z"
+    },
+    {
+      "_id": "68d56dc3c82b6bd1565a1611",
+      "number": 107,
+      "floor": 1,
+      "type": "triple",
+      "price": 72,
+      "status": "ocupada",
+      "__v": 1,
+      "maintenanceHistory": [],
+      "updatedAt": "2025-10-11T02:30:00.073Z"
+    },
+    {
+      "_id": "68d56dd3c82b6bd1565a1615",
+      "number": 108,
+      "floor": 1,
+      "type": "triple",
+      "price": 72,
+      "status": "ocupada",
+      "__v": 1,
+      "maintenanceHistory": [],
+      "updatedAt": "2025-10-11T02:30:00.074Z"
+    },
+    {
+      "_id": "68d56ddfc82b6bd1565a1619",
+      "number": 109,
+      "floor": 1,
+      "type": "doble",
+      "price": 50,
+      "status": "ocupada",
+      "__v": 1,
+      "maintenanceHistory": [],
+      "updatedAt": "2025-10-11T02:30:00.076Z"
+    },
+    {
+      "_id": "68d7187e4bbcfb43b674e5ea",
+      "number": 201,
+      "floor": 2,
+      "type": "doble",
+      "price": 50,
+      "status": "ocupada",
+      "__v": 1,
+      "maintenanceHistory": [],
+      "updatedAt": "2025-10-11T02:30:00.078Z"
+    },
+    {
+      "_id": "68e3a6e02ad4c4501e0ff546",
+      "number": 202,
+      "floor": 1,
+      "type": "doble",
+      "price": 50,
+      "status": "ocupada",
+      "__v": 1,
+      "maintenanceHistory": [],
+      "updatedAt": "2025-10-11T11:30:00.037Z"
+    },
+    {
+      "_id": "68e3c2c25494ac433efcde0c",
+      "number": 210,
+      "floor": 2,
+      "type": "cuadruple",
+      "price": 85,
+      "status": "ocupada",
+      "__v": 1,
+      "maintenanceHistory": [],
+      "updatedAt": "2025-10-11T11:30:00.039Z"
+    },
+    {
+      "_id": "68e3c2c25494ac433efcde0e",
+      "number": 211,
+      "floor": 2,
+      "type": "cuadruple",
+      "price": 85,
+      "status": "ocupada",
+      "__v": 1,
+      "maintenanceHistory": [],
+      "updatedAt": "2025-10-11T11:30:00.041Z"
+    },
+    {
+      "_id": "68e3c2c25494ac433efcde10",
+      "number": 212,
+      "floor": 2,
+      "type": "cuadruple",
+      "price": 85,
+      "status": "ocupada",
+      "__v": 1,
+      "maintenanceHistory": [],
+      "updatedAt": "2025-10-11T11:30:00.042Z"
+    },
+    {
+      "_id": "68e3c2c25494ac433efcde12",
+      "number": 213,
+      "floor": 2,
+      "type": "cuadruple",
+      "price": 85,
+      "status": "ocupada",
+      "__v": 1,
+      "maintenanceHistory": [],
+      "updatedAt": "2025-10-11T11:30:00.044Z"
+    },
+    {
+      "_id": "68e51a33c5a3b8622c3b532e",
+      "number": 214,
+      "floor": 2,
+      "type": "doble",
+      "price": 50,
+      "status": "ocupada",
+      "__v": 1,
+      "maintenanceHistory": [],
+      "updatedAt": "2025-10-11T11:30:00.045Z"
+    },
+    {
+      "_id": "68e51a49c5a3b8622c3b5332",
+      "number": 301,
+      "floor": 2,
+      "type": "doble",
+      "price": 50,
+      "status": "ocupada",
+      "__v": 1,
+      "maintenanceHistory": [],
+      "updatedAt": "2025-10-11T11:30:00.047Z"
+    },
+    {
+      "_id": "68e86501e26cb80e5343d91c",
+      "number": 302,
+      "floor": 3,
+      "type": "triple",
+      "price": 72,
+      "status": "ocupada",
+      "__v": 1,
+      "maintenanceHistory": [],
+      "updatedAt": "2025-10-11T11:30:00.049Z"
+    }
+  ],
+  "users": [
+    {
+      "_id": "68d2c29f5a22b9bc73f70dbd",
+      "name": "Admin",
+      "email": "admin@hotel.com",
+      "password": "$2a$10$SOjkJe077MjQaFHfTV/y5exkvDlaoV1Qn1cuv8XfReQK6iZV0950O",
+      "role": "admin",
+      "createdAt": "2025-09-23T15:54:07.590Z",
+      "__v": 0
+    },
+    {
+      "_id": "68d2c500eb89f27b61344c6d",
+      "name": "agus",
+      "email": "agus@hotel.com",
+      "password": "$2a$10$YTGCnFVx1dT/U7XHsJs7m.6oVKeQXo8F6QkrTbjkLH0MWYqJjoM8C",
+      "role": "recepcionista",
+      "createdAt": "2025-09-23T16:04:16.040Z",
+      "__v": 0
+    },
+    {
+      "_id": "68d2c517eb89f27b61344c71",
+      "name": "ana",
+      "email": "ana@hotel.com",
+      "password": "$2a$10$xoyjI5.azESSYP.n2.JggeFaZIkSQvwzhj3VUdv.S4k3VquC.04u2",
+      "role": "cliente",
+      "createdAt": "2025-09-23T16:04:39.386Z",
+      "__v": 0
+    },
+    {
+      "_id": "68d42e9feb89f27b61346ec9",
+      "name": "sil",
+      "email": "sil@hotel.com",
+      "password": "$2a$10$29W2lwfVStx3aa3Fmmnskums1w/DS8CnrqaHQN5HqH8xYrXwKbLE6",
+      "role": "cliente",
+      "createdAt": "2025-09-24T17:47:11.163Z",
+      "__v": 0
+    },
+    {
+      "_id": "68e45c1e28b879c058e565ed",
+      "name": "Administrador Sistema",
+      "email": "admin@hotelcrm.com",
+      "password": "$2a$12$l9pTXlb1E.2dS.isHQNByeS8h/O/IbW.szCDaqjocIxmHvw3lOb4S",
+      "role": "admin",
+      "createdAt": "2025-10-07T00:17:34.033Z",
+      "__v": 0
+    },
+    {
+      "_id": "68e45c1e28b879c058e565f0",
+      "name": "Recepcionista Hotel",
+      "email": "recepcion@hotelcrm.com",
+      "password": "$2a$12$iOp30MJ6SnalUXyBOTBok.bhxNM0SKeTYauRIWEIDQgckmJJWw/du",
+      "role": "recepcionista",
+      "createdAt": "2025-10-07T00:17:34.276Z",
+      "__v": 0
+    },
+    {
+      "_id": "68e45c1e28b879c058e565f3",
+      "name": "Cliente Prueba",
+      "email": "cliente@hotelcrm.com",
+      "password": "$2a$12$aF4oxojL6mEdEI3VxbLTlOnrUovxQ/QZARXBQ.phpQ9mf9gzeT/tO",
+      "role": "cliente",
+      "createdAt": "2025-10-07T00:17:34.509Z",
+      "__v": 0
+    }
+  ],
+  "clients": [
+    {
+      "_id": "68e7fb532882b425887fca48",
+      "nombre": "gaby ",
+      "apellido": "trollo",
+      "dni": "21366654",
+      "email": "trlo@culo.com",
+      "whatsapp": "2223154855",
+      "createdAt": "2025-10-09T18:13:39.739Z",
+      "__v": 0
+    },
+    {
+      "_id": "68e7fbed2882b425887fca9a",
+      "nombre": "gaby",
+      "apellido": "retrolla",
+      "dni": "316846654",
+      "email": "fhfdhdf@hghf.com",
+      "whatsapp": "65468465",
+      "createdAt": "2025-10-09T18:16:13.009Z",
+      "__v": 0
+    },
+    {
+      "_id": "68e80d622882b425887fcb0c",
+      "nombre": "wwww",
+      "apellido": "wwwww",
+      "dni": "wwwwwwwww",
+      "email": "wwwwww@hhj.oc",
+      "whatsapp": "wwwwwww",
+      "createdAt": "2025-10-09T19:30:42.694Z",
+      "__v": 0
+    },
+    {
+      "_id": "68e857ec0f771da57a8852c3",
+      "nombre": "mio",
+      "apellido": "mio",
+      "dni": "5646465464",
+      "email": "654654@jhguj.com",
+      "whatsapp": "12216556546",
+      "createdAt": "2025-10-10T00:48:44.345Z",
+      "__v": 0
+    },
+    {
+      "_id": "68e865efe26cb80e5343d9b1",
+      "nombre": "ddfg",
+      "apellido": "dfgdgfd",
+      "dni": "gfdgdfgd",
+      "email": "dgdgd@hkjgh.com",
+      "whatsapp": "f gdf gdf gd gd",
+      "createdAt": "2025-10-10T01:48:31.538Z",
+      "__v": 0
+    },
+    {
+      "_id": "68e86641e26cb80e5343da09",
+      "nombre": "hj",
+      "apellido": "jhgj",
+      "dni": "hjgjhgj",
+      "email": "ghjghj@olfg-com",
+      "whatsapp": "gjghjghj",
+      "createdAt": "2025-10-10T01:49:53.885Z",
+      "__v": 0
+    },
+    {
+      "_id": "68e8668ce26cb80e5343da5a",
+      "nombre": "mmmmmmmm",
+      "apellido": "mmmmmmmmmmm",
+      "dni": "mmmmmmmmmmmmm",
+      "email": "mmmmmmmmm@nhgdfhg.com",
+      "whatsapp": "mmmmmmmmmmm",
+      "createdAt": "2025-10-10T01:51:08.605Z",
+      "__v": 0
+    },
+    {
+      "_id": "68e866c7e26cb80e5343da94",
+      "nombre": "}",
+      "apellido": "{}",
+      "dni": "}{}",
+      "email": "{}{}{}{}{}@jfghgdf.ciom",
+      "whatsapp": "hjgjgj",
+      "createdAt": "2025-10-10T01:52:07.087Z",
+      "__v": 0
+    },
+    {
+      "_id": "68e91ae495a16941664f30ea",
+      "nombre": "hgfgj",
+      "apellido": "hgjghjghj",
+      "dni": "hgjghj",
+      "email": "ghjghjghj@kjufgh.com",
+      "whatsapp": "jhgjgh",
+      "createdAt": "2025-10-10T14:40:36.868Z",
+      "__v": 0
+    },
+    {
+      "_id": "68e91b0695a16941664f3123",
+      "nombre": "gfdg",
+      "apellido": "fdgdf",
+      "dni": "gdfgdfg",
+      "email": "dfgdf@jfgf.com",
+      "whatsapp": "gdfgdfg",
+      "createdAt": "2025-10-10T14:41:10.053Z",
+      "__v": 0
+    },
+    {
+      "_id": "68e91b2b95a16941664f315b",
+      "nombre": "fghgf",
+      "apellido": "hgfhgf",
+      "dni": "gfhfgh",
+      "email": "hfgh@kjfgf.com",
+      "whatsapp": "ggfhgfh",
+      "createdAt": "2025-10-10T14:41:47.491Z",
+      "__v": 0
+    }
+  ],
+  "reservations": [
+    {
+      "_id": "68e5635ab8c26236a35ce6ed",
+      "tipo": "doble",
+      "cantidad": 1,
+      "room": [
+        "68d2c2ddeb89f27b61344c1d"
+      ],
+      "client": "68e5635ab8c26236a35ce6e7",
+      "checkIn": "2025-10-10T00:00:00.000Z",
+      "checkOut": "2025-10-12T00:00:00.000Z",
+      "status": "checkin",
+      "pricing": {
+        "pricePerNight": 15000,
+        "totalNights": 2,
+        "subtotal": 30000,
+        "taxes": 6300,
+        "total": 36300,
+        "currency": "ARS"
+      },
+      "payment": {
+        "status": "pendiente",
+        "method": "efectivo",
+        "amountPaid": 0
+      },
+      "invoice": {
+        "isPaid": false
+      },
+      "createdAt": "2025-10-07T19:00:42.517Z",
+      "__v": 1,
+      "user": "68d2c500eb89f27b61344c6d"
+    },
+    {
+      "_id": "68e7fb532882b425887fca4f",
+      "tipo": "doble",
+      "cantidad": 6,
+      "room": [
+        "68d2c2f5eb89f27b61344c21",
+        "68d2c387eb89f27b61344c3f",
+        "68d2c39feb89f27b61344c43",
+        "68d5443dafc898836e2ad7d1",
+        "68d56ddfc82b6bd1565a1619",
+        "68d7187e4bbcfb43b674e5ea"
+      ],
+      "client": "68e7fb532882b425887fca48",
+      "checkIn": "2025-10-09T00:00:00.000Z",
+      "checkOut": "2025-10-12T00:00:00.000Z",
+      "status": "checkin",
+      "pricing": {
+        "pricePerNight": 15000,
+        "totalNights": 3,
+        "subtotal": 270000,
+        "taxes": 56700,
+        "total": 326700,
+        "currency": "ARS"
+      },
+      "payment": {
+        "status": "pendiente",
+        "method": "efectivo",
+        "amountPaid": 0
+      },
+      "invoice": {
+        "isPaid": false
+      },
+      "createdAt": "2025-10-09T18:13:39.777Z",
+      "__v": 1,
+      "user": "68d2c500eb89f27b61344c6d"
+    },
+    {
+      "_id": "68e7fbed2882b425887fcaa5",
+      "tipo": "triple",
+      "cantidad": 1,
+      "room": [
+        "68d2c311eb89f27b61344c25"
+      ],
+      "client": "68e7fbed2882b425887fca9a",
+      "checkIn": "2025-10-09T00:00:00.000Z",
+      "checkOut": "2025-10-16T00:00:00.000Z",
+      "status": "checkin",
+      "pricing": {
+        "pricePerNight": 20000,
+        "totalNights": 7,
+        "subtotal": 140000,
+        "taxes": 29400,
+        "total": 169400,
+        "currency": "ARS"
+      },
+      "payment": {
+        "status": "pendiente",
+        "method": "efectivo",
+        "amountPaid": 0
+      },
+      "invoice": {
+        "isPaid": false
+      },
+      "createdAt": "2025-10-09T18:16:13.019Z",
+      "__v": 1,
+      "user": "68d2c29f5a22b9bc73f70dbd"
+    },
+    {
+      "_id": "68e80d622882b425887fcb12",
+      "tipo": "triple",
+      "cantidad": 2,
+      "room": [
+        "68d56dc3c82b6bd1565a1611",
+        "68d56dd3c82b6bd1565a1615"
+      ],
+      "client": "68e80d622882b425887fcb0c",
+      "checkIn": "2025-10-10T00:00:00.000Z",
+      "checkOut": "2025-10-12T00:00:00.000Z",
+      "status": "checkin",
+      "pricing": {
+        "pricePerNight": 20000,
+        "totalNights": 2,
+        "subtotal": 80000,
+        "taxes": 16800,
+        "total": 96800,
+        "currency": "ARS"
+      },
+      "payment": {
+        "status": "pendiente",
+        "method": "efectivo",
+        "amountPaid": 0
+      },
+      "invoice": {
+        "isPaid": false
+      },
+      "createdAt": "2025-10-09T19:30:42.700Z",
+      "__v": 1,
+      "user": "68d2c29f5a22b9bc73f70dbd"
+    },
+    {
+      "_id": "68e857ec0f771da57a8852ea",
+      "tipo": "doble",
+      "cantidad": 7,
+      "room": [
+        "68d2c2ddeb89f27b61344c1d",
+        "68d2c2f5eb89f27b61344c21",
+        "68d2c387eb89f27b61344c3f",
+        "68d2c39feb89f27b61344c43",
+        "68d5443dafc898836e2ad7d1",
+        "68d56ddfc82b6bd1565a1619",
+        "68d7187e4bbcfb43b674e5ea"
+      ],
+      "client": "68e857ec0f771da57a8852c3",
+      "checkIn": "2025-10-14T00:00:00.000Z",
+      "checkOut": "2025-11-18T00:00:00.000Z",
+      "status": "reservada",
+      "pricing": {
+        "pricePerNight": 15000,
+        "totalNights": 35,
+        "subtotal": 3675000,
+        "taxes": 771750,
+        "total": 4446750,
+        "currency": "ARS"
+      },
+      "payment": {
+        "status": "pendiente",
+        "method": "efectivo",
+        "amountPaid": 0
+      },
+      "invoice": {
+        "isPaid": false
+      },
+      "createdAt": "2025-10-10T00:48:44.409Z",
+      "__v": 1
+    },
+    {
+      "_id": "68e865efe26cb80e5343d9b6",
+      "tipo": "doble",
+      "cantidad": 3,
+      "room": [
+        "68d2c2ddeb89f27b61344c1d",
+        "68e3a6e02ad4c4501e0ff546",
+        "68e51a33c5a3b8622c3b532e"
+      ],
+      "client": "68e865efe26cb80e5343d9b1",
+      "checkIn": "2025-10-09T00:00:00.000Z",
+      "checkOut": "2025-10-10T00:00:00.000Z",
+      "status": "cancelada",
+      "pricing": {
+        "pricePerNight": 15000,
+        "totalNights": 1,
+        "subtotal": 45000,
+        "taxes": 9450,
+        "total": 54450,
+        "currency": "ARS"
+      },
+      "payment": {
+        "status": "pendiente",
+        "method": "efectivo",
+        "amountPaid": 0
+      },
+      "invoice": {
+        "isPaid": false
+      },
+      "createdAt": "2025-10-10T01:48:31.544Z",
+      "__v": 1,
+      "user": "68d2c29f5a22b9bc73f70dbd"
+    },
+    {
+      "_id": "68e86641e26cb80e5343da0e",
+      "tipo": "triple",
+      "cantidad": 1,
+      "room": [
+        "68d56dc3c82b6bd1565a1611"
+      ],
+      "client": "68e86641e26cb80e5343da09",
+      "checkIn": "2025-10-09T00:00:00.000Z",
+      "checkOut": "2025-10-10T00:00:00.000Z",
+      "status": "cancelada",
+      "pricing": {
+        "pricePerNight": 20000,
+        "totalNights": 1,
+        "subtotal": 20000,
+        "taxes": 4200,
+        "total": 24200,
+        "currency": "ARS"
+      },
+      "payment": {
+        "status": "pendiente",
+        "method": "efectivo",
+        "amountPaid": 0
+      },
+      "invoice": {
+        "isPaid": false
+      },
+      "createdAt": "2025-10-10T01:49:53.890Z",
+      "__v": 1,
+      "user": "68d2c29f5a22b9bc73f70dbd"
+    },
+    {
+      "_id": "68e8668ce26cb80e5343da5f",
+      "tipo": "cuadruple",
+      "cantidad": 5,
+      "room": [
+        "68d2c33aeb89f27b61344c29",
+        "68e3c2c25494ac433efcde0c",
+        "68e3c2c25494ac433efcde0e",
+        "68e3c2c25494ac433efcde10",
+        "68e3c2c25494ac433efcde12"
+      ],
+      "client": "68e8668ce26cb80e5343da5a",
+      "checkIn": "2025-10-09T00:00:00.000Z",
+      "checkOut": "2025-10-10T00:00:00.000Z",
+      "status": "checkout",
+      "pricing": {
+        "pricePerNight": 25000,
+        "totalNights": 1,
+        "subtotal": 125000,
+        "taxes": 26250,
+        "total": 151250,
+        "currency": "ARS"
+      },
+      "payment": {
+        "status": "pendiente",
+        "method": "efectivo",
+        "amountPaid": 0
+      },
+      "invoice": {
+        "isPaid": false
+      },
+      "createdAt": "2025-10-10T01:51:08.611Z",
+      "__v": 1,
+      "user": "68d2c29f5a22b9bc73f70dbd"
+    },
+    {
+      "_id": "68e866c7e26cb80e5343da99",
+      "tipo": "triple",
+      "cantidad": 1,
+      "room": [
+        "68d56dd3c82b6bd1565a1615"
+      ],
+      "client": "68e866c7e26cb80e5343da94",
+      "checkIn": "2025-10-09T00:00:00.000Z",
+      "checkOut": "2025-10-10T00:00:00.000Z",
+      "status": "checkout",
+      "pricing": {
+        "pricePerNight": 20000,
+        "totalNights": 1,
+        "subtotal": 20000,
+        "taxes": 4200,
+        "total": 24200,
+        "currency": "ARS"
+      },
+      "payment": {
+        "status": "pendiente",
+        "method": "efectivo",
+        "amountPaid": 0
+      },
+      "invoice": {
+        "isPaid": false
+      },
+      "createdAt": "2025-10-10T01:52:07.092Z",
+      "__v": 1,
+      "user": "68d2c29f5a22b9bc73f70dbd"
+    },
+    {
+      "_id": "68e91ae495a16941664f30f0",
+      "tipo": "doble",
+      "cantidad": 3,
+      "room": [
+        "68e3a6e02ad4c4501e0ff546",
+        "68e51a33c5a3b8622c3b532e",
+        "68e51a49c5a3b8622c3b5332"
+      ],
+      "client": "68e91ae495a16941664f30ea",
+      "checkIn": "2025-10-10T00:00:00.000Z",
+      "checkOut": "2025-10-12T00:00:00.000Z",
+      "status": "checkin",
+      "pricing": {
+        "pricePerNight": 15000,
+        "totalNights": 2,
+        "subtotal": 90000,
+        "taxes": 18900,
+        "total": 108900,
+        "currency": "ARS"
+      },
+      "payment": {
+        "status": "pendiente",
+        "method": "efectivo",
+        "amountPaid": 0
+      },
+      "invoice": {
+        "isPaid": false
+      },
+      "createdAt": "2025-10-10T14:40:36.904Z",
+      "__v": 1,
+      "user": "68d2c29f5a22b9bc73f70dbd"
+    },
+    {
+      "_id": "68e91b0695a16941664f3129",
+      "tipo": "triple",
+      "cantidad": 1,
+      "room": [
+        "68e86501e26cb80e5343d91c"
+      ],
+      "client": "68e91b0695a16941664f3123",
+      "checkIn": "2025-10-10T00:00:00.000Z",
+      "checkOut": "2025-10-12T00:00:00.000Z",
+      "status": "checkin",
+      "pricing": {
+        "pricePerNight": 20000,
+        "totalNights": 2,
+        "subtotal": 40000,
+        "taxes": 8400,
+        "total": 48400,
+        "currency": "ARS"
+      },
+      "payment": {
+        "status": "pendiente",
+        "method": "efectivo",
+        "amountPaid": 0
+      },
+      "invoice": {
+        "isPaid": false
+      },
+      "createdAt": "2025-10-10T14:41:10.059Z",
+      "__v": 1,
+      "user": "68d2c29f5a22b9bc73f70dbd"
+    },
+    {
+      "_id": "68e91b2b95a16941664f3161",
+      "tipo": "cuadruple",
+      "cantidad": 5,
+      "room": [
+        "68d2c33aeb89f27b61344c29",
+        "68e3c2c25494ac433efcde0c",
+        "68e3c2c25494ac433efcde0e",
+        "68e3c2c25494ac433efcde10",
+        "68e3c2c25494ac433efcde12"
+      ],
+      "client": "68e91b2b95a16941664f315b",
+      "checkIn": "2025-10-10T00:00:00.000Z",
+      "checkOut": "2025-10-12T00:00:00.000Z",
+      "status": "checkin",
+      "pricing": {
+        "pricePerNight": 25000,
+        "totalNights": 2,
+        "subtotal": 250000,
+        "taxes": 52500,
+        "total": 302500,
+        "currency": "ARS"
+      },
+      "payment": {
+        "status": "pendiente",
+        "method": "efectivo",
+        "amountPaid": 0
+      },
+      "invoice": {
+        "isPaid": false
+      },
+      "createdAt": "2025-10-10T14:41:47.498Z",
+      "__v": 1,
+      "user": "68d2c29f5a22b9bc73f70dbd"
+    }
+  ]
+}

@@ -1,0 +1,6 @@
+Esta es una nota para colocar la imagen de fondo:
+
+1. Reemplaza este archivo con tu imagen de fondo (por ejemplo: hotel-background.jpg)
+2. La imagen debe tener una buena resolución y ser apropiada para fondo
+3. Formatos recomendados: jpg, png
+4. Asegúrate de que la imagen tenga un tamaño adecuado para no afectar el rendimiento

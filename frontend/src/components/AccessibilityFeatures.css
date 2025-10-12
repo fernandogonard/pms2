@@ -1,0 +1,645 @@
+/* frontend/src/components/AccessibilityFeatures.css */
+/* Estilos para características de accesibilidad */
+
+/* Skip Links */
+.skip-links {
+  position: relative;
+  z-index: 10000;
+}
+
+.skip-link {
+  position: absolute;
+  top: -40px;
+  left: 6px;
+  background: #000;
+  color: #fff;
+  padding: 8px;
+  text-decoration: none;
+  border-radius: 0 0 4px 4px;
+  font-size: 14px;
+  font-weight: bold;
+  transition: top 0.3s ease;
+}
+
+.skip-link:focus {
+  top: 0;
+  outline: 2px solid #007bff;
+  outline-offset: 2px;
+}
+
+/* Panel de Accesibilidad */
+.accessibility-panel {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 9999;
+}
+
+.accessibility-toggle {
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  background: #007bff;
+  color: white;
+  border: none;
+  font-size: 20px;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(0, 123, 255, 0.3);
+  transition: all 0.3s ease;
+}
+
+.accessibility-toggle:hover,
+.accessibility-toggle:focus {
+  background: #0056b3;
+  transform: scale(1.1);
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+}
+
+.accessibility-controls {
+  position: absolute;
+  top: 60px;
+  right: 0;
+  background: white;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  padding: 20px;
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+  min-width: 250px;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-20px);
+  transition: all 0.3s ease;
+}
+
+.accessibility-controls.visible {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+}
+
+.accessibility-controls h3 {
+  margin: 0 0 15px 0;
+  color: #333;
+  font-size: 16px;
+}
+
+.accessibility-option {
+  margin-bottom: 15px;
+}
+
+.accessibility-option label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  color: #555;
+}
+
+.accessibility-option input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  accent-color: #007bff;
+}
+
+.accessibility-option select {
+  width: 100%;
+  padding: 8px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 14px;
+  margin-top: 5px;
+}
+
+.reset-btn {
+  background: #6c757d;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  width: 100%;
+  transition: background-color 0.2s ease;
+}
+
+.reset-btn:hover,
+.reset-btn:focus {
+  background: #5a6268;
+  outline: 2px solid #007bff;
+  outline-offset: 2px;
+}
+
+/* Screen Reader Only */
+.sr-only {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+}
+
+/* Landmarks Helper */
+.landmarks-helper {
+  position: absolute;
+  top: -9999px;
+  left: -9999px;
+}
+
+/* Breadcrumbs */
+.breadcrumbs {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+}
+
+.breadcrumbs li:not(:last-child)::after {
+  content: ">";
+  margin-left: 8px;
+  color: #6c757d;
+}
+
+.breadcrumbs a {
+  color: #007bff;
+  text-decoration: none;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+}
+
+.breadcrumbs a:hover,
+.breadcrumbs a:focus {
+  background: #e3f2fd;
+  outline: 2px solid #007bff;
+  outline-offset: 2px;
+}
+
+.breadcrumbs .current span {
+  color: #333;
+  font-weight: 500;
+}
+
+/* Accessible Table */
+table[role="table"] {
+  width: 100%;
+  border-collapse: collapse;
+  border: 1px solid #dee2e6;
+}
+
+table[role="table"] caption {
+  caption-side: top;
+  padding: 12px;
+  font-weight: bold;
+  text-align: left;
+  background: #f8f9fa;
+  border: 1px solid #dee2e6;
+  border-bottom: none;
+}
+
+table[role="table"] th {
+  background: #f8f9fa;
+  padding: 12px;
+  text-align: left;
+  border: 1px solid #dee2e6;
+  font-weight: 600;
+  color: #495057;
+}
+
+table[role="table"] th.sortable {
+  cursor: pointer;
+  -webkit-user-select: none;
+  user-select: none;
+  position: relative;
+  transition: background-color 0.2s ease;
+}
+
+table[role="table"] th.sortable:hover,
+table[role="table"] th.sortable:focus {
+  background: #e9ecef;
+  outline: 2px solid #007bff;
+  outline-offset: -2px;
+}
+
+table[role="table"] .sort-indicator {
+  margin-left: 8px;
+  font-size: 12px;
+}
+
+table[role="table"] td {
+  padding: 12px;
+  border: 1px solid #dee2e6;
+  color: #495057;
+}
+
+table[role="table"] tr:nth-child(even) {
+  background: #f8f9fa;
+}
+
+/* Modo Alto Contraste */
+.high-contrast {
+  --bg-primary: #000000;
+  --text-primary: #ffffff;
+  --bg-secondary: #1a1a1a;
+  --text-secondary: #ffffff;
+  --border-color: #ffffff;
+  --link-color: #ffff00;
+  --button-bg: #ffffff;
+  --button-text: #000000;
+}
+
+.high-contrast body {
+  background: var(--bg-primary) !important;
+  color: var(--text-primary) !important;
+}
+
+.high-contrast .card,
+.high-contrast .modal-content,
+.high-contrast .table {
+  background: var(--bg-secondary) !important;
+  color: var(--text-primary) !important;
+  border: 2px solid var(--border-color) !important;
+}
+
+.high-contrast a {
+  color: var(--link-color) !important;
+  text-decoration: underline !important;
+}
+
+.high-contrast button,
+.high-contrast .btn {
+  background: var(--button-bg) !important;
+  color: var(--button-text) !important;
+  border: 2px solid var(--border-color) !important;
+}
+
+.high-contrast input,
+.high-contrast select,
+.high-contrast textarea {
+  background: var(--bg-primary) !important;
+  color: var(--text-primary) !important;
+  border: 2px solid var(--border-color) !important;
+}
+
+/* Tamaños de Fuente */
+.large-text {
+  font-size: 18px !important;
+}
+
+.large-text h1 { font-size: 2.5rem !important; }
+.large-text h2 { font-size: 2.2rem !important; }
+.large-text h3 { font-size: 1.8rem !important; }
+.large-text h4 { font-size: 1.5rem !important; }
+.large-text h5 { font-size: 1.3rem !important; }
+.large-text h6 { font-size: 1.1rem !important; }
+
+.extra-large-text {
+  font-size: 22px !important;
+}
+
+.extra-large-text h1 { font-size: 3rem !important; }
+.extra-large-text h2 { font-size: 2.6rem !important; }
+.extra-large-text h3 { font-size: 2.2rem !important; }
+.extra-large-text h4 { font-size: 1.8rem !important; }
+.extra-large-text h5 { font-size: 1.5rem !important; }
+.extra-large-text h6 { font-size: 1.3rem !important; }
+
+/* Indicadores de Foco */
+.focus-visible *:focus {
+  outline: 3px solid #007bff !important;
+  outline-offset: 2px !important;
+  border-radius: 4px;
+}
+
+.focus-visible a:focus,
+.focus-visible button:focus,
+.focus-visible input:focus,
+.focus-visible select:focus,
+.focus-visible textarea:focus {
+  box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.5) !important;
+}
+
+/* Reducir Movimiento */
+.reduce-motion * {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+}
+
+/* Media Queries para Preferencias del Sistema */
+@media (prefers-contrast: high) {
+  :root {
+    --bg-primary: #000000;
+    --text-primary: #ffffff;
+    --bg-secondary: #1a1a1a;
+    --text-secondary: #ffffff;
+    --border-color: #ffffff;
+    --link-color: #ffff00;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  .accessibility-controls {
+    background: #2d3748;
+    color: #ffffff;
+    border-color: #4a5568;
+  }
+  
+  .accessibility-controls h3 {
+    color: #ffffff;
+  }
+  
+  .accessibility-option label {
+    color: #e2e8f0;
+  }
+  
+  .accessibility-option select {
+    background: #1a202c;
+    color: #ffffff;
+    border-color: #4a5568;
+  }
+}
+
+/* Responsive Design para Accesibilidad */
+@media (max-width: 768px) {
+  .accessibility-panel {
+    top: 10px;
+    right: 10px;
+  }
+  
+  .accessibility-toggle {
+    width: 45px;
+    height: 45px;
+    font-size: 18px;
+  }
+  
+  .accessibility-controls {
+    right: -150px;
+    min-width: 280px;
+  }
+  
+  .breadcrumbs {
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+  
+  table[role="table"] {
+    font-size: 14px;
+  }
+  
+  table[role="table"] th,
+  table[role="table"] td {
+    padding: 8px;
+  }
+}
+
+@media (max-width: 480px) {
+  .accessibility-controls {
+    position: fixed;
+    top: 70px;
+    right: 10px;
+    left: 10px;
+    width: auto;
+    min-width: auto;
+  }
+  
+  .skip-link {
+    font-size: 12px;
+    padding: 6px;
+  }
+}
+
+/* Estilos para Estados del Calendario de Reservas */
+.calendar-status-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 16px;
+  padding: 12px;
+  background: #f8f9fa;
+  border-radius: 8px;
+  border: 1px solid #dee2e6;
+}
+
+.calendar-status-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  color: #495057;
+}
+
+.calendar-status-color {
+  width: 16px;
+  height: 16px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+/* Estados específicos del calendario */
+.room-status-occupied {
+  background-color: #0a0a0a !important;
+  color: #ffffff !important;
+}
+
+.room-status-reserved {
+  background-color: #f59e42 !important;
+  color: #ffffff !important;
+}
+
+.room-status-checkedin {
+  background-color: #22c55e !important;
+  color: #ffffff !important;
+}
+
+.room-status-maintenance {
+  background-color: #2563eb !important;
+  color: #ffffff !important;
+}
+
+.room-status-cleaning {
+  background-color: #22d3ee !important;
+  color: #0a0a0a !important;
+}
+
+.room-status-available {
+  background-color: #e0e0e0 !important;
+  color: #0a0a0a !important;
+}
+
+/* Estilos para estados de reserva en el panel lateral */
+.reservation-status {
+  display: inline-block;
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.reservation-status--checkin {
+  background-color: #22c55e;
+  color: #ffffff;
+}
+
+.reservation-status--reserved {
+  background-color: #f59e42;
+  color: #ffffff;
+}
+
+.reservation-status--cancelled {
+  background-color: #ef4444;
+  color: #ffffff;
+}
+
+.reservation-status--completed {
+  background-color: #6b7280;
+  color: #ffffff;
+}
+
+/* Iconos de estado */
+.status-icon {
+  font-size: 14px;
+  margin-right: 4px;
+}
+
+/* Tooltip para explicar estados */
+.status-tooltip {
+  position: relative;
+  cursor: help;
+}
+
+.status-tooltip:hover::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #333;
+  color: #fff;
+  padding: 6px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  white-space: nowrap;
+  z-index: 1000;
+  margin-bottom: 4px;
+}
+
+.status-tooltip:hover::before {
+  content: "";
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 4px solid transparent;
+  border-top-color: #333;
+  z-index: 1000;
+}
+
+/* Modo alto contraste para estados */
+.high-contrast .room-status-occupied {
+  background-color: #000000 !important;
+  color: #ffffff !important;
+  border: 2px solid #ffffff !important;
+}
+
+.high-contrast .room-status-reserved {
+  background-color: #ffaa00 !important;
+  color: #000000 !important;
+  border: 2px solid #ffffff !important;
+}
+
+.high-contrast .room-status-checkedin {
+  background-color: #00ff00 !important;
+  color: #000000 !important;
+  border: 2px solid #ffffff !important;
+}
+
+.high-contrast .room-status-maintenance {
+  background-color: #0066ff !important;
+  color: #ffffff !important;
+  border: 2px solid #ffffff !important;
+}
+
+.high-contrast .room-status-cleaning {
+  background-color: #00ccff !important;
+  color: #000000 !important;
+  border: 2px solid #ffffff !important;
+}
+
+/* Responsive para estados del calendario */
+@media (max-width: 768px) {
+  .calendar-status-legend {
+    flex-direction: column;
+    gap: 8px;
+  }
+  
+  .calendar-status-item {
+    font-size: 13px;
+  }
+  
+  .calendar-status-color {
+    width: 14px;
+    height: 14px;
+  }
+  
+  .reservation-status {
+    font-size: 10px;
+    padding: 2px 6px;
+  }
+}
+
+/* Print Styles */
+@media print {
+  .accessibility-panel,
+  .skip-links {
+    display: none !important;
+  }
+  
+  .accessibility-controls {
+    display: none !important;
+  }
+  
+  table[role="table"] {
+    border-collapse: collapse;
+  }
+  
+  table[role="table"] th,
+  table[role="table"] td {
+    border: 1px solid #000;
+    padding: 8px;
+  }
+  
+  /* Estados en impresión - usar patrones para diferenciar */
+  .room-status-occupied {
+    background: #000 !important;
+    color: #fff !important;
+  }
+  
+  .room-status-reserved {
+    background: repeating-linear-gradient(45deg, #fff, #fff 2px, #ccc 2px, #ccc 4px) !important;
+    color: #000 !important;
+  }
+  
+  .room-status-checkedin {
+    background: repeating-linear-gradient(90deg, #fff, #fff 3px, #000 3px, #000 6px) !important;
+    color: #000 !important;
+  }
+}

@@ -1,0 +1,52 @@
+# Dependencias
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Archivos de producción
+build/
+dist/
+
+# Variables de entorno
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Logs
+logs/
+*.log
+
+# Archivos temporales
+*.tmp
+*.temp
+port.txt
+
+# Base de datos local
+*.sqlite
+*.db
+
+# Archivos del sistema
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Coverage reports
+coverage/
+
+# Backend específico
+backend/logs/
+backend/uploads/
+backend/.env
+backend/port.txt
+
+# Frontend específico
+frontend/build/
+frontend/.env*
