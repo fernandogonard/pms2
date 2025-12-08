@@ -443,8 +443,11 @@
     
     <!-- PWA Service Worker Registration -->
     <script>
-      // Registrar Service Worker para PWA
-      if ('serviceWorker' in navigator) {
+      // Desabilitar Service Worker en desarrollo (localhost:3000)
+      // Habilitar solo en producción
+      const isDevelopment = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+      
+      if ('serviceWorker' in navigator && !isDevelopment) {
         window.addEventListener('load', function() {
           navigator.serviceWorker.register('/sw.js?v=2.0.1')
             .then(function(registration) {
@@ -483,6 +486,14 @@
                 console.log('Cache actualizado en background');
                 break;
             }
+          });
+        });
+      } else if (isDevelopment && 'serviceWorker' in navigator) {
+        // En desarrollo, limpiar Service Workers existentes
+        navigator.serviceWorker.getRegistrations().then(registrations => {
+          registrations.forEach(reg => {
+            reg.unregister();
+            console.log('[DEV] Service Worker desregistrado para desarrollo limpio');
           });
         });
       }
