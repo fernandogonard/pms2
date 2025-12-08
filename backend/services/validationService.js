@@ -24,17 +24,19 @@ const schemas = {
     description: Joi.string().max(500).allow('').default('')
   }),
 
-  // Reservación
+  // Reservación - Acepta datos del cliente (nombre, apellido, dni, email) o clientId existente
   reservation: Joi.object({
-    clientId: Joi.string().required(),
-    roomId: Joi.string().required(),
+    tipo: Joi.string().min(2).max(50).required(), // Tipo de habitación
+    cantidad: Joi.number().integer().min(1).max(10).required(), // Cantidad de habitaciones
     checkIn: Joi.date().iso().required(),
     checkOut: Joi.date().iso().greater(Joi.ref('checkIn')).required(),
-    guests: Joi.number().integer().min(1).max(10).required(),
-    totalPrice: Joi.number().min(0).required(),
-    status: Joi.string().valid('confirmada', 'checkin', 'checkout', 'checked-in', 'checked-out', 'cancelada').default('confirmada'),
-    specialRequests: Joi.string().max(500).allow('').default(''),
-    paymentStatus: Joi.string().valid('pendiente', 'parcial', 'completado', 'reembolsado').default('pendiente')
+    nombre: Joi.string().min(2).max(50).allow(''), // Cliente - datos opcionales
+    apellido: Joi.string().min(2).max(50).allow(''),
+    dni: Joi.string().min(5).max(20).allow(''),
+    email: Joi.string().email().allow(''),
+    whatsapp: Joi.string().pattern(/^[+]?[\d\s\-()]+$/).min(7).max(20).allow(''),
+    status: Joi.string().valid('reservada', 'checkin', 'checkout', 'cancelada').default('reservada'),
+    specialRequests: Joi.string().max(500).allow('').default('')
   }),
 
   // Cliente

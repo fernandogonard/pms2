@@ -8,7 +8,8 @@ const WebSocket = require('ws');
 const { logger, logHelpers } = require('./config/logger');
 const { initScheduledJobs } = require('./scheduledJobs');
 
-dotenv.config({ path: './config/.env' });
+// Cargar variables de entorno desde .env en la raíz del backend
+dotenv.config({ path: './.env' });
 
 const PORT = process.env.PORT || 5000;
 const MONGO_URI = process.env.MONGO_URI || 'mongodb://localhost:27017/crm-hotelero';

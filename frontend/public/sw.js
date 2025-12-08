@@ -117,12 +117,24 @@ self.addEventListener('fetch', event => {
     return;
   }
   
-  // Estrategia para recursos estáticos
-  if (request.destination === 'script' || 
+  // Estrategia para recursos estáticos - EXCEPTO bundle.js en desarrollo
+  // Durante desarrollo, dejar que bundle.js se cargue normalmente del webpack dev server
+  if ((request.destination === 'script' && !request.url.includes('/static/js/bundle')) || 
       request.destination === 'style' || 
       request.destination === 'image' ||
       url.hostname !== location.hostname) {
     event.respondWith(handleStaticResource(request));
+    return;
+  }
+  
+  // Para bundle.js, usar network first sin cache complicado
+  if (request.url.includes('/static/js/bundle')) {
+    event.respondWith(
+      fetch(request).catch(() => {
+        // Si falla, no intentar cache, solo retornar error
+        return new Response('Bundle unavailable', { status: 503 });
+      })
+    );
     return;
   }
   
