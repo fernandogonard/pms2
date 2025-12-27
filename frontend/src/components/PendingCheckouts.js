@@ -2,15 +2,23 @@
 // Componente para mostrar y gestionar reservas con checkout pendiente
 import React, { useEffect, useState } from 'react';
 import { apiFetch } from '../utils/api';
+import useSessionGuard from '../hooks/useSessionGuard';
 
 const PendingCheckouts = () => {
   const [pendingReservations, setPendingReservations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [processingCheckout, setProcessingCheckout] = useState({});
+  const { canFetch, sessionExpired, authLoading } = useSessionGuard();
 
   // Cargar reservas con checkout pendiente
   const fetchPendingCheckouts = async () => {
+    if (!canFetch) {
+      setLoading(false);
+      setPendingReservations([]);
+      setError(sessionExpired ? 'Tu sesión expiró. Inicia sesión nuevamente para ver los check-outs pendientes.' : 'Debes iniciar sesión para ver los check-outs pendientes.');
+      return;
+    }
     try {
       setLoading(true);
       const response = await apiFetch('/api/reservations/pending-checkouts');
@@ -31,6 +39,10 @@ const PendingCheckouts = () => {
 
   // Procesar checkout de una reserva
   const handleCheckout = async (reservationId) => {
+    if (!canFetch) {
+      setError(sessionExpired ? 'Tu sesión expiró. Inicia sesión nuevamente para procesar check-outs.' : 'Debes iniciar sesión para procesar check-outs.');
+      return;
+    }
     try {
       setProcessingCheckout(prev => ({ ...prev, [reservationId]: true }));
       setError('');
@@ -63,8 +75,17 @@ const PendingCheckouts = () => {
 
   // Cargar datos al montar el componente
   useEffect(() => {
+    if (!canFetch) {
+      if (!authLoading) {
+        setLoading(false);
+        setPendingReservations([]);
+        setError(sessionExpired ? 'Tu sesión expiró. Inicia sesión nuevamente para ver los check-outs pendientes.' : 'Debes iniciar sesión para ver los check-outs pendientes.');
+      }
+      return;
+    }
+
     fetchPendingCheckouts();
-  }, []);
+  }, [canFetch, sessionExpired, authLoading]);
 
   const containerStyle = {
     background: '#1a1a1a',

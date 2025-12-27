@@ -56,12 +56,15 @@ const AdvancedDashboard = () => {
         fetch(`/api/analytics/kpis?range=${timeRange}`).then(r => r.json())
       ]);
 
+      const safeArray = (value) => Array.isArray(value) ? value : Array.isArray(value?.data) ? value.data : [];
+      const safeObject = (value) => (value && typeof value === 'object' && !Array.isArray(value)) ? value : {};
+
       setAnalytics({
-        occupancyTrend: occupancy,
-        revenueData: revenue,
-        roomTypeDistribution: roomTypes,
-        checkinCheckoutTrend: checkins,
-        kpis
+        occupancyTrend: safeArray(occupancy),
+        revenueData: safeArray(revenue),
+        roomTypeDistribution: safeArray(roomTypes),
+        checkinCheckoutTrend: safeArray(checkins),
+        kpis: safeObject(kpis)
       });
     } catch (error) {
       console.error('Error fetching analytics:', error);
@@ -70,20 +73,27 @@ const AdvancedDashboard = () => {
     }
   };
 
+  const occupancyTrend = Array.isArray(analytics.occupancyTrend) ? analytics.occupancyTrend : [];
+  const revenueData = Array.isArray(analytics.revenueData) ? analytics.revenueData : [];
+  const roomTypeDistribution = Array.isArray(analytics.roomTypeDistribution) ? analytics.roomTypeDistribution : [];
+  const checkinCheckoutTrend = Array.isArray(analytics.checkinCheckoutTrend) ? analytics.checkinCheckoutTrend : [];
+  const kpis = (analytics.kpis && typeof analytics.kpis === 'object') ? analytics.kpis : {};
+  const numberOrZero = (value) => typeof value === 'number' ? value : 0;
+
   // Configuración del gráfico de ocupación
   const occupancyChartData = {
-    labels: analytics.occupancyTrend.map(d => d.date),
+    labels: occupancyTrend.map(d => d.date),
     datasets: [
       {
         label: 'Ocupación (%)',
-        data: analytics.occupancyTrend.map(d => d.occupancyRate),
+        data: occupancyTrend.map(d => d.occupancyRate),
         borderColor: 'rgb(59, 130, 246)',
         backgroundColor: 'rgba(59, 130, 246, 0.1)',
         tension: 0.4,
       },
       {
         label: 'ADR (Tarifa Promedio)',
-        data: analytics.occupancyTrend.map(d => d.adr),
+        data: occupancyTrend.map(d => d.adr),
         borderColor: 'rgb(16, 185, 129)',
         backgroundColor: 'rgba(16, 185, 129, 0.1)',
         yAxisID: 'y1',
@@ -142,11 +152,11 @@ const AdvancedDashboard = () => {
 
   // Configuración del gráfico de ingresos
   const revenueChartData = {
-    labels: analytics.revenueData.map(d => d.date),
+    labels: revenueData.map(d => d.date),
     datasets: [
       {
         label: 'Ingresos Diarios',
-        data: analytics.revenueData.map(d => d.revenue),
+        data: revenueData.map(d => d.revenue),
         backgroundColor: 'rgba(245, 158, 11, 0.8)',
         borderColor: 'rgb(245, 158, 11)',
         borderWidth: 1
@@ -156,10 +166,10 @@ const AdvancedDashboard = () => {
 
   // Configuración del gráfico circular de tipos de habitación
   const roomTypeChartData = {
-    labels: analytics.roomTypeDistribution.map(d => d.type),
+    labels: roomTypeDistribution.map(d => d.type),
     datasets: [
       {
-        data: analytics.roomTypeDistribution.map(d => d.count),
+        data: roomTypeDistribution.map(d => d.count),
         backgroundColor: [
           '#FF6384',
           '#36A2EB', 
@@ -227,29 +237,29 @@ const AdvancedDashboard = () => {
       <div className="kpis-row">
         <KPICard
           title="Ocupación Promedio"
-          value={`${analytics.kpis.avgOccupancy}%`}
-          change={analytics.kpis.occupancyChange}
+          value={`${numberOrZero(kpis.avgOccupancy)}%`}
+          change={numberOrZero(kpis.occupancyChange)}
           icon="🏨"
           color="#3B82F6"
         />
         <KPICard
           title="RevPAR"
-          value={`$${analytics.kpis.revpar}`}
-          change={analytics.kpis.revparChange}
+          value={`$${numberOrZero(kpis.revpar)}`}
+          change={numberOrZero(kpis.revparChange)}
           icon="💰"
           color="#10B981"
         />
         <KPICard
           title="ADR"
-          value={`$${analytics.kpis.adr}`}
-          change={analytics.kpis.adrChange}
+          value={`$${numberOrZero(kpis.adr)}`}
+          change={numberOrZero(kpis.adrChange)}
           icon="💳"
           color="#F59E0B"
         />
         <KPICard
           title="Ingresos Totales"
-          value={`$${analytics.kpis.totalRevenue}`}
-          change={analytics.kpis.revenueChange}
+          value={`$${numberOrZero(kpis.totalRevenue)}`}
+          change={numberOrZero(kpis.revenueChange)}
           icon="📈"
           color="#EF4444"
         />
@@ -305,24 +315,24 @@ const AdvancedDashboard = () => {
             <tbody>
               <tr>
                 <td>Tiempo Promedio de Estadía</td>
-                <td>{analytics.kpis.avgStayLength} días</td>
-                <td>{analytics.kpis.prevAvgStayLength} días</td>
-                <td className={analytics.kpis.stayLengthChange >= 0 ? 'positive' : 'negative'}>
-                  {analytics.kpis.stayLengthChange}%
+                <td>{numberOrZero(kpis.avgStayLength)} días</td>
+                <td>{numberOrZero(kpis.prevAvgStayLength)} días</td>
+                <td className={numberOrZero(kpis.stayLengthChange) >= 0 ? 'positive' : 'negative'}>
+                  {numberOrZero(kpis.stayLengthChange)}%
                 </td>
               </tr>
               <tr>
                 <td>Tasa de Cancelación</td>
-                <td>{analytics.kpis.cancellationRate}%</td>
-                <td>{analytics.kpis.prevCancellationRate}%</td>
-                <td className={analytics.kpis.cancellationChange <= 0 ? 'positive' : 'negative'}>
-                  {analytics.kpis.cancellationChange}%
+                <td>{numberOrZero(kpis.cancellationRate)}%</td>
+                <td>{numberOrZero(kpis.prevCancellationRate)}%</td>
+                <td className={numberOrZero(kpis.cancellationChange) <= 0 ? 'positive' : 'negative'}>
+                  {numberOrZero(kpis.cancellationChange)}%
                 </td>
               </tr>
               <tr>
                 <td>Check-in Promedio</td>
-                <td>{analytics.kpis.avgCheckinTime}</td>
-                <td>{analytics.kpis.prevAvgCheckinTime}</td>
+                <td>{kpis.avgCheckinTime || '--'}</td>
+                <td>{kpis.prevAvgCheckinTime || '--'}</td>
                 <td>--</td>
               </tr>
             </tbody>

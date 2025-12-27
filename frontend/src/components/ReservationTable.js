@@ -1,6 +1,7 @@
 // components/ReservationTable.js
 // Tabla de gestión visual de reservas (CRUD)
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
+import useSessionGuard from '../hooks/useSessionGuard';
 
 // Usar rutas relativas y apiFetch('/api/...') para manejar base URL y Authorization
 const API_RESERVATIONS = '/api/reservations';
@@ -18,10 +19,30 @@ const ReservationTable = () => {
   const [success, setSuccess] = useState('');
   const [assignModal, setAssignModal] = useState({ open: false, reservation: null, candidates: [], loading: false });
   const [selectedRooms, setSelectedRooms] = useState([]);
+  const { canFetch, sessionExpired, authLoading } = useSessionGuard();
+  const sessionCopy = useCallback(
+    (action = 'gestionar reservas') => (
+      sessionExpired
+        ? `Tu sesión expiró. Inicia sesión nuevamente para ${action}.`
+        : `Debes iniciar sesión para ${action}.`
+    ),
+    [sessionExpired]
+  );
 
   // Cargar datos
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
+    if (!canFetch) {
+      if (!authLoading) {
+        setReservations([]);
+        setRooms([]);
+        setUsers([]);
+        setLoading(false);
+        setError(sessionCopy());
+      }
+      return;
+    }
     try {
+      setError('');
       const { apiFetch } = await import('../utils/api');
       const [reservationsRes, roomsRes, usersRes] = await Promise.all([
         apiFetch(API_RESERVATIONS),
@@ -36,18 +57,34 @@ const ReservationTable = () => {
       setUsers(Array.isArray(usersData) ? usersData : []);
       setLoading(false);
     } catch (err) {
-      setError('No se pudieron cargar los datos.');
+      if (!sessionExpired) {
+        setError('No se pudieron cargar los datos.');
+      }
       setLoading(false);
     }
-  };
+  }, [canFetch, authLoading, sessionCopy, sessionExpired]);
 
   useEffect(() => {
+    if (!canFetch) {
+      if (!authLoading) {
+        setLoading(false);
+        setReservations([]);
+        setRooms([]);
+        setUsers([]);
+        setError(sessionCopy());
+      }
+      return;
+    }
     fetchData();
-  }, []);
+  }, [canFetch, authLoading, sessionCopy, fetchData]);
 
   // Crear o editar reserva
   const handleSubmit = async e => {
     e.preventDefault();
+    if (!canFetch) {
+      setError(sessionCopy('crear o actualizar reservas'));
+      return;
+    }
     setError('');
     setSuccess('');
     setLoading(true);
@@ -85,6 +122,10 @@ const ReservationTable = () => {
   // Eliminar reserva
   const handleDelete = async id => {
     if (!window.confirm('¿Eliminar esta reserva?')) return;
+    if (!canFetch) {
+      setError(sessionCopy('eliminar reservas'));
+      return;
+    }
     const { apiFetch } = await import('../utils/api');
     const res = await apiFetch(`${API_RESERVATIONS}/${id}`, { method: 'DELETE' });
     if (!res.ok) {
@@ -110,6 +151,10 @@ const ReservationTable = () => {
 
   // Asignar habitación manualmente a una reserva
   const openAssignModal = async (r) => {
+    if (!canFetch) {
+      setError(sessionCopy('asignar habitaciones a reservas'));
+      return;
+    }
     setAssignModal({ open: true, reservation: r, candidates: [], loading: true });
     try {
       const { apiFetch } = await import('../utils/api');
@@ -134,6 +179,10 @@ const ReservationTable = () => {
 
   const doAssign = async (roomId) => {
     if (!assignModal.reservation) return;
+    if (!canFetch) {
+      setError(sessionCopy('asignar habitaciones'));
+      return;
+    }
     try {
       const { apiFetch } = await import('../utils/api');
       // si hay selectedRooms y su longitud > 0 usamos eso, sino usamos el roomId único

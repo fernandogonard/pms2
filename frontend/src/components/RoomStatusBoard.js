@@ -2,77 +2,105 @@
 // Estado en tiempo real de habitaciones para el panel recepcionista
 import React, { useEffect, useState } from 'react';
 import { createWS } from '../utils/wsClient';
-
+import { apiFetch } from '../utils/api';
+import redirectorService from '../services/redirectorService';
+import useSessionGuard from '../hooks/useSessionGuard';
 
 const API_ROOMS_STATUS = '/api/rooms/status';
 
 const RoomStatusBoard = () => {
-
   const [rooms, setRooms] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-
+  const { canFetch, sessionExpired, authLoading } = useSessionGuard();
 
   useEffect(() => {
+    if (!canFetch) {
+      if (authLoading) {
+        setLoading(true);
+        setError('');
+      } else {
+        setLoading(false);
+        if (sessionExpired) {
+          setError('Tu sesión expiró. Inicia sesión nuevamente para ver el estado de las habitaciones.');
+        } else {
+          setError('Debes iniciar sesión para ver el estado de las habitaciones.');
+        }
+        setRooms([]);
+      }
+      return undefined;
+    }
+
+    let didCancel = false;
+    let client;
+
     const fetchAll = async () => {
       try {
-        const { apiFetch } = await import('../utils/api');
         const res = await apiFetch(API_ROOMS_STATUS);
         const data = await res.json();
+        if (didCancel) return;
         setRooms(Array.isArray(data) ? data : []);
         setLoading(false);
       } catch (err) {
+        if (didCancel) return;
         setError('No se pudieron cargar los datos.');
         setLoading(false);
       }
     };
-    fetchAll();
-    // WebSocket para refresco en tiempo real (con reconexión)
-    setError('');
-  // Importar el servicio de redirección de puertos
-  const redirectorService = require('../services/redirectorService');
-  
-  const buildWsBase = () => {
-    // Intentar usar el puerto descubierto por el redirectorService
-    const wsUrl = redirectorService.getWebSocketUrl();
-    if (wsUrl) {
-      return wsUrl.replace('/ws', '');
-    }
-    
-    // Fallback al método anterior
-    const wsEnv = process.env.REACT_APP_WS_URL && process.env.REACT_APP_WS_URL.trim();
-    const apiEnv = process.env.REACT_APP_API_URL && process.env.REACT_APP_API_URL.trim();
-    let base = wsEnv || apiEnv || (typeof window !== 'undefined' && window.location && window.location.origin) || 'http://localhost:5002';
-    if (!wsEnv && !apiEnv && typeof window !== 'undefined' && window.location && window.location.hostname === 'localhost') {
-      const p = window.location.port;
-      if (p === '3000' || p === '3001') {
-        // Obtener el puerto guardado del localStorage o usar el puerto por defecto
-        const savedPort = localStorage.getItem('backend-port') || '5002';
-        base = base.replace(/:30(00|01)$/, `:${savedPort}`);
+
+    const buildWsBase = () => {
+      const wsUrl = redirectorService.getWebSocketUrl();
+      if (wsUrl) {
+        return wsUrl.replace('/ws', '');
       }
-    }
-    if (!/^wss?:\/\//i.test(base)) {
-      base = base.replace(/^http/i, 'ws');
-    }
-    return base;
-  };
-  const client = createWS(`${buildWsBase().replace(/\/$/, '')}/ws`, {
-      onopen: () => setError(''),
-      onmessage: (event) => {
-        try {
-          const data = JSON.parse(event.data);
-          if (data.type && data.type.startsWith('reservation_')) {
-            fetchAll();
-          }
-        } catch (e) {
-          // ignore
+
+      const wsEnv = process.env.REACT_APP_WS_URL && process.env.REACT_APP_WS_URL.trim();
+      const apiEnv = process.env.REACT_APP_API_URL && process.env.REACT_APP_API_URL.trim();
+      let base = wsEnv || apiEnv || (typeof window !== 'undefined' && window.location && window.location.origin) || 'http://localhost:5000';
+      if (!wsEnv && !apiEnv && typeof window !== 'undefined' && window.location && window.location.hostname === 'localhost') {
+        const p = window.location.port;
+        if (p === '3000' || p === '3001') {
+          const savedPort = localStorage.getItem('backend-port') || '5000';
+          base = base.replace(/:30(00|01)$/, `:${savedPort}`);
         }
-      },
-      onclose: () => setError('Conexión en tiempo real desconectada. Reconectando...'),
-      onerror: () => setError('Error en la conexión en tiempo real. Intentando reconectar...')
-    });
-    return () => client.close();
-  }, []);
+      }
+      if (!/^wss?:\/\//i.test(base)) {
+        base = base.replace(/^http/i, 'ws');
+      }
+      return base;
+    };
+
+    const startRealtime = () => {
+      const wsBase = `${buildWsBase().replace(/\/$/, '')}/ws`;
+      client = createWS(wsBase, {
+        onopen: () => !didCancel && setError(''),
+        onmessage: (event) => {
+          try {
+            const payload = JSON.parse(event.data);
+            if (payload.type && payload.type.startsWith('reservation_')) {
+              fetchAll();
+            }
+          } catch (e) {
+            // noop
+          }
+        },
+        onclose: () => !didCancel && setError('Conexión en tiempo real desconectada. Reconectando...'),
+        onerror: () => !didCancel && setError('Error en la conexión en tiempo real. Intentando reconectar...')
+      });
+    };
+
+    setError('');
+    setLoading(true);
+    fetchAll();
+    startRealtime();
+
+    return () => {
+      didCancel = true;
+      if (client) {
+        client.close();
+      }
+    };
+  }, [canFetch, sessionExpired, authLoading]);
 
   if (loading) return (
     <div style={{ textAlign: 'center', margin: '24px 0' }}>

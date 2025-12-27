@@ -5,7 +5,7 @@ const express = require('express');
 const router = express.Router();
 const reservationController = require('../controllers/reservationController');
 const reservationOptimized = require('../controllers/reservationOptimized');
-const { protect, authorize } = require('../middlewares/authMiddleware');
+const { protect, protectOptional, authorize } = require('../middlewares/authMiddleware');
 const { reservationLimiter, adminLimiter } = require('../config/rateLimiter');
 
 // 🆕 Importar validaciones Joi
@@ -14,7 +14,8 @@ const { createValidationMiddleware, validateParams, validateQuery } = require('.
 // 🆕 Crear reserva con validación Joi (pública o autenticada)
 // Si hay token, se asigna usuario; si no, reserva pública
 router.post('/', 
-  reservationLimiter, 
+  reservationLimiter,
+  protectOptional,
   createValidationMiddleware('reservation'), // 🔄 Validar datos de reserva
   reservationController.createReservation
 );
@@ -22,7 +23,7 @@ router.post('/',
 // 🆕 Obtener todas las reservas con paginación (admin y recepcionista)
 router.get('/', 
   reservationLimiter, 
-  protect, 
+  protect,
   authorize('admin', 'recepcionista'), 
   validateQuery('pagination'), // 🔄 Validar parámetros de paginación
   reservationController.getReservations

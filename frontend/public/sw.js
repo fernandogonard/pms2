@@ -8,7 +8,6 @@ const API_CACHE = 'crm-hotelero-api-v2.0.1';
 // Recursos críticos que siempre deben estar en cache
 const CRITICAL_RESOURCES = [
   '/',
-  '/static/js/bundle.js',
   '/static/css/main.css',
   '/manifest.json',
   '/icons/icon-16x16.png',
@@ -53,6 +52,8 @@ const CACHE_CONFIG = {
 self.addEventListener('install', event => {
   console.log('[SW] Instalando Service Worker v2.0.0');
   
+  self.skipWaiting();
+  
   event.waitUntil(
     caches.open(STATIC_CACHE)
       .then(cache => {
@@ -72,6 +73,16 @@ self.addEventListener('install', event => {
 // Activación del Service Worker
 self.addEventListener('activate', event => {
   console.log('[SW] Activando Service Worker v2.0.0');
+  
+  event.waitUntil(
+    caches.keys().then(function(cacheNames) {
+      return Promise.all(
+        cacheNames.map(function(cacheName) {
+          return caches.delete(cacheName);
+        })
+      );
+    })
+  );
   
   event.waitUntil(
     caches.keys()
@@ -117,24 +128,12 @@ self.addEventListener('fetch', event => {
     return;
   }
   
-  // Estrategia para recursos estáticos - EXCEPTO bundle.js en desarrollo
-  // Durante desarrollo, dejar que bundle.js se cargue normalmente del webpack dev server
-  if ((request.destination === 'script' && !request.url.includes('/static/js/bundle')) || 
+  // Estrategia para recursos estáticos
+  if (request.destination === 'script' || 
       request.destination === 'style' || 
       request.destination === 'image' ||
       url.hostname !== location.hostname) {
     event.respondWith(handleStaticResource(request));
-    return;
-  }
-  
-  // Para bundle.js, usar network first sin cache complicado
-  if (request.url.includes('/static/js/bundle')) {
-    event.respondWith(
-      fetch(request).catch(() => {
-        // Si falla, no intentar cache, solo retornar error
-        return new Response('Bundle unavailable', { status: 503 });
-      })
-    );
     return;
   }
   

@@ -294,6 +294,38 @@ Con las implementaciones críticas, nuestro CRM puede capturar 5-10% del mercado
 
 ---
 
+# Roadmap de Implementación
+
+## Fase 1: Seguridad y Estabilidad
+- [x] Implementar Refresh Tokens seguros.
+- [x] Crear lista negra persistente de tokens.
+- [x] Registrar auditorías de acciones críticas.
+
+## Fase 2: Optimización del Backend
+- [x] Optimizar índices y consultas en MongoDB.
+- [x] Centralizar lógica en servicios reutilizables.
+- [x] Diseñar reportes avanzados (ocupación, ingresos, cancelaciones).
+
+## Fase 3: Experiencia de Usuario
+- [x] Mejorar interacciones en el frontend (estados de carga, feedback visual).
+- [x] Mejorar accesibilidad en el frontend (roles ARIA, navegación por teclado).
+
+## Fase 4: Escalabilidad y Nuevas Funcionalidades
+- [ ] Implementar soporte para múltiples idiomas.
+- [ ] Añadir notificaciones en tiempo real.
+- [ ] Integrar pasarelas de pago.
+
+## Fase 5: Monitoreo y Mantenimiento
+- [ ] Configurar herramientas de monitoreo (Prometheus, Grafana).
+- [ ] Automatizar backups y recuperación ante desastres.
+- [ ] Realizar pruebas de carga y estrés periódicas.
+
+---
+
+Este roadmap está diseñado para evolucionar el sistema de manera incremental, asegurando calidad y estabilidad en cada etapa.
+
+---
+
 ## 🔍 **AUDITORÍA TÉCNICA COMPLETA (08/10/2025)**
 
 ### 📊 **RESULTADO DE LA AUDITORÍA**

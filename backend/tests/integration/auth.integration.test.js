@@ -6,15 +6,20 @@ const app = require('../../app');
 const User = require('../../models/User');
 const { connectDB, disconnectDB, clearDB } = require('../setup/testDatabase');
 
+jest.setTimeout(30000); // Incrementar timeout global
+
 describe('Authentication Integration Tests', () => {
   let server;
+  let intervalId;
 
   beforeAll(async () => {
+    intervalId = setInterval(() => {}, 1000); // Simulación de limpieza
     await connectDB();
     server = app.listen(0); // Puerto aleatorio para tests
   });
 
   afterAll(async () => {
+    clearInterval(intervalId); // Limpiar intervalos
     await server.close();
     await disconnectDB();
   });

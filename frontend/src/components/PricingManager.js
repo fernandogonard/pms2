@@ -1,8 +1,9 @@
 // components/PricingManager.js
 // Componente para gestionar precios de tipos de habitación
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { apiFetch } from '../utils/api';
+import useSessionGuard from '../hooks/useSessionGuard';
 
 const PricingManager = () => {
   const [roomTypes, setRoomTypes] = useState([]);
@@ -11,14 +12,28 @@ const PricingManager = () => {
   const [editPrice, setEditPrice] = useState('');
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
+  const { canFetch, sessionExpired, authLoading } = useSessionGuard();
+  const sessionCopy = useCallback(
+    (action = 'gestionar precios') => (
+      sessionExpired
+        ? `Tu sesión expiró. Inicia sesión nuevamente para ${action}.`
+        : `Debes iniciar sesión para ${action}.`
+    ),
+    [sessionExpired]
+  );
 
-  useEffect(() => {
-    loadRoomTypes();
-  }, []);
-
-  const loadRoomTypes = async () => {
+  const loadRoomTypes = useCallback(async () => {
+    if (!canFetch) {
+      if (!authLoading) {
+        setRoomTypes([]);
+        setLoading(false);
+        setMessage(sessionCopy());
+      }
+      return;
+    }
     try {
       setLoading(true);
+      setMessage('');
       const response = await apiFetch('/api/billing/room-types');
       const data = await response.json();
       if (response.ok && data.success) {
@@ -28,11 +43,17 @@ const PricingManager = () => {
       }
     } catch (error) {
       console.error('Error cargando tipos de habitación:', error);
-      setMessage('Error cargando tipos de habitación');
+      if (!sessionExpired) {
+        setMessage('Error cargando tipos de habitación');
+      }
     } finally {
       setLoading(false);
     }
-  };
+  }, [canFetch, authLoading, sessionCopy, sessionExpired]);
+
+  useEffect(() => {
+    loadRoomTypes();
+  }, [loadRoomTypes]);
 
   const startEdit = (roomType) => {
     setEditingType(roomType.id);
@@ -49,6 +70,11 @@ const PricingManager = () => {
   const savePrice = async (roomTypeId) => {
     if (!editPrice || isNaN(editPrice) || parseFloat(editPrice) <= 0) {
       setMessage('Por favor ingrese un precio válido mayor a 0');
+      return;
+    }
+
+    if (!canFetch) {
+      setMessage(sessionCopy('actualizar precios'));
       return;
     }
 
@@ -146,7 +172,7 @@ const PricingManager = () => {
                     <div className="price-actions">
                       <button 
                         onClick={() => savePrice(roomType.id)}
-                        disabled={saving}
+                        disabled={saving || !canFetch || authLoading}
                         className="btn-save"
                       >
                         {saving ? 'Guardando...' : '💾 Guardar'}
@@ -180,7 +206,7 @@ const PricingManager = () => {
         ))}
       </div>
 
-      <style jsx>{`
+      <style>{`
         .pricing-manager {
           padding: 20px;
           background: #f8f9fa;

@@ -2,6 +2,7 @@
 // Descarga de reportes avanzados (ocupación) para admin
 import React, { useState } from 'react';
 import { apiFetch } from '../utils/api';
+import useSessionGuard from '../hooks/useSessionGuard';
 
 const API_REPORT_OCCUPANCY = '/api/reports/occupancy';
 
@@ -10,12 +11,21 @@ const ReportDownload = () => {
   const [end, setEnd] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const { canFetch, sessionExpired, authLoading } = useSessionGuard();
 
   const handleDownload = async e => {
     e.preventDefault();
     setError('');
     if (!start || !end) {
       setError('Debes seleccionar ambas fechas.');
+      return;
+    }
+    if (!canFetch) {
+      setError(
+        sessionExpired
+          ? 'Tu sesión expiró. Inicia sesión nuevamente para descargar reportes.'
+          : 'Debes iniciar sesión para descargar reportes.'
+      );
       return;
     }
     setLoading(true);
@@ -54,10 +64,15 @@ const ReportDownload = () => {
           Hasta:
           <input type="date" value={end} onChange={e => setEnd(e.target.value)} style={{ marginLeft: 8, background: '#18191A', color: '#fff', border: '1px solid #444', borderRadius: 6, padding: 8 }} required />
         </label>
-        <button type="submit" style={{ background: '#2563eb', color: '#fff', border: 'none', padding: '8px 24px', borderRadius: 6, fontWeight: 500, fontSize: 16 }} disabled={loading}>
+        <button type="submit" style={{ background: '#2563eb', color: '#fff', border: 'none', padding: '8px 24px', borderRadius: 6, fontWeight: 500, fontSize: 16 }} disabled={loading || authLoading || !canFetch}>
           {loading ? 'Descargando...' : 'Descargar Excel'}
         </button>
       </form>
+      {(!canFetch && !authLoading && !error) && (
+        <div style={{ color: '#fbbf24', fontWeight: 500 }}>
+          {sessionExpired ? 'Tu sesión expiró. Actualiza tu sesión para descargar el reporte.' : 'Inicia sesión para habilitar la descarga del reporte.'}
+        </div>
+      )}
       {error && <div style={{ color: '#ef4444', fontWeight: 500 }}>{error}</div>}
     </div>
   );

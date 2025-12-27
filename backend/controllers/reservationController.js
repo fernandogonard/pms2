@@ -8,9 +8,11 @@ const mongoose = require('mongoose');
 const Client = require('../models/Client');
 const { assignRoomsToReservation, processCheckin, processCheckout } = require('../services/roomAssignmentService');
 const BillingService = require('../services/billingService');
+const ReservationService = require('../services/ReservationService');
 
 // 🆕 Importar nuevo sistema de logging Winston
 const { logger } = require('../services/loggerService');
+const lockService = require('../services/lockService');
 
 /**
  * Obtiene las reservas con checkout pendiente (que deberían haber terminado pero siguen activas)
@@ -59,10 +61,13 @@ const getPendingCheckouts = async (req, res) => {
       };
     });
 
-    logger.performance.requestCompleted(
-      'GET_PENDING_CHECKOUTS',
-      Date.now() - startTime,
-      { count: reservationsWithDelay.length }
+    const duration = Date.now() - startTime;
+    logger.performance.requestTime(
+      req.method,
+      req.originalUrl,
+      duration,
+      200,
+      req.user?.id
     );
 
     res.json({
@@ -93,208 +98,242 @@ const getPendingCheckouts = async (req, res) => {
 // 🆕 Crear reserva con logging avanzado
 const createReservation = async (req, res) => {
   const startTime = Date.now();
+  let { tipo, cantidad, checkIn, checkOut, nombre, apellido, dni, email, whatsapp } = req.body;
+  const lockKey = `reservation-type:${tipo || 'unknown'}`;
+  let user = undefined;
+  if (req.user && req.user.userId) {
+    user = req.user.userId;
+  }
+  if (user && !mongoose.Types.ObjectId.isValid(user)) {
+    user = undefined; // Evita fallos de casteo cuando devProtect inyecta ids no-Mongo
+  }
+
+  logger.audit.userAction(
+    'CREATE_RESERVATION_ATTEMPT',
+    user || 'anonymous',
+    'reservation',
+    null,
+    { tipo, cantidad, checkIn, checkOut, email, ip: req.ip }
+  );
+
   try {
-    const { tipo, cantidad, checkIn, checkOut, nombre, apellido, dni, email, whatsapp } = req.body;
-    let user = undefined;
-    if (req.user && req.user.userId) {
-      user = req.user.userId;
-    }
+    await lockService.withLock(lockKey, 15000, async () => {
+      const missingClientFields = ['nombre', 'apellido', 'dni', 'email', 'whatsapp'].filter(f => !req.body[f]);
+      const isStaff = req.user?.role && ['admin', 'recepcionista'].includes(req.user.role);
+      if (missingClientFields.length > 0 && isStaff) {
+        const stamp = Date.now();
+        nombre = nombre || 'Invitado';
+        apellido = apellido || 'Reserva rápida';
+        dni = dni || `ADM-${stamp}`;
+        email = email || `guest+${stamp}@hotel.local`;
+        whatsapp = whatsapp || '000000000';
+        req.body.nombre = nombre;
+        req.body.apellido = apellido;
+        req.body.dni = dni;
+        req.body.email = email;
+        req.body.whatsapp = whatsapp;
+      } else if (missingClientFields.length > 0) {
+        return res.status(400).json({
+          message: 'Faltan datos obligatorios del cliente',
+          missingClientFields: missingClientFields
+        });
+      }
 
-    // 📝 Log del intento de creación de reserva
-    logger.audit.userAction(
-      'CREATE_RESERVATION_ATTEMPT',
-      user || 'anonymous',
-      'reservation',
-      null,
-      { tipo, cantidad, checkIn, checkOut, email, ip: req.ip }
-    );
-    // Validar fechas
-    if (new Date(checkIn) > new Date(checkOut)) {
-      return res.status(400).json({ message: 'La fecha de check-in no puede ser posterior a la de check-out.' });
-    }
-    // Buscar o crear cliente
-    let client = await Client.findOne({ $or: [{ dni }, { email }] });
-    if (!client) {
-      client = await Client.create({ nombre, apellido, dni, email, whatsapp });
-    } else {
-      // Si existe, actualizar datos básicos si cambiaron
-      let updated = false;
-      if (client.nombre !== nombre) { client.nombre = nombre; updated = true; }
-      if (client.apellido !== apellido) { client.apellido = apellido; updated = true; }
-      if (client.whatsapp !== whatsapp) { client.whatsapp = whatsapp; updated = true; }
-      if (updated) await client.save();
-    }
-    // Validar que el tipo no esté vacío
-    if (!tipo) {
-      return res.status(400).json({ message: 'El tipo de habitación es obligatorio.' });
-    }
+      // Validar fechas
+      if (new Date(checkIn) > new Date(checkOut)) {
+        return res.status(400).json({ message: 'La fecha de check-in no puede ser posterior a la de check-out.' });
+      }
 
-    // 🚫 VALIDACIÓN ESTRICTA: NO SOBREVENTA
-    // Verificar disponibilidad real antes de crear la reserva
-    const cantidadSolicitada = cantidad || 1;
-    
-    // Obtener todas las habitaciones del tipo solicitado que no estén en mantenimiento o limpieza
-    const habitacionesDelTipo = await Room.find({
-      type: tipo,
-      status: { $nin: ['mantenimiento', 'limpieza'] }
-    });
-    const totalHabitaciones = habitacionesDelTipo.length;
-    
-    if (totalHabitaciones === 0) {
-      return res.status(400).json({ 
-        message: `No existen habitaciones del tipo "${tipo}".` 
+      // Buscar o crear cliente
+      let client = await Client.findOne({ $or: [{ dni }, { email }] });
+      if (!client) {
+        client = await Client.create({ nombre, apellido, dni, email, whatsapp });
+      } else {
+        let updated = false;
+        if (client.nombre !== nombre) { client.nombre = nombre; updated = true; }
+        if (client.apellido !== apellido) { client.apellido = apellido; updated = true; }
+        if (client.whatsapp !== whatsapp) { client.whatsapp = whatsapp; updated = true; }
+        if (updated) await client.save();
+      }
+
+      if (!tipo) {
+        return res.status(400).json({ message: 'El tipo de habitación es obligatorio.' });
+      }
+
+      // 🚫 VALIDACIÓN ESTRICTA: NO SOBREVENTA
+      const cantidadSolicitada = cantidad || 1;
+      const habitacionesDelTipo = await Room.find({
+        type: tipo,
+        status: { $nin: ['mantenimiento', 'limpieza'] }
       });
-    }
-    
-    // Generar rango de fechas de la reserva
-    const fechaInicio = new Date(checkIn);
-    const fechaFin = new Date(checkOut);
-    const fechasReserva = [];
-    
-    for (let d = new Date(fechaInicio); d < fechaFin; d.setDate(d.getDate() + 1)) {
-      fechasReserva.push(d.toISOString().split('T')[0]);
-    }
-    
-    // Para cada fecha, verificar disponibilidad
-    for (const fecha of fechasReserva) {
-      const fechaObj = new Date(fecha + 'T00:00:00.000Z');
-      const fechaSiguiente = new Date(fechaObj);
-      fechaSiguiente.setDate(fechaSiguiente.getDate() + 1);
-      
-      // Contar habitaciones ocupadas en esta fecha (reales + virtuales)
-      const reservasEnFecha = await Reservation.find({
-        tipo: tipo,
-        status: { $ne: 'checkout' }, // Excluir reservas que ya hicieron checkout
-        checkIn: { $lt: fechaSiguiente },
-        checkOut: { $gt: fechaObj }
-      });
-      
-      // Limpiar reservas fantasma (checkout anticipado)
-      for (const reserva of reservasEnFecha) {
-        if (reserva.status === 'checkin' && new Date(reserva.checkOut) < new Date()) {
-          reserva.status = 'checkout';
-          await reserva.save();
-          
-          // Liberar habitaciones si estaban asignadas
-          if (reserva.room && reserva.room.length > 0) {
-            for (const roomId of reserva.room) {
-              const room = await Room.findById(roomId);
-              if (room && room.status === 'ocupada') {
-                room.status = 'disponible';
-                await room.save();
-                console.log(`[API] Habitación ${room.number} liberada automáticamente por checkout anticipado`);
+      const totalHabitaciones = habitacionesDelTipo.length;
+
+      if (totalHabitaciones === 0) {
+        return res.status(400).json({ 
+          message: `No existen habitaciones del tipo "${tipo}".` 
+        });
+      }
+
+      const fechaInicio = new Date(checkIn);
+      const fechaFin = new Date(checkOut);
+      const fechasReserva = [];
+      for (let d = new Date(fechaInicio); d < fechaFin; d.setDate(d.getDate() + 1)) {
+        fechasReserva.push(d.toISOString().split('T')[0]);
+      }
+
+      for (const fecha of fechasReserva) {
+        const fechaObj = new Date(fecha + 'T00:00:00.000Z');
+        const fechaSiguiente = new Date(fechaObj);
+        fechaSiguiente.setDate(fechaSiguiente.getDate() + 1);
+
+        const reservasEnFecha = await Reservation.find({
+          tipo: tipo,
+          status: { $ne: 'checkout' },
+          checkIn: { $lt: fechaSiguiente },
+          checkOut: { $gt: fechaObj }
+        });
+
+        for (const reserva of reservasEnFecha) {
+          if (reserva.status === 'checkin' && new Date(reserva.checkOut) < new Date()) {
+            reserva.status = 'checkout';
+            await reserva.save();
+
+            if (reserva.room && reserva.room.length > 0) {
+              for (const roomId of reserva.room) {
+                const room = await Room.findById(roomId);
+                if (room && room.status === 'ocupada') {
+                  room.status = 'disponible';
+                  await room.save();
+                  console.log(`[API] Habitación ${room.number} liberada automáticamente por checkout anticipado`);
+                }
               }
             }
+            continue;
           }
-          continue; // No contar esta reserva como ocupada
         }
-      };
-      
-      let habitacionesOcupadas = 0;
-      
-      // Contar reservas que ocupan habitaciones
-      reservasEnFecha.forEach(reserva => {
-        if (reserva.room && reserva.room.length > 0) {
-          // Reserva real - cuenta las habitaciones asignadas
-          habitacionesOcupadas += reserva.room.length;
-        } else {
-          // Reserva virtual - cuenta la cantidad solicitada
-          habitacionesOcupadas += (reserva.cantidad || 1);
+
+        let habitacionesOcupadas = 0;
+        reservasEnFecha.forEach(reserva => {
+          if (reserva.room && reserva.room.length > 0) {
+            habitacionesOcupadas += reserva.room.length;
+          } else {
+            habitacionesOcupadas += (reserva.cantidad || 1);
+          }
+        });
+
+        const habitacionesDisponibles = totalHabitaciones - habitacionesOcupadas;
+        if (cantidadSolicitada > habitacionesDisponibles) {
+          return res.status(409).json({ 
+            message: `No hay suficientes habitaciones ${tipo} disponibles para el ${fecha}. Solicitadas: ${cantidadSolicitada}, Disponibles: ${habitacionesDisponibles}`,
+            detalles: {
+              fecha,
+              tipo,
+              totalHabitaciones,
+              habitacionesOcupadas,
+              habitacionesDisponibles,
+              cantidadSolicitada
+            }
+          });
+        }
+      }
+
+      // Validación de solapamiento de reservas
+      const overlappingReservations = await Reservation.find({
+        room: { $in: habitacionesDelTipo.map(h => h._id) },
+        $or: [
+          { checkIn: { $lt: fechaFin }, checkOut: { $gt: fechaInicio } },
+          { checkIn: { $gte: fechaInicio, $lt: fechaFin } },
+          { checkOut: { $gt: fechaInicio, $lte: fechaFin } }
+        ]
+      });
+
+      if (overlappingReservations.length > 0) {
+        return res.status(409).json({
+          message: 'Conflicto: Ya existen reservas que solapan con las fechas seleccionadas.',
+          detalles: overlappingReservations.map(r => ({
+            id: r._id,
+            checkIn: r.checkIn,
+            checkOut: r.checkOut,
+            room: r.room
+          }))
+        });
+      }
+
+      console.log(`✅ Validación pasada: Creando reserva ${tipo} x${cantidadSolicitada} del ${checkIn} al ${checkOut}`);
+      const reservationData = { tipo, cantidad, checkIn, checkOut };
+      const pricing = await BillingService.calculateReservationPricing(reservationData);
+
+      const reservation = new Reservation({ 
+        tipo, 
+        cantidad, 
+        user, 
+        client: client._id, 
+        checkIn, 
+        checkOut,
+        pricing: {
+          pricePerNight: pricing.pricePerNight,
+          totalNights: pricing.totalNights,
+          subtotal: pricing.subtotal,
+          taxes: pricing.taxes,
+          total: pricing.total,
+          currency: pricing.currency
+        },
+        payment: {
+          status: 'pendiente',
+          method: 'efectivo',
+          amountPaid: 0
+        },
+        invoice: {
+          isPaid: false
         }
       });
-      
-      // NO hay doble conteo - las reservas ya incluyen las habitaciones ocupadas
-      const habitacionesDisponibles = totalHabitaciones - habitacionesOcupadas;
-      
-      if (cantidadSolicitada > habitacionesDisponibles) {
-        return res.status(409).json({ 
-          message: `No hay suficientes habitaciones ${tipo} disponibles para el ${fecha}. Solicitadas: ${cantidadSolicitada}, Disponibles: ${habitacionesDisponibles}`,
-          detalles: {
-            fecha,
-            tipo,
-            totalHabitaciones,
-            habitacionesOcupadas,
-            habitacionesDisponibles,
-            cantidadSolicitada
+
+      await reservation.save();
+      console.log(`💰 Precios calculados: $${pricing.total} por ${pricing.totalNights} noches`);
+
+      console.log('🔄 Intentando asignación automática de habitaciones...');
+      await assignRoomsToReservation(reservation);
+
+      const updatedReservation = await Reservation.findById(reservation._id).populate('room client');
+
+      const wss = req.app.get('wss');
+      if (wss) {
+        wss.clients.forEach(wsclient => {
+          if (wsclient.readyState === 1) {
+            wsclient.send(JSON.stringify({ type: 'reservation_created', reservation: updatedReservation }));
           }
         });
       }
-    }
-    
-    console.log(`✅ Validación pasada: Creando reserva ${tipo} x${cantidadSolicitada} del ${checkIn} al ${checkOut}`);
-    
-    // 🆕 CALCULAR PRECIOS AUTOMÁTICAMENTE
-    const reservationData = { tipo, cantidad, checkIn, checkOut };
-    const pricing = await BillingService.calculateReservationPricing(reservationData);
-    
-    const reservation = new Reservation({ 
-      tipo, 
-      cantidad, 
-      user, 
-      client: client._id, 
-      checkIn, 
-      checkOut,
-      pricing: {
-        pricePerNight: pricing.pricePerNight,
-        totalNights: pricing.totalNights,
-        subtotal: pricing.subtotal,
-        taxes: pricing.taxes,
-        total: pricing.total,
-        currency: pricing.currency
-      },
-      payment: {
-        status: 'pendiente',
-        method: 'efectivo',
-        amountPaid: 0
-      },
-      invoice: {
-        isPaid: false
-      }
-    });
-    
-    await reservation.save();
-    console.log(`💰 Precios calculados: $${pricing.total} por ${pricing.totalNights} noches`);
-    
-    // 🏠 ASIGNACIÓN AUTOMÁTICA: Intentar asignar habitaciones inmediatamente
-    console.log('🔄 Intentando asignación automática de habitaciones...');
-    await assignRoomsToReservation(reservation);
-    
-    // Recargar reserva con habitaciones asignadas
-    const updatedReservation = await Reservation.findById(reservation._id).populate('room client');
-    
-    // Emitir evento WebSocket
-    const wss = req.app.get('wss');
-    if (wss) {
-      wss.clients.forEach(wsclient => {
-        if (wsclient.readyState === 1) {
-          wsclient.send(JSON.stringify({ type: 'reservation_created', reservation: updatedReservation }));
+
+      const duration = Date.now() - startTime;
+      logger.audit.userAction(
+        'CREATE_RESERVATION_SUCCESS',
+        user || 'anonymous',
+        'reservation',
+        updatedReservation._id.toString(),
+        { 
+          tipo, 
+          cantidad, 
+          checkIn, 
+          checkOut, 
+          totalPrice: pricing.total,
+          roomsAssigned: updatedReservation.room?.length || 0,
+          duration
         }
-      });
+      );
+
+      logger.performance.requestTime(req.method, req.originalUrl, duration, 201, user);
+
+      return res.status(201).json(updatedReservation);
+    });
+
+    return;
+  } catch (error) {
+    if (error && error.name === 'LockBusyError') {
+      logger.warn('createReservation lock busy', { tipo, userId: user, ip: req.ip });
+      return res.status(423).json({ message: 'Otra operación está creando una reserva del mismo tipo. Intenta nuevamente en unos segundos.' });
     }
 
-    // 📝 Log de éxito
-    const duration = Date.now() - startTime;
-    logger.audit.userAction(
-      'CREATE_RESERVATION_SUCCESS',
-      user || 'anonymous',
-      'reservation',
-      updatedReservation._id.toString(),
-      { 
-        tipo, 
-        cantidad, 
-        checkIn, 
-        checkOut, 
-        totalPrice: pricing.total,
-        roomsAssigned: updatedReservation.room?.length || 0,
-        duration
-      }
-    );
-
-    logger.performance.requestTime(req.method, req.originalUrl, duration, 201, user);
-    
-    res.status(201).json(updatedReservation);
-  } catch (error) {
-    // 📝 Log de error
     const duration = Date.now() - startTime;
     logger.error('Error al crear reserva', error, {
       userId: user,
@@ -304,9 +343,18 @@ const createReservation = async (req, res) => {
       duration
     });
 
-    logger.performance.requestTime(req.method, req.originalUrl, duration, 500, user);
+    const message = (error && error.message) ? error.message : 'Error al crear reserva.';
+    // Si el problema es de negocio (p.ej. tipo de habitación inexistente), responder 400 en lugar de 500
+    const isBusinessError = message.toLowerCase().includes('tipo de habitación') || message.toLowerCase().includes('disponibles');
+    const statusCode = isBusinessError ? 400 : 500;
 
-    res.status(500).json({ message: 'Error al crear reserva.', error });
+    logger.performance.requestTime(req.method, req.originalUrl, duration, statusCode, user);
+
+    // Propagar detalles si existen
+    const payload = { message };
+    if (error?.details) payload.details = error.details;
+
+    return res.status(statusCode).json(payload);
   }
 };
 
@@ -418,93 +466,96 @@ const updateReservation = async (req, res) => {
 
 // Asignar una habitación concreta a una reserva (admin/recepcionista)
 const assignRoomToReservation = async (req, res) => {
+  const reservationId = req.params.id;
+  const lockKey = `reservation:${reservationId}`;
   try {
-    const reservationId = req.params.id;
-    let { room } = req.body;
+    await lockService.withLock(lockKey, 5000, async () => {
+      let { room } = req.body;
+      if (!room) {
+        return res.status(400).json({ message: 'Debe indicar room (id) o array de ids en el body.' });
+      }
+      if (!Array.isArray(room)) room = [room];
 
-    if (!room) {
-      return res.status(400).json({ message: 'Debe indicar room (id) o array de ids en el body.' });
-    }
-    if (!Array.isArray(room)) room = [room];
-
-    const reservation = await Reservation.findById(reservationId);
-    if (!reservation) return res.status(404).json({ message: 'Reserva no encontrada.' });
-
-    // Validar cantidad
-    const requested = room.length;
-    const allowed = reservation.cantidad || 1;
-    if (requested > allowed) {
-      return res.status(400).json({ message: `Se intentan asignar ${requested} habitaciones pero la reserva solicita ${allowed}.` });
-    }
-
-    // Validar y reservar habitaciones
-    const roomsToUpdate = [];
-    for (const rId of room) {
-      const rm = await Room.findById(rId);
-      if (!rm) return res.status(404).json({ message: `Habitación ${rId} no encontrada.` });
-
-      if (['mantenimiento', 'limpieza'].includes(rm.status)) {
-        return res.status(400).json({ message: `La habitación ${rm.number} no está disponible para asignación (status ${rm.status}).` });
+      const reservation = await Reservation.findById(reservationId);
+      if (!reservation) {
+        return res.status(404).json({ message: 'Reserva no encontrada.' });
       }
 
-      // Comprobar solapamiento con otras reservas activas para esa habitación
-      const overlap = await Reservation.findOne({
-        _id: { $ne: reservationId },
-        room: rm._id,
-        status: { $ne: 'checkout' },
-        $or: [
-          { checkIn: { $lt: new Date(reservation.checkOut) }, checkOut: { $gt: new Date(reservation.checkIn) } }
-        ]
-      });
-      if (overlap) {
-        return res.status(409).json({ message: `La habitación ${rm.number} ya está reservada en esas fechas.` });
+      const requested = room.length;
+      const allowed = reservation.cantidad || 1;
+      if (requested > allowed) {
+        return res.status(400).json({ message: `Se intentan asignar ${requested} habitaciones pero la reserva solicita ${allowed}.` });
       }
 
-      roomsToUpdate.push(rm);
-    }
-
-    // Asignar habitaciones en la reserva
-    const existingRooms = Array.isArray(reservation.room) ? reservation.room.map(r => r.toString()) : (reservation.room ? [reservation.room.toString()] : []);
-    const incomingRooms = room.map(r => r.toString());
-    const finalRoomIds = Array.from(new Set([...existingRooms, ...incomingRooms]));
-
-    if (finalRoomIds.length > allowed) {
-      return res.status(400).json({ message: `La asignación resultaría en ${finalRoomIds.length} habitaciones pero la reserva solicita ${allowed}.` });
-    }
-
-    reservation.room = finalRoomIds;
-
-    const checkInDate = new Date(reservation.checkIn);
-    checkInDate.setHours(0,0,0,0);
-    const today = new Date(); today.setHours(0,0,0,0);
-    if (today >= checkInDate) reservation.status = 'checkin';
-
-    await reservation.save();
-
-    // Marcar nuevas habitaciones como ocupadas (solo las que no estaban ya asignadas)
-    const existingSet = new Set(existingRooms);
-    for (const rm of roomsToUpdate) {
-      if (!existingSet.has(rm._id.toString())) {
-        rm.status = 'ocupada';
-        await rm.save();
-      }
-    }
-
-    // En la respuesta, devolver la reserva con relaciones pobladas
-    const updatedReservation = await Reservation.findById(reservationId).populate('room client');
-
-    // Emitir evento WebSocket
-    const wss = req.app.get('wss');
-    if (wss) {
-      wss.clients.forEach(client => {
-        if (client.readyState === 1) {
-          client.send(JSON.stringify({ type: 'reservation_updated', reservation: updatedReservation }));
+      const roomsToUpdate = [];
+      for (const rId of room) {
+        const rm = await Room.findById(rId);
+        if (!rm) {
+          return res.status(404).json({ message: `Habitación ${rId} no encontrada.` });
         }
-      });
-    }
 
-    return res.status(200).json(updatedReservation);
+        if (['mantenimiento', 'limpieza'].includes(rm.status)) {
+          return res.status(400).json({ message: `La habitación ${rm.number} no está disponible para asignación (status ${rm.status}).` });
+        }
+
+        const overlap = await Reservation.findOne({
+          _id: { $ne: reservationId },
+          room: rm._id,
+          status: { $ne: 'checkout' },
+          $or: [
+            { checkIn: { $lt: new Date(reservation.checkOut) }, checkOut: { $gt: new Date(reservation.checkIn) } }
+          ]
+        });
+        if (overlap) {
+          return res.status(409).json({ message: `La habitación ${rm.number} ya está reservada en esas fechas.` });
+        }
+
+        roomsToUpdate.push(rm);
+      }
+
+      const existingRooms = Array.isArray(reservation.room) ? reservation.room.map(r => r.toString()) : (reservation.room ? [reservation.room.toString()] : []);
+      const incomingRooms = room.map(r => r.toString());
+      const finalRoomIds = Array.from(new Set([...existingRooms, ...incomingRooms]));
+
+      if (finalRoomIds.length > allowed) {
+        return res.status(400).json({ message: `La asignación resultaría en ${finalRoomIds.length} habitaciones pero la reserva solicita ${allowed}.` });
+      }
+
+      reservation.room = finalRoomIds;
+
+      const checkInDate = new Date(reservation.checkIn);
+      checkInDate.setHours(0,0,0,0);
+      const today = new Date(); today.setHours(0,0,0,0);
+      if (today >= checkInDate) reservation.status = 'checkin';
+
+      await reservation.save();
+
+      const existingSet = new Set(existingRooms);
+      for (const rm of roomsToUpdate) {
+        if (!existingSet.has(rm._id.toString())) {
+          rm.status = 'ocupada';
+          await rm.save();
+        }
+      }
+
+      const updatedReservation = await Reservation.findById(reservationId).populate('room client');
+
+      const wss = req.app.get('wss');
+      if (wss) {
+        wss.clients.forEach(client => {
+          if (client.readyState === 1) {
+            client.send(JSON.stringify({ type: 'reservation_updated', reservation: updatedReservation }));
+          }
+        });
+      }
+
+      return res.status(200).json(updatedReservation);
+    });
+    return;
   } catch (error) {
+    if (error && error.name === 'LockBusyError') {
+      return res.status(423).json({ message: 'Otra operación está modificando esta reserva. Intenta en unos segundos.' });
+    }
     console.error('assignRoomToReservation error', error);
     return res.status(500).json({ message: 'Error al asignar habitación.', error: (error && error.message) ? error.message : error });
   }
@@ -757,15 +808,13 @@ function optimizarCombinacion(combinaciones) {
       }
       
       const duration = Date.now() - startTime;
-      logger.performance.operation('Limpieza de reservas fantasma completada', {
-        service: 'crm-hotelero',
-        operation: 'CLEANUP_GHOST_RESERVATIONS',
+      logger.performance.requestTime(
+        req.method,
+        req.originalUrl,
         duration,
-        cleanedCount: cleaned,
-        totalFound: ghostReservations.length,
-        adminId: req.user?.id,
-        success: true
-      });
+        200,
+        req.user?.id
+      );
       
       res.json({
         success: true,

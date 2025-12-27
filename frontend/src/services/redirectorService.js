@@ -10,6 +10,9 @@ let lastDetectionTime = 0;
 // Tiempo de caché en milisegundos (10 minutos)
 const CACHE_TIME = 10 * 60 * 1000;
 
+// Tiempo máximo para forzar una redetección cuando el WS falla (3 minutos)
+const REFRESH_WINDOW_MS = 3 * 60 * 1000;
+
 /**
  * Obtiene el puerto del backend y redirige el WebSocket al puerto correcto
  */
@@ -120,6 +123,20 @@ export function getWebSocketUrl() {
 }
 
 /**
+ * Fuerza o asegura una redetección del puerto y devuelve el WS URL fresco.
+ * Se usa cuando el cliente detecta reconexiones repetidas.
+ */
+export async function refreshWebSocketUrl(force = false) {
+  const age = Date.now() - lastDetectionTime;
+  if (!force && cachedWsUrl && age < REFRESH_WINDOW_MS) {
+    return cachedWsUrl;
+  }
+
+  await detectBackendPort();
+  return cachedWsUrl;
+}
+
+/**
  * Obtiene la URL base de la API (HTTP)
  * @returns {string} URL base de la API
  */
@@ -136,7 +153,4 @@ export function getApiBaseUrl() {
   return `${protocol}//${hostname}:${savedPort}`;
 }
 
-// Ejecutar la detección de puerto al cargar
-detectBackendPort().catch(console.error);
-
-export default { detectBackendPort, getWebSocketUrl, getApiBaseUrl };
+export default { detectBackendPort, getWebSocketUrl, getApiBaseUrl, refreshWebSocketUrl };

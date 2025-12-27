@@ -1,8 +1,9 @@
 // components/BillingInfo.js
 // Componente para mostrar información de facturación de una reserva
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { apiFetch } from '../utils/api';
+import useSessionGuard from '../hooks/useSessionGuard';
 
 const BillingInfo = ({ reservationId, onPaymentProcessed }) => {
   const [billingData, setBillingData] = useState(null);
@@ -16,16 +17,29 @@ const BillingInfo = ({ reservationId, onPaymentProcessed }) => {
   });
   const [processing, setProcessing] = useState(false);
   const [message, setMessage] = useState('');
+  const { canFetch, sessionExpired, authLoading } = useSessionGuard();
+  const sessionCopy = useCallback(
+    (action = 'gestionar la facturación de reservas') => (
+      sessionExpired
+        ? `Tu sesión expiró. Inicia sesión nuevamente para ${action}.`
+        : `Debes iniciar sesión para ${action}.`
+    ),
+    [sessionExpired]
+  );
 
-  useEffect(() => {
-    if (reservationId) {
-      loadBillingData();
+  const loadBillingData = useCallback(async () => {
+    if (!reservationId) return;
+    if (!canFetch) {
+      if (!authLoading) {
+        setBillingData(null);
+        setLoading(false);
+        setMessage(sessionCopy());
+      }
+      return;
     }
-  }, [reservationId]);
-
-  const loadBillingData = async () => {
     try {
       setLoading(true);
+      setMessage('');
       const response = await apiFetch(`/api/billing/reservations/${reservationId}`);
       const data = await response.json();
       if (response.ok && data.success) {
@@ -35,11 +49,17 @@ const BillingInfo = ({ reservationId, onPaymentProcessed }) => {
       }
     } catch (error) {
       console.error('Error cargando información de facturación:', error);
-      setMessage('Error cargando información de facturación');
+      if (!sessionExpired) {
+        setMessage('Error cargando información de facturación');
+      }
     } finally {
       setLoading(false);
     }
-  };
+  }, [reservationId, canFetch, authLoading, sessionCopy, sessionExpired]);
+
+  useEffect(() => {
+    loadBillingData();
+  }, [loadBillingData]);
 
   const processPayment = async () => {
     if (!paymentData.amount || parseFloat(paymentData.amount) <= 0) {
@@ -49,6 +69,11 @@ const BillingInfo = ({ reservationId, onPaymentProcessed }) => {
 
     if (parseFloat(paymentData.amount) > billingData.balance.pending) {
       setMessage('El monto no puede ser mayor al saldo pendiente');
+      return;
+    }
+
+    if (!canFetch) {
+      setMessage(sessionCopy('procesar pagos de la reserva'));
       return;
     }
 
@@ -251,10 +276,11 @@ const BillingInfo = ({ reservationId, onPaymentProcessed }) => {
               className="btn-process-payment"
             >
               💳 Procesar Pago
-            </button>
+            <button 
           ) : (
-            <div className="payment-form-content">
-              <h5>💳 Procesar Pago</h5>
+              onClick={() => setShowPaymentForm(!showPaymentForm)}
+              disabled={!canFetch || authLoading}
+            >
               
               <div className="form-group">
                 <label>Monto a pagar:</label>
@@ -315,10 +341,10 @@ const BillingInfo = ({ reservationId, onPaymentProcessed }) => {
                   className="btn-confirm-payment"
                 >
                   {processing ? '⏳ Procesando...' : '✅ Confirmar Pago'}
-                </button>
+                <button 
                 <button
-                  onClick={() => {
-                    setShowPaymentForm(false);
+                  onClick={processPayment}
+                  disabled={processing || !canFetch || authLoading}
                     setMessage('');
                   }}
                   disabled={processing}
@@ -343,7 +369,7 @@ const BillingInfo = ({ reservationId, onPaymentProcessed }) => {
         </div>
       )}
 
-      <style jsx>{`
+      <style>{`
         .billing-info {
           background: white;
           border-radius: 12px;

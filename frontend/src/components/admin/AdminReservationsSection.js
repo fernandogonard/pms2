@@ -4,9 +4,70 @@
 import React from 'react';
 import ReservationTable from '../ReservationTable';
 import AdvancedReservationModal from '../AdvancedReservationModal';
+import { apiFetch } from '../../utils/api';
+import useSessionGuard from '../../hooks/useSessionGuard';
+
+const DEFAULT_RES_STATS = { reservationsToday: 0, checkins: 0, checkouts: 0, pending: 0, loading: true };
 
 const AdminReservationsSection = () => {
   const [modalOpen, setModalOpen] = React.useState(false);
+  const [stats, setStats] = React.useState(DEFAULT_RES_STATS);
+  const [error, setError] = React.useState('');
+  const { canFetch, sessionExpired, authLoading } = useSessionGuard();
+
+  React.useEffect(() => {
+    let cancelled = false;
+
+    const loadStats = async () => {
+      try {
+        const res = await apiFetch('/api/reservations');
+        const data = await res.json();
+        const list = Array.isArray(data) ? data : [];
+
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        const sameDay = (a, b) => a && b && a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+        const toDate = (value) => value ? new Date(value) : null;
+
+        const reservationsToday = list.filter(r => {
+          const checkIn = toDate(r.checkIn);
+          const checkOut = toDate(r.checkOut);
+          if (!checkIn || !checkOut) return false;
+          return checkIn <= today && checkOut > today;
+        }).length;
+
+        const checkins = list.filter(r => r.status === 'checkin' && sameDay(toDate(r.checkIn), today)).length;
+        const checkouts = list.filter(r => r.status === 'checkout' && sameDay(toDate(r.checkOut), today)).length;
+        const pending = list.filter(r => r.status === 'reservada').length;
+
+        if (cancelled) return;
+        setStats({ reservationsToday, checkins, checkouts, pending, loading: false });
+        setError('');
+      } catch (error) {
+        if (cancelled) return;
+        setStats(prev => ({ ...prev, loading: false }));
+        if (!sessionExpired) {
+          setError('No se pudieron cargar las estadísticas de reservas.');
+        }
+      }
+    };
+
+    if (!canFetch) {
+      if (!authLoading) {
+        setStats(prev => ({ ...prev, ...DEFAULT_RES_STATS, loading: false }));
+        setError(sessionExpired ? 'Tu sesión expiró. Refresca para volver a ver las reservas.' : 'Esperando una sesión válida...');
+      }
+      return;
+    }
+
+    setError('');
+    loadStats();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [canFetch, sessionExpired, authLoading]);
 
   return (
     <div style={containerStyle}>
@@ -24,33 +85,37 @@ const AdminReservationsSection = () => {
         </button>
       </div>
 
+      {error && (
+        <div style={errorBannerStyle}>{error}</div>
+      )}
+
       {/* Estadísticas rápidas */}
       <div style={statsRowStyle}>
         <div style={statCardStyle}>
           <div style={statIconStyle}>📊</div>
           <div>
-            <div style={statValueStyle}>24</div>
+            <div style={statValueStyle}>{stats.reservationsToday}</div>
             <div style={statLabelStyle}>Reservas Hoy</div>
           </div>
         </div>
         <div style={statCardStyle}>
           <div style={statIconStyle}>✅</div>
           <div>
-            <div style={statValueStyle}>8</div>
+            <div style={statValueStyle}>{stats.checkins}</div>
             <div style={statLabelStyle}>Check-ins</div>
           </div>
         </div>
         <div style={statCardStyle}>
           <div style={statIconStyle}>🚪</div>
           <div>
-            <div style={statValueStyle}>6</div>
+            <div style={statValueStyle}>{stats.checkouts}</div>
             <div style={statLabelStyle}>Check-outs</div>
           </div>
         </div>
         <div style={statCardStyle}>
           <div style={statIconStyle}>⏳</div>
           <div>
-            <div style={statValueStyle}>12</div>
+            <div style={statValueStyle}>{stats.pending}</div>
             <div style={statLabelStyle}>Pendientes</div>
           </div>
         </div>
@@ -159,6 +224,15 @@ const tableContainerStyle = {
   borderRadius: '12px',
   border: '1px solid rgba(255, 255, 255, 0.1)',
   overflow: 'hidden'
+};
+
+const errorBannerStyle = {
+  background: '#dc2626',
+  color: '#fff',
+  padding: '12px 16px',
+  borderRadius: '10px',
+  marginBottom: '16px',
+  fontWeight: 600
 };
 
 export default AdminReservationsSection;

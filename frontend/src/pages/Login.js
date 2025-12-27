@@ -175,33 +175,34 @@ const Login = () => {
             />
           </div>
           
-          <button 
-            type="submit" 
-            disabled={isSubmitting}
-            style={{ 
-              width: '100%', 
-              background: isSubmitting 
-                ? 'rgba(0, 153, 255, 0.6)' 
-                : 'linear-gradient(135deg, #0099ff, #004c99)', 
-              color: '#fff', 
-              padding: 12, 
-              border: 'none', 
-              borderRadius: 6, 
-              fontWeight: 'bold', 
+          {/* Añadir feedback visual para el botón de inicio de sesión */}
+          <button
+            type="submit"
+            className="btn btn-primary"
+            disabled={loading}
+            style={{
+              width: '100%',
+              backgroundColor: loading ? '#6c757d' : '#007bff',
+              cursor: loading ? 'not-allowed' : 'pointer',
+              padding: 12,
+              border: 'none',
+              borderRadius: 6,
+              fontWeight: 'bold',
               boxShadow: '0 4px 10px rgba(0, 100, 255, 0.3)',
-              cursor: isSubmitting ? 'not-allowed' : 'pointer',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               gap: 8
             }}
           >
-            {isSubmitting && (
-              <div className="spinner-border spinner-border-sm" role="status">
-                <span className="visually-hidden">Cargando...</span>
-              </div>
+            {loading ? (
+              <>
+                <span className="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                Cargando...
+              </>
+            ) : (
+              'Iniciar sesión'
             )}
-            {isSubmitting ? 'Iniciando sesión...' : 'Entrar'}
           </button>
         </form>
       </div>

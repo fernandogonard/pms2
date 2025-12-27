@@ -7,70 +7,80 @@ import redirectorService from '../services/redirectorService';
 let API_BASE_URL = '';
 let API_PORT_DISCOVERY = false;
 let API_PORT_DISCOVERY_INTERVAL = null;
+let API_PORT_DISCOVERY_PROMISE = null; // Lock global para evitar llamadas concurrentes
 
 // Función para descubrir el puerto del backend usando redirectorService
 export async function discoverBackendPort() {
-  try {
-    // Usar el servicio de redirección para obtener el puerto
-    const result = await redirectorService.detectBackendPort();
-    
-    if (result && result.success && result.port) {
-      console.log(`🔍 Backend descubierto en puerto: ${result.port}`);
-      API_BASE_URL = `http://localhost:${result.port}`;
-      localStorage.setItem('backend-port', result.port.toString());
-      return result.port;
-    }
-    
-    // Si redirectorService falla, intentamos el método anterior como respaldo
-    // Intentar múltiples puertos comunes si no hay uno guardado
-    const savedPort = localStorage.getItem('backend-port');
-    const portsToTry = savedPort ? [savedPort, '5002', '5001', '5000'] : ['5002', '5001', '5000'];
-    
-    for (const port of portsToTry) {
-      try {
-        const res = await fetch(`http://localhost:${port}/api/system/port`, {
-          method: 'GET',
-          headers: { 'Content-Type': 'application/json' }
-        });
-        
-        if (res.ok) {
-          const data = await res.json();
-          if (data.success && data.port) {
-            console.log(`🔍 Backend descubierto en puerto: ${data.port}`);
-            API_BASE_URL = `http://localhost:${data.port}`;
-            localStorage.setItem('backend-port', data.port.toString());
-            return data.port;
-          }
-        }
-      } catch (e) {
-        // Ignorar errores individuales y continuar con el siguiente puerto
-      }
-    }
-    
-    // Si no se encontró ningún puerto válido, volver al valor por defecto o guardado
-    const defaultPort = savedPort || '5002';
-    API_BASE_URL = `http://localhost:${defaultPort}`;
-    console.warn(`⚠️ No se pudo descubrir el puerto del backend. Usando puerto por defecto: ${defaultPort}`);
-    return defaultPort;
-    
-  } catch (error) {
-    console.error('❌ Error al intentar descubrir el puerto del backend:', error);
-    return null;
+  // Log de depuración para rastrear llamadas
+  if (typeof window !== 'undefined') {
+    if (!window.__dbg_port_calls) window.__dbg_port_calls = [];
+    window.__dbg_port_calls.push({ ts: Date.now(), stack: new Error().stack });
+    if (window.__dbg_port_calls.length > 50) window.__dbg_port_calls.shift();
+    console.debug('[discoverBackendPort] llamada', window.__dbg_port_calls.length, 'timestamp', Date.now());
   }
+  // Lock global: si ya hay una promesa en curso, reusar
+  if (API_PORT_DISCOVERY_PROMISE) {
+    console.debug('[discoverBackendPort] Reusando promesa existente');
+    return API_PORT_DISCOVERY_PROMISE;
+  }
+  API_PORT_DISCOVERY_PROMISE = (async () => {
+    try {
+      // Optimization: Avoid redundant port discovery if already configured
+      if (API_BASE_URL) {
+        console.log('✅ Backend port already configured:', API_BASE_URL);
+        return API_BASE_URL.split(':').pop();
+      }
+
+      // Usar el servicio de redirección para obtener el puerto
+      const result = await redirectorService.detectBackendPort();
+      if (result && result.success && result.port) {
+        console.log(`🔍 Backend descubierto en puerto: ${result.port}`);
+        API_BASE_URL = `http://localhost:${result.port}`;
+        localStorage.setItem('backend-port', result.port.toString());
+        return result.port;
+      }
+      // Si redirectorService falla, intentamos el método anterior como respaldo
+      const savedPort = localStorage.getItem('backend-port');
+      const portsToTry = savedPort ? [savedPort, '5000', '5001', '5002'] : ['5000', '5001', '5002'];
+      for (const port of portsToTry) {
+        try {
+          const response = await fetch(`http://localhost:${port}/api/system/port`);
+          if (response.ok) {
+            console.log(`✅ Puerto ${port} confirmado`);
+            API_BASE_URL = `http://localhost:${port}`;
+            localStorage.setItem('backend-port', port);
+            return port;
+          }
+        } catch (error) {
+          console.warn(`⚠️ Puerto ${port} no disponible`);
+        }
+      }
+      // Si no se encontró ningún puerto válido, volver al valor por defecto o guardado
+      const defaultPort = savedPort || '5002';
+      API_BASE_URL = `http://localhost:${defaultPort}`;
+      console.warn(`⚠️ No se pudo descubrir el puerto del backend. Usando puerto por defecto: ${defaultPort}`);
+      return defaultPort;
+    } catch (error) {
+      console.error('❌ Error al intentar descubrir el puerto del backend:', error);
+      return null;
+    } finally {
+      API_PORT_DISCOVERY_PROMISE = null; // Liberar el bloqueo global
+    }
+  })();
+  return API_PORT_DISCOVERY_PROMISE;
 }
 
 // Iniciar descubrimiento automático del puerto
 export function startPortDiscovery() {
   if (API_PORT_DISCOVERY) return;
-  
   API_PORT_DISCOVERY = true;
+  // Llamar solo una vez y luego programar el intervalo si no existe
   discoverBackendPort();
-  
-  // Programar redescubrimiento cada 5 minutos
-  API_PORT_DISCOVERY_INTERVAL = setInterval(() => {
-    discoverBackendPort();
-  }, 300000); // 5 minutos
-  
+  if (!API_PORT_DISCOVERY_INTERVAL) {
+    API_PORT_DISCOVERY_INTERVAL = setInterval(() => {
+      discoverBackendPort();
+    }, 300000); // 5 minutos
+  }
   return () => {
     if (API_PORT_DISCOVERY_INTERVAL) {
       clearInterval(API_PORT_DISCOVERY_INTERVAL);
@@ -82,11 +92,10 @@ export function startPortDiscovery() {
 
 // Función principal de API con soporte offline
 export async function apiFetch(url, opts = {}) {
-  // Si no hay URL base, intentar descubrirla
+  // Si no hay URL base, intentar descubrirla (protegido por lock)
   if (!API_BASE_URL && !API_PORT_DISCOVERY) {
     await discoverBackendPort();
   }
-  
   // Resolver URL relativa contra API_BASE_URL o redirectorService o REACT_APP_API_URL
   const API_BASE = API_BASE_URL || 
     redirectorService.getApiBaseUrl() ||
@@ -94,89 +103,83 @@ export async function apiFetch(url, opts = {}) {
   const resolvedUrl = API_BASE && !/^https?:\/\//i.test(url) ? 
     `${API_BASE.replace(/\/$/, '')}/${url.replace(/^\//, '')}` : url;
   const token = localStorage.getItem('token');
-  
   // Construir headers a partir de opts.headers y añadir Authorization si procede.
   const headers = Object.assign({}, opts.headers || {});
   if (token && !headers.Authorization && !headers.authorization) {
     headers['Authorization'] = `Bearer ${token}`;
   }
-
   // No sobrescribir los headers ya construidos cuando se mezclen las opciones.
   const final = Object.assign({}, opts);
   if (!final.credentials) final.credentials = 'include';
   final.headers = headers;
 
-  try {
-    const res = await fetch(resolvedUrl, final);
-    
-    // Manejar respuesta 401 (sesión expirada)
-    if (res.status === 401) {
-      // sesión inválida/expirada: limpiar token y emitir evento global para UI
-      try { localStorage.removeItem('token'); } catch (e) {}
-      if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
-        const next = encodeURIComponent(window.location.pathname + window.location.search);
-        window.dispatchEvent(new CustomEvent('sessionExpired', { detail: { next } }));
-      }
-      const err = new Error('Unauthorized');
-      err.response = res;
-      throw err;
-    }
+  let retries = 3;
+  while (retries > 0) {
+    try {
+      const res = await fetch(resolvedUrl, final);
 
-    // Cachear respuestas exitosas GET automáticamente
-    if (res.ok && (!opts.method || opts.method === 'GET')) {
-      try {
-        const responseData = await res.clone().json();
-        const cacheKey = `api-${url.replace(/[^a-zA-Z0-9]/g, '-')}`;
-        const cacheData = {
-          data: responseData,
-          expiry: Date.now() + (5 * 60 * 1000), // 5 minutos
-          timestamp: new Date().toISOString(),
-          url: resolvedUrl
-        };
-        localStorage.setItem(`crm-cache-${cacheKey}`, JSON.stringify(cacheData));
-      } catch (error) {
-        console.warn('Error caching response:', error);
+      // Manejar respuesta 429 (rate limit)
+      if (res.status === 429) {
+        const retryAfter = res.headers.get('Retry-After');
+        const waitTime = retryAfter ? parseInt(retryAfter, 10) * 1000 : 2000;
+        console.warn(`429 Too Many Requests. Retrying in ${waitTime / 1000} seconds...`);
+        await new Promise(resolve => setTimeout(resolve, waitTime));
+        retries -= 1;
+        continue;
       }
-    }
 
-    return res;
-  } catch (error) {
-    // Si falla la request y es GET, intentar servir desde cache
-    if (!opts.method || opts.method === 'GET') {
+      // Manejar respuesta 401 (sesión expirada)
+      if (res.status === 401) {
+        try { localStorage.removeItem('token'); } catch (e) {}
+        if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
+          const next = encodeURIComponent(window.location.pathname + window.location.search);
+          window.dispatchEvent(new CustomEvent('sessionExpired', { detail: { next } }));
+        }
+        const err = new Error('Unauthorized');
+        err.response = res;
+        throw err;
+      }
+
+      // Cachear respuestas exitosas GET automáticamente
+      if (res.ok && (!opts.method || opts.method === 'GET')) {
+        try {
+          const responseData = await res.clone().json();
+          const cacheKey = `api-${url.replace(/[^a-zA-Z0-9]/g, '-')}`;
+          const cacheData = {
+            data: responseData,
+            expiry: Date.now() + (5 * 60 * 1000), // 5 minutos
+            timestamp: new Date().toISOString(),
+            url: resolvedUrl
+          };
+          localStorage.setItem(`crm-cache-${cacheKey}`, JSON.stringify(cacheData));
+        } catch (error) {
+          console.warn('Error caching response:', error);
+        }
+      }
+
+      return res;
+    } catch (error) {
+      if (retries <= 1 || opts.method && opts.method !== 'GET') {
+        console.error('Request failed:', error);
+        throw error;
+      }
+
       const cacheKey = `api-${url.replace(/[^a-zA-Z0-9]/g, '-')}`;
       const cached = localStorage.getItem(`crm-cache-${cacheKey}`);
-      
       if (cached) {
         try {
           const parsed = JSON.parse(cached);
           if (parsed.expiry > Date.now()) {
             console.log('Serving from cache:', url);
-            
-            // Incrementar contador de cache hits
-            const hits = parseInt(localStorage.getItem('cache-hits') || '0') + 1;
-            localStorage.setItem('cache-hits', hits.toString());
-            
-            // Crear respuesta mock desde cache
-            return new Response(JSON.stringify(parsed.data), {
-              status: 200,
-              headers: { 
-                'Content-Type': 'application/json',
-                'X-Offline-Response': 'true',
-                'X-Cache-Time': parsed.timestamp
-              }
-            });
+            return new Response(JSON.stringify(parsed.data), { status: 200 });
           }
-        } catch (parseError) {
-          console.warn('Error parsing cached data:', parseError);
+        } catch (cacheError) {
+          console.warn('Error reading cache:', cacheError);
         }
       }
+
+      retries -= 1;
     }
-
-    // Incrementar contador de cache misses
-    const misses = parseInt(localStorage.getItem('cache-misses') || '0') + 1;
-    localStorage.setItem('cache-misses', misses.toString());
-
-    throw error;
   }
 }
 
@@ -192,7 +195,6 @@ export async function cleanupGhostReservations() {
   return res.json();
 }
 
-// Iniciar descubrimiento de puerto automáticamente
-startPortDiscovery();
+
 
 export default apiFetch;

@@ -1,7 +1,9 @@
 // components/RoomTable.js
 // Tabla de gestión visual de habitaciones (CRUD)
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
+import useBackendReady from '../hooks/useBackendReady';
 import { apiFetch } from '../utils/api';
+import useSessionGuard from '../hooks/useSessionGuard';
 
 const API_ROOMS = '/api/rooms';
 const API_RESERVATIONS = '/api/reservations';
@@ -14,11 +16,31 @@ const RoomTable = () => {
   const [form, setForm] = useState({ number: '', floor: '', type: 'doble', price: '', status: 'disponible' });
   const [editingId, setEditingId] = useState(null);
   const [success, setSuccess] = useState('');
+  const { canFetch, sessionExpired, authLoading } = useSessionGuard();
+  const sessionCopy = useCallback(
+    (action = 'gestionar habitaciones') => (
+      sessionExpired
+        ? `Tu sesión expiró. Inicia sesión nuevamente para ${action}.`
+        : `Debes iniciar sesión para ${action}.`
+    ),
+    [sessionExpired]
+  );
 
+  const { backendReady, backendLoading, backendError } = useBackendReady();
   // Cargar habitaciones y reservas activas
-  const fetchRoomsAndReservations = async () => {
+  const fetchRoomsAndReservations = useCallback(async () => {
+    if (!canFetch || !backendReady) {
+      if (!authLoading && !backendLoading) {
+        setRooms([]);
+        setReservations([]);
+        setLoading(false);
+        setError(sessionCopy());
+      }
+      return;
+    }
     try {
       setLoading(true);
+      setError('');
       const [roomsRes, reservationsRes] = await Promise.all([
         apiFetch(API_ROOMS, {
           headers: {
@@ -29,51 +51,71 @@ const RoomTable = () => {
         }),
         apiFetch(API_RESERVATIONS)
       ]);
-      
       const roomsData = await roomsRes.json();
       const reservationsData = await reservationsRes.json();
-      
       setRooms(Array.isArray(roomsData) ? roomsData : []);
-      // Filtrar solo reservas con check-in
       const activeCheckins = Array.isArray(reservationsData) 
         ? reservationsData.filter(r => r.status === 'checkin') 
         : [];
       setReservations(activeCheckins);
     } catch (e) {
-      setError('No se pudieron cargar las habitaciones.');
+      if (!sessionExpired) {
+        setError('No se pudieron cargar las habitaciones.');
+      }
     } finally {
       setLoading(false);
     }
-  };
+  }, [canFetch, authLoading, sessionExpired, sessionCopy, backendReady, backendLoading]);
 
   useEffect(() => {
-    fetchRoomsAndReservations();
-    
-    // Configurar WebSocket para actualizaciones en tiempo real
-    const wsUrl = 'ws://localhost:3001'; // Ajusta según tu configuración
-    const ws = new WebSocket(wsUrl);
-    
-    ws.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data);
-        if (data.type && 
-           (data.type.startsWith('room_') || 
-            data.type.startsWith('reservation_'))) {
-          fetchRoomsAndReservations();
-        }
-      } catch (e) {
-        // Ignorar errores de parseo
+    if (!canFetch || !backendReady) {
+      if (!authLoading && !backendLoading) {
+        setLoading(false);
+        setRooms([]);
+        setReservations([]);
+        setError(sessionCopy());
       }
+      return undefined;
+    }
+    let ws;
+    let cancelled = false;
+    const init = async () => {
+      await fetchRoomsAndReservations();
+      if (cancelled) return;
+      const backendPort = localStorage.getItem('backend-port') || '5000';
+      const wsUrl = `ws://localhost:${backendPort}/ws`;
+      ws = new WebSocket(wsUrl);
+      ws.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          if (data.type && 
+             (data.type.startsWith('room_') || 
+              data.type.startsWith('reservation_'))) {
+            fetchRoomsAndReservations();
+          }
+        } catch (e) {}
+      };
     };
-    
+    init();
     return () => {
+      cancelled = true;
       if (ws) ws.close();
     };
-  }, []);
+  }, [canFetch, authLoading, fetchRoomsAndReservations, sessionCopy, backendReady, backendLoading]);
+  if (backendLoading) {
+    return <div style={{textAlign:'center',marginTop:40}}><b>Conectando con backend...</b></div>;
+  }
+  if (backendError) {
+    return <div style={{textAlign:'center',marginTop:40,color:'#ef4444'}}><b>{backendError}</b></div>;
+  }
 
   // Crear o editar habitación
   const handleSubmit = async e => {
     e.preventDefault();
+    if (!canFetch) {
+      setError(sessionCopy('crear o actualizar habitaciones'));
+      return;
+    }
     setError('');
     setSuccess('');
     setLoading(true);
@@ -93,7 +135,7 @@ const RoomTable = () => {
       setSuccess(editingId ? 'Habitación actualizada con éxito.' : 'Habitación creada con éxito.');
       setForm({ number: '', floor: '', type: 'doble', price: '', status: 'disponible' });
       setEditingId(null);
-      fetchRooms();
+      fetchRoomsAndReservations();
     } catch (err) {
       setError('Error de red');
     } finally {
@@ -104,13 +146,17 @@ const RoomTable = () => {
   // Eliminar habitación
   const handleDelete = async id => {
     if (!window.confirm('¿Eliminar esta habitación?')) return;
+    if (!canFetch) {
+      setError(sessionCopy('eliminar habitaciones'));
+      return;
+    }
     const res = await apiFetch(`${API_ROOMS}/${id}`, { method: 'DELETE' });
     if (!res.ok) {
       const data = await res.json();
       setError(data.message || 'Error al eliminar habitación');
       return;
     }
-    fetchRooms();
+    fetchRoomsAndReservations();
   };
 
   // Editar habitación

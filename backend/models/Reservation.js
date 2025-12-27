@@ -5,21 +5,11 @@ const mongoose = require('mongoose');
 const { VALID_ROOM_TYPES, VALID_RESERVATION_STATUS } = require('../constants/businessConstants');
 
 const reservationSchema = new mongoose.Schema({
-  tipo: {
-    type: String,
-    enum: VALID_ROOM_TYPES,
+  room: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Room',
     required: true
   },
-  cantidad: {
-    type: Number,
-    required: true,
-    min: 1
-  },
-  // Ahora soportamos asignación múltiple: array de ObjectId de Room
-  room: [{
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Room'
-  }],
   user: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User'
@@ -40,7 +30,7 @@ const reservationSchema = new mongoose.Schema({
   },
   status: {
     type: String,
-    enum: VALID_RESERVATION_STATUS,
+    enum: ['reservada', 'ocupada', 'cancelada'],
     default: 'reservada'
   },
   // 🆕 CAMPOS DE FACTURACIÓN
@@ -114,6 +104,10 @@ const reservationSchema = new mongoose.Schema({
     default: Date.now
   }
 });
+
+// Índices para optimizar consultas
+reservationSchema.index({ checkIn: 1, checkOut: 1 });
+reservationSchema.index({ client: 1, checkIn: 1 });
 
 // Virtual para obtener información del cliente de forma consistente
 reservationSchema.virtual('clientInfo', {

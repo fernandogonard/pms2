@@ -2,6 +2,7 @@
 import AdminLayout from '../layouts/AdminLayout';
 import AdminSidebar from '../components/AdminSidebar';
 import { useAuth } from '../contexts/AuthContext';
+import { cleanupGhostReservations } from '../utils/api';
 
 // Importar secciones modulares
 import AdminDashboardSection from '../components/admin/AdminDashboardSection';
@@ -27,21 +28,9 @@ const AdminDashboard = () => {
 
     setLoading(true);
     try {
-      const response = await fetch('/api/reservations/cleanup-ghost', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (response.ok) {
-        const result = await response.json();
-        alert(`Limpieza completada. ${result.deleted} reservas fantasma eliminadas.`);
-        window.location.reload();
-      } else {
-        throw new Error('Error al limpiar reservas fantasma');
-      }
+      const result = await cleanupGhostReservations();
+      alert(`Limpieza completada. ${result.deleted} reservas fantasma eliminadas.`);
+      window.location.reload();
     } catch (error) {
       console.error('Error:', error);
       alert('Error al limpiar reservas fantasma');

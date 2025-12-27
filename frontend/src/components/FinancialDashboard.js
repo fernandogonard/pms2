@@ -1,8 +1,10 @@
 // components/FinancialDashboard.js
 // Dashboard financiero con resumen de ingresos y pagos
 
-import React, { useState, useEffect } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
+import useBackendReady from '../hooks/useBackendReady';
 import { apiFetch } from '../utils/api';
+import useSessionGuard from '../hooks/useSessionGuard';
 
 const FinancialDashboard = () => {
   const [summary, setSummary] = useState(null);
@@ -13,39 +15,55 @@ const FinancialDashboard = () => {
     startDate: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0],
     endDate: new Date().toISOString().split('T')[0]
   });
+  const { canFetch, sessionExpired, authLoading } = useSessionGuard();
+  const sessionCopy = useCallback(
+    (action = 'ver el dashboard financiero') => (
+      sessionExpired
+        ? `Tu sesión expiró. Inicia sesión nuevamente para ${action}.`
+        : `Debes iniciar sesión para ${action}.`
+    ),
+    [sessionExpired]
+  );
 
-  useEffect(() => {
-    loadFinancialData();
-  }, [dateRange]);
-
-  const loadFinancialData = async () => {
+  const { backendReady, backendLoading, backendError } = useBackendReady();
+  const loadFinancialData = useCallback(async () => {
+    if (!canFetch || !backendReady) {
+      if (!authLoading && !backendLoading) {
+        setSummary(null);
+        setPendingInvoices([]);
+        setLoading(false);
+        setError(sessionCopy());
+      }
+      return;
+    }
     try {
       setLoading(true);
       setError('');
-      
       const [summaryRes, invoicesRes] = await Promise.all([
         apiFetch(`/api/billing/summary?startDate=${dateRange.startDate}&endDate=${dateRange.endDate}`),
         apiFetch('/api/billing/invoices/pending')
       ]);
-
       const summaryData = await summaryRes.json();
       const invoicesData = await invoicesRes.json();
-
       if (summaryRes.ok && summaryData.success) {
         setSummary(summaryData.data.summary);
       }
-
       if (invoicesRes.ok && invoicesData.success) {
         setPendingInvoices(invoicesData.data);
       }
-
     } catch (error) {
       console.error('Error cargando datos financieros:', error);
-      setError('Error cargando datos financieros');
+      if (!sessionExpired) {
+        setError('Error cargando datos financieros: ' + (error.message || ''));
+      }
     } finally {
       setLoading(false);
     }
-  };
+  }, [canFetch, authLoading, dateRange, sessionCopy, sessionExpired, backendReady, backendLoading]);
+
+  useEffect(() => {
+    loadFinancialData();
+  }, [loadFinancialData]);
 
   const formatPrice = (price) => {
     return `$ ${price?.toLocaleString() || 0}`;
@@ -55,6 +73,12 @@ const FinancialDashboard = () => {
     return new Date(dateString).toLocaleDateString();
   };
 
+  if (backendLoading) {
+    return <div style={{textAlign:'center',marginTop:40}}><b>Conectando con backend...</b></div>;
+  }
+  if (backendError) {
+    return <div style={{textAlign:'center',marginTop:40,color:'#ef4444'}}><b>{backendError}</b></div>;
+  }
   if (loading) {
     return (
       <div className="financial-dashboard">
@@ -88,6 +112,11 @@ const FinancialDashboard = () => {
       {error && (
         <div className="error-message">
           {error}
+        </div>
+      )}
+      {(!canFetch && !authLoading && !error) && (
+        <div className="error-message" style={{ background: '#f59e0b', color: '#1e1e1e' }}>
+          {sessionCopy()}
         </div>
       )}
 
@@ -206,7 +235,7 @@ const FinancialDashboard = () => {
         </div>
       )}
 
-      <style jsx>{`
+      <style>{`
         .financial-dashboard {
           background: #1e2026;
           color: #fff;

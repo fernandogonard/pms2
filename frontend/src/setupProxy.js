@@ -1,4 +1,20 @@
 const { createProxyMiddleware } = require('http-proxy-middleware');
+const fs = require('fs');
+const path = require('path');
+
+// Descubre dinámicamente el puerto backend desde port.txt o env para evitar proxies rotos cuando el backend salta de 5000 a otro puerto
+const portFile = path.resolve(__dirname, '../backend/port.txt');
+const fallbackPort = process.env.BACKEND_PORT || '5000';
+const getBackendPort = () => {
+  try {
+    const raw = fs.readFileSync(portFile, 'utf8').trim();
+    return raw || fallbackPort;
+  } catch (err) {
+    return fallbackPort;
+  }
+};
+
+const buildTarget = () => `http://localhost:${getBackendPort()}`;
 
 /**
  * Configuración de proxy para desarrollo
@@ -11,7 +27,8 @@ module.exports = function(app) {
   app.use(
     '/api',
     createProxyMiddleware({
-      target: 'http://localhost:5001',
+      target: buildTarget(),
+      router: buildTarget,
       changeOrigin: true,
       secure: false,
       logLevel: 'info',
@@ -40,16 +57,21 @@ module.exports = function(app) {
   app.use(
     '/ws',
     createProxyMiddleware({
-      target: 'http://localhost:5001',
+      target: buildTarget(),
+      router: buildTarget,
       ws: true,
       changeOrigin: true
     })
   );
   
-  // Middleware para establecer cabeceras de codificación en todas las respuestas
-  app.use('*', (req, res, next) => {
-    // Solo agregar cabeceras si no es una solicitud de API o WS
-    if (!req.url.startsWith('/api') && !req.url.startsWith('/ws')) {
+  // Middleware para agregar cabeceras solo a navegaciones HTML, no a assets estáticos
+  app.use((req, res, next) => {
+    const isApi = req.url.startsWith('/api');
+    const isWs = req.url.startsWith('/ws');
+    const isAsset = /\.[a-zA-Z0-9]+$/.test(req.path);
+    const acceptsHtml = (req.headers.accept || '').includes('text/html');
+
+    if (!isApi && !isWs && !isAsset && acceptsHtml) {
       res.set({
         'Content-Type': 'text/html; charset=utf-8',
         'X-Content-Type-Options': 'nosniff',

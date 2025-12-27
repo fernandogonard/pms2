@@ -1,11 +1,27 @@
 // components/admin/AdminReportsSection.js
 // Sección de reportes y analytics para administradores
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import ReportDownload from '../ReportDownload';
+import { apiFetch } from '../../utils/api';
 
 const AdminReportsSection = () => {
   const [selectedPeriod, setSelectedPeriod] = React.useState('month');
+  const [revenueData, setRevenueData] = useState(null);
+
+  useEffect(() => {
+    const fetchRevenueData = async () => {
+      try {
+        const response = await apiFetch(`/api/reports/revenue?startDate=2025-12-01&endDate=2025-12-31`);
+        const data = await response.json();
+        setRevenueData(data);
+      } catch (error) {
+        console.error('Error fetching revenue data:', error);
+      }
+    };
+
+    fetchRevenueData();
+  }, []);
 
   const reportTypes = [
     {
@@ -65,35 +81,10 @@ const AdminReportsSection = () => {
       {/* KPIs principales */}
       <div style={kpiRowStyle}>
         <div style={kpiCardStyle}>
-          <div style={kpiIconStyle}>📈</div>
-          <div>
-            <div style={kpiValueStyle}>87.5%</div>
-            <div style={kpiLabelStyle}>Tasa de Ocupación</div>
-            <div style={kpiChangeStyle}>+5.2% vs mes anterior</div>
-          </div>
-        </div>
-        <div style={kpiCardStyle}>
           <div style={kpiIconStyle}>💵</div>
           <div>
-            <div style={kpiValueStyle}>$125.50</div>
-            <div style={kpiLabelStyle}>ADR Promedio</div>
-            <div style={kpiChangeStyle}>+8.1% vs mes anterior</div>
-          </div>
-        </div>
-        <div style={kpiCardStyle}>
-          <div style={kpiIconStyle}>📊</div>
-          <div>
-            <div style={kpiValueStyle}>$109.81</div>
-            <div style={kpiLabelStyle}>RevPAR</div>
-            <div style={kpiChangeStyle}>+12.3% vs mes anterior</div>
-          </div>
-        </div>
-        <div style={kpiCardStyle}>
-          <div style={kpiIconStyle}>⭐</div>
-          <div>
-            <div style={kpiValueStyle}>4.7</div>
-            <div style={kpiLabelStyle}>Puntuación Promedio</div>
-            <div style={kpiChangeStyle}>+0.2 vs mes anterior</div>
+            <div style={kpiValueStyle}>{revenueData ? `$${revenueData.totalRevenue}` : 'Cargando...'}</div>
+            <div style={kpiLabelStyle}>Ingresos Totales</div>
           </div>
         </div>
       </div>
@@ -113,30 +104,9 @@ const AdminReportsSection = () => {
             <div style={reportContentStyle}>
               <h3 style={reportTitleStyle}>{report.title}</h3>
               <p style={reportDescStyle}>{report.description}</p>
-              <div style={reportActionsStyle}>
-                <button 
-                  style={{
-                    ...reportButtonStyle,
-                    background: `linear-gradient(135deg, ${report.color}, ${report.color}dd)`
-                  }}
-                >
-                  📄 Generar PDF
-                </button>
-                <button style={reportButtonSecondaryStyle}>
-                  📊 Ver Online
-                </button>
-              </div>
             </div>
           </div>
         ))}
-      </div>
-
-      {/* Componente de descarga de reportes existente */}
-      <div style={legacyReportStyle}>
-        <h3 style={sectionTitleStyle}>🔧 Herramientas de Reporte Legacy</h3>
-        <div style={legacyContainerStyle}>
-          <ReportDownload />
-        </div>
       </div>
     </div>
   );

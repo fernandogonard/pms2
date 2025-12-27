@@ -68,5 +68,15 @@ module.exports = {
   testTimeout: 30000,
 
   // Reporters básicos
-  reporters: ['default']
+  reporters: ['default'],
+
+  // Ignorar ciertos directorios
+  modulePathIgnorePatterns: [
+    "<rootDir>/.bun/",
+    "<rootDir>/node_modules/",
+    "<rootDir>/AppData/",
+    "<rootDir>/.bun/install/cache/"
+  ],
+
+  // resolver eliminado: no es válido en Jest, causa error de tipo
 };

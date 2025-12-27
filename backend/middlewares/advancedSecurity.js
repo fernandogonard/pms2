@@ -75,35 +75,30 @@ const advancedSanitization = (req, res, next) => {
 };
 
 // Rate limiting avanzado por usuario
-const createUserBasedLimiter = (windowMs, maxRequests) => {
+const createUserBasedLimiter = (windowMs = 60 * 1000, maxRequests = 30) => {
   const userAttempts = new Map();
-  
+
   return (req, res, next) => {
     const identifier = req.user?.id || req.ip;
     const now = Date.now();
-    
-    if (!userAttempts.has(identifier)) {
-      userAttempts.set(identifier, { count: 1, resetTime: now + windowMs });
-      return next();
+
+    let attempt = userAttempts.get(identifier);
+    if (!attempt || now > attempt.resetTime) {
+      attempt = { count: 0, resetTime: now + windowMs };
+      userAttempts.set(identifier, attempt);
     }
-    
-    const userAttempt = userAttempts.get(identifier);
-    
-    if (now > userAttempt.resetTime) {
-      userAttempt.count = 1;
-      userAttempt.resetTime = now + windowMs;
-      return next();
-    }
-    
-    if (userAttempt.count >= maxRequests) {
+
+    attempt.count += 1;
+
+    if (attempt.count > maxRequests) {
+      securityLogger('USER_RATE_LIMIT', { identifier, maxRequests }, req);
       return res.status(429).json({
         error: 'Demasiadas solicitudes',
         message: 'Por favor, espera antes de intentar nuevamente',
-        retryAfter: Math.ceil((userAttempt.resetTime - now) / 1000)
+        retryAfter: Math.ceil((attempt.resetTime - now) / 1000)
       });
     }
-    
-    userAttempt.count++;
+
     next();
   };
 };
@@ -188,7 +183,7 @@ const sanitizeInput = (req, res, next) => {
 };
 
 // Rate limiting por usuario
-const rateLimitByUser = createUserBasedLimiter();
+const rateLimitByUser = createUserBasedLimiter(60 * 1000, 120);
 
 module.exports = {
   securityConfig,

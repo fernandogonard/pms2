@@ -110,7 +110,8 @@ class RequestOptimizer {
   }
 
   async executeRequest(endpoint, options) {
-    const baseURL = process.env.REACT_APP_API_URL || 'http://localhost:5001';
+    const savedPort = localStorage.getItem('backend-port');
+    const baseURL = process.env.REACT_APP_API_URL || (savedPort ? `http://localhost:${savedPort}` : 'http://localhost:5000');
     const url = `${baseURL}${endpoint}`;
     
     const defaultOptions = {

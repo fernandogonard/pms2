@@ -1,8 +1,9 @@
 // components/AdminStats.js
 // Estadísticas clave para el dashboard admin
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 
 import { apiFetch } from '../utils/api';
+import useSessionGuard from '../hooks/useSessionGuard';
 const API_ROOMS = '/api/rooms';
 const API_RESERVATIONS = '/api/reservations';
 const API_STATS = '/api/stats/rooms';
@@ -12,34 +13,53 @@ const AdminStats = () => {
   const [reservations, setReservations] = useState([]);
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
+  const { canFetch, sessionExpired, authLoading } = useSessionGuard();
+  const sessionCopy = useCallback(
+    (action = 'ver estadísticas administrativas') => (
+      sessionExpired
+        ? `Tu sesión expiró. Inicia sesión nuevamente para ${action}.`
+        : `Debes iniciar sesión para ${action}.`
+    ),
+    [sessionExpired]
+  );
 
-  useEffect(() => {
-    const load = async () => {
-      try {
-        const [roomsRes, reservationsRes, statsRes] = await Promise.all([
-          apiFetch(API_ROOMS),
-          apiFetch(API_RESERVATIONS),
-          apiFetch(API_STATS, {
-            headers: {
-              'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
-              'Pragma': 'no-cache',
-              'Expires': '0'
-            }
-          })
-        ]);
-        const roomsData = await roomsRes.json();
-        const reservationsData = await reservationsRes.json();
-        const statsData = await statsRes.json();
-        
-        setRooms(Array.isArray(roomsData) ? roomsData : []);
-        setReservations(Array.isArray(reservationsData) ? reservationsData : []);
-        setStats(statsData);
-      } catch (e) {
-        console.error('Error cargando estadísticas:', e);
-      } finally {
+  const load = useCallback(async () => {
+    if (!canFetch) {
+      if (!authLoading) {
+        setRooms([]);
+        setReservations([]);
+        setStats(null);
         setLoading(false);
       }
-    };
+      return;
+    }
+    try {
+      const [roomsRes, reservationsRes, statsRes] = await Promise.all([
+        apiFetch(API_ROOMS),
+        apiFetch(API_RESERVATIONS),
+        apiFetch(API_STATS, {
+          headers: {
+            'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+            'Pragma': 'no-cache',
+            'Expires': '0'
+          }
+        })
+      ]);
+      const roomsData = await roomsRes.json();
+      const reservationsData = await reservationsRes.json();
+      const statsData = await statsRes.json();
+      
+      setRooms(Array.isArray(roomsData) ? roomsData : []);
+      setReservations(Array.isArray(reservationsData) ? reservationsData : []);
+      setStats(statsData);
+    } catch (e) {
+      console.error('Error cargando estadísticas:', e);
+    } finally {
+      setLoading(false);
+    }
+  }, [canFetch, authLoading]);
+
+  useEffect(() => {
     load();
     
     // Actualizar cada 30 segundos para mantener datos frescos
@@ -48,7 +68,7 @@ const AdminStats = () => {
     }, 30000);
     
     return () => clearInterval(interval);
-  }, []);
+  }, [load]);
 
   // Estadísticas
   const today = new Date().toISOString().slice(0, 10);
@@ -93,6 +113,14 @@ const AdminStats = () => {
     const avgPrice = tipoRooms.length > 0 ? tipoRooms.reduce((s, room) => s + room.price, 0) / tipoRooms.length : 0;
     return sum + avgPrice;
   }, 0);
+
+  if (!canFetch && !authLoading) {
+    return (
+      <div style={{ textAlign: 'center', margin: '24px 0', color: '#fbbf24' }}>
+        {sessionCopy()}
+      </div>
+    );
+  }
 
   if (loading) return (
     <div style={{ textAlign: 'center', margin: '24px 0' }}>

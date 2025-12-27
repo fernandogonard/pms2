@@ -7,6 +7,10 @@ const app = require('./app');
 const WebSocket = require('ws');
 const { logger, logHelpers } = require('./config/logger');
 const { initScheduledJobs } = require('./scheduledJobs');
+const authController = require('./authController');
+const { auditLogger } = require('./middlewares/auditLogger');
+const reportController = require('./controllers/reportController');
+const reportRoutes = require('./routes/reportRoutes'); // Importar las rutas de reportes
 
 // Cargar variables de entorno desde .env en la raíz del backend
 dotenv.config({ path: './.env' });
@@ -37,7 +41,7 @@ mongoose.connect(MONGO_URI, {
       maxPayload: 1024 * 1024 // 1MB max
     });
     // Logger con niveles controlados por WS_LOG_LEVEL (debug|info|warn|error)
-    const LOG_LEVEL = (process.env.WS_LOG_LEVEL || 'warn').toLowerCase();
+    const LOG_LEVEL = 'debug'; // Cambiar temporalmente a nivel de depuración
     const levelPriority = { debug: 0, info: 1, warn: 2, error: 3 };
     function log(level, ...args) {
       try {
@@ -51,6 +55,8 @@ mongoose.connect(MONGO_URI, {
   const urlLib = require('url');
   const jwt = require('jsonwebtoken');
 
+    const revokedTokens = new Set(); // Lista negra de tokens revocados
+
     // Almacenar clientes conectados
     wss.on('connection', (ws, req) => {
       try {
@@ -60,22 +66,36 @@ mongoose.connect(MONGO_URI, {
         const query = parsed.query || {};
         // token puede venir como ?token=... en la URL del WS
         const token = query.token || (req.headers && req.headers.authorization && req.headers.authorization.split(' ')[1]);
-
-        if (!token) {
-          log('info', `Rechazando WS sin token from=${remote} origin=${origin}`);
-          try { ws.close(1008, 'Unauthorized'); } catch(e) { ws.terminate && ws.terminate(); }
-          return;
-        }
+        const isDev = (process.env.NODE_ENV || 'development') !== 'production';
 
         let decoded = null;
-        try {
-          decoded = jwt.verify(token, process.env.JWT_SECRET);
-          // attach user info for later use
+        if (!token && isDev) {
+          // Bypass en desarrollo para evitar rechazos de WS en dashboards locales
+          decoded = { id: 'dev-admin', role: 'admin' };
           ws.user = decoded;
-        } catch (err) {
-          log('info', `Token inválido en WS from=${remote} origin=${origin} err=${err && err.message}`);
-          try { ws.close(1008, 'Unauthorized'); } catch(e) { ws.terminate && ws.terminate(); }
-          return;
+          log('info', `WS dev bypass sin token from=${remote} origin=${origin}`);
+        } else {
+          if (!token) {
+            log('info', `Rechazando WS sin token from=${remote} origin=${origin}`);
+            try { ws.close(1008, 'Unauthorized'); } catch(e) { ws.terminate && ws.terminate(); }
+            return;
+          }
+
+          if (revokedTokens.has(token)) {
+            log('info', `Token revocado en WS from=${remote} origin=${origin}`);
+            try { ws.close(1008, 'Unauthorized'); } catch(e) { ws.terminate && ws.terminate(); }
+            return;
+          }
+
+          try {
+            decoded = jwt.verify(token, process.env.JWT_SECRET);
+            // attach user info for later use
+            ws.user = decoded;
+          } catch (err) {
+            log('info', `Token inválido en WS from=${remote} origin=${origin} err=${err && err.message}`);
+            try { ws.close(1008, 'Unauthorized'); } catch(e) { ws.terminate && ws.terminate(); }
+            return;
+          }
         }
 
         const url = req.url;
@@ -230,3 +250,69 @@ mongoose.connect(MONGO_URI, {
   .catch((err) => {
     logHelpers.system.dbError(err);
   });
+
+// Configurar persistencia de logs
+const fs = require('fs');
+const logFile = fs.createWriteStream('./logs/server.log', { flags: 'a' });
+const logStdout = process.stdout;
+
+console.log = function (message) {
+  logFile.write(message + '\n');
+  logStdout.write(message + '\n');
+};
+console.error = console.log;
+
+// Endpoint para revocar tokens debe implementarse en ./app.js o en un archivo de rutas dedicado, no aquí. Eliminar duplicidad de instancia 'app'.
+
+// Rutas de autenticación
+app.post('/api/login', authController.login);
+app.post('/api/token', authController.refreshAccessToken);
+app.post('/api/logout', authController.logout);
+
+// Rutas para reportes avanzados
+app.get('/api/reports/occupancy', reportController.getOccupancyReport);
+app.get('/api/reports/revenue', reportController.getRevenueReport);
+app.get('/api/reports/cancellations', reportController.getCancellationReport);
+
+// Middleware para auditoría
+app.use(auditLogger);
+
+// Rutas de reportes
+app.use('/api/reports', reportRoutes);
+
+// Capturar errores globales y registrar en logs
+app.use((err, req, res, next) => {
+  logger.error('Error global capturado', {
+    message: err.message,
+    stack: err.stack,
+    route: req.originalUrl,
+    method: req.method
+  });
+  res.status(500).json({ message: 'Error interno del servidor.' });
+});
+
+// Capturar señales y registrar su origen (ignorar SIGINT para pruebas)
+process.on('SIGINT', () => {
+  // Ignorar SIGINT durante pruebas para evitar interferencias externas
+  console.log('SIGINT ignorado durante pruebas');
+});
+
+process.on('SIGTERM', () => {
+  logger.warn('Señal SIGTERM recibida. Apagando servidor...');
+  process.exit(0);
+});
+
+// Habilitar detalles de depuración
+process.on('uncaughtException', (err) => {
+  logger.error('Excepción no capturada', {
+    message: err.message,
+    stack: err.stack
+  });
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  logger.error('Promesa no manejada', {
+    reason,
+    promise
+  });
+});

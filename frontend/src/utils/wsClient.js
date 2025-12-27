@@ -19,38 +19,14 @@ export function createWS(urlParam, handlers = {}) {
   
   // Función para descubrir el puerto actual del backend
   async function discoverServerPort() {
-    if (isPortDiscoveryActive) return; // Evitar múltiples solicitudes paralelas
-    
+    if (isPortDiscoveryActive) return;
     isPortDiscoveryActive = true;
     try {
-      // Primero intentar con redirectorService
-      try {
-        // Obtener la URL del WebSocket desde redirectorService
-        const wsUrl = redirectorService.getWebSocketUrl();
-        if (wsUrl) {
-          console.log(`[WS] Puerto descubierto mediante redirectorService: ${wsUrl}`);
-          url = wsUrl; // Actualizar la URL con el endpoint correcto
-          
-          // Si ya hay un intento de conexión en curso, cerrar y reconectar
-          if (ws && ws.readyState !== WebSocket.CLOSED) {
-            try { ws.close(); } catch (e) {}
-          }
-          return;
-        }
-      } catch (redirErr) {
-        console.warn('[WS] Error con redirectorService, probando método alternativo');
-      }
-      
-      // Si redirectorService falla, intentar con el método anterior
-      const response = await fetch('/api/system/port');
-      if (!response.ok) throw new Error('Error al obtener información del puerto');
-      
-      const data = await response.json();
-      if (data.success && data.wsEndpoint) {
-        console.log(`[WS] Puerto descubierto: ${data.port}, Endpoint: ${data.wsEndpoint}`);
-        url = data.wsEndpoint; // Actualizar la URL con el endpoint correcto
-        
-        // Si ya hay un intento de conexión en curso, cerrar y reconectar
+      // Toda la detección de puerto pasa por redirectorService (con lock global)
+      const result = await redirectorService.detectBackendPort();
+      if (result && result.success && result.wsEndpoint) {
+        console.log(`[WS] Puerto descubierto: ${result.port}, Endpoint: ${result.wsEndpoint}`);
+        url = result.wsEndpoint;
         if (ws && ws.readyState !== WebSocket.CLOSED) {
           try { ws.close(); } catch (e) {}
         }

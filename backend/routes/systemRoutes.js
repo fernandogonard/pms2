@@ -30,6 +30,11 @@ router.get('/ready-check', systemController.systemReadyCheck);
  */
 router.get('/port', (req, res) => {
   try {
+    // Evitar respuestas cacheadas que dejen un puerto viejo en el frontend
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.set('Pragma', 'no-cache');
+    res.set('Expires', '0');
+
     // Intentar obtener el puerto directamente de la configuración del servidor
     const port = req.app.get('port') || process.env.PORT || 5002;
     

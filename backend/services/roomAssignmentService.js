@@ -13,7 +13,7 @@ const {
  * @param {Object} reservation - La reserva a la que asignar habitaciones
  * @returns {Promise<Array>} - Array de habitaciones asignadas
  */
-async function assignRoomsToReservation(reservation) {
+async function assignRoomsToReservation(reservation, options = {}) {
   try {
     console.log(`🏠 Intentando asignar ${reservation.cantidad || 1} habitaciones tipo ${reservation.tipo} para reserva ${reservation._id}`);
     
@@ -23,13 +23,16 @@ async function assignRoomsToReservation(reservation) {
       return reservation.room;
     }
 
+    const { session } = options;
     const cantidadNeeded = reservation.cantidad || 1;
     
     // Buscar habitaciones disponibles del tipo correcto
-    const availableRooms = await Room.find({
+    const roomQuery = Room.find({
       type: reservation.tipo,
       status: 'disponible' // Solo habitaciones disponibles
-    }).sort({ number: 1 }); // Ordenar por número para consistencia
+    });
+    if (session) roomQuery.session(session);
+    const availableRooms = await roomQuery.sort({ number: 1 }); // Ordenar por número para consistencia
 
     if (availableRooms.length === 0) {
       console.log(`   ❌ No hay habitaciones ${reservation.tipo} disponibles para asignar`);
@@ -45,13 +48,15 @@ async function assignRoomsToReservation(reservation) {
       if (roomsToAssign.length >= cantidadNeeded) break;
 
       // Verificar si esta habitación tiene conflictos con otras reservas
-      const conflictingReservation = await Reservation.findOne({
+      const conflictQuery = Reservation.findOne({
         _id: { $ne: reservation._id }, // Excluir la reserva actual
         room: room._id,
         status: { $in: ['reservada', 'checkin'] },
         checkIn: { $lt: checkOutDate },
         checkOut: { $gt: checkInDate }
       });
+      if (session) conflictQuery.session(session);
+      const conflictingReservation = await conflictQuery;
 
       if (!conflictingReservation) {
         roomsToAssign.push(room._id);
@@ -68,13 +73,17 @@ async function assignRoomsToReservation(reservation) {
     // Asignar las habitaciones a la reserva
     if (roomsToAssign.length > 0) {
       reservation.room = roomsToAssign;
-      await reservation.save();
+      const reservationSaveOptions = session ? { session } : undefined;
+      await reservation.save(reservationSaveOptions);
 
       // Marcar habitaciones como ocupadas si la reserva está en checkin
       if (reservation.status === 'checkin') {
         for (const roomId of roomsToAssign) {
-          await Room.findByIdAndUpdate(roomId, { status: 'ocupada' });
-          const room = await Room.findById(roomId);
+          const updateOptions = session ? { session } : undefined;
+          await Room.findByIdAndUpdate(roomId, { status: 'ocupada' }, updateOptions);
+          let roomQueryById = Room.findById(roomId);
+          if (session) roomQueryById = roomQueryById.session(session);
+          const room = await roomQueryById;
           console.log(`   🔒 Habitación #${room.number} marcada como ocupada`);
         }
       }
@@ -95,9 +104,13 @@ async function assignRoomsToReservation(reservation) {
  * @param {String} reservationId - ID de la reserva
  * @returns {Promise<Object>} - Reserva actualizada
  */
-async function processCheckin(reservationId) {
+async function processCheckin(reservationId, options = {}) {
   try {
-    const reservation = await Reservation.findById(reservationId);
+    const { session } = options;
+    const reservationQuery = Reservation.findById(reservationId);
+    if (session) reservationQuery.session(session);
+    const reservation = await reservationQuery;
+
     if (!reservation) {
       throw new Error('Reserva no encontrada');
     }
@@ -107,7 +120,7 @@ async function processCheckin(reservationId) {
     // Si no tiene habitaciones asignadas, intentar asignar
     if (!reservation.room || reservation.room.length === 0) {
       console.log('   Reserva virtual detectada, asignando habitaciones...');
-      await assignRoomsToReservation(reservation);
+      await assignRoomsToReservation(reservation, { session });
     }
 
     // 🔄 Validar transición de estado antes del check-in
@@ -124,18 +137,24 @@ async function processCheckin(reservationId) {
     // Actualizar estado a checkin
     console.log(`🔄 Reserva ${reservation._id}: ${reservation.status} → checkin`);
     reservation.status = 'checkin';
-    await reservation.save();
+    const saveOptions = session ? { session } : undefined;
+    await reservation.save(saveOptions);
 
     // Marcar habitaciones como ocupadas
     if (reservation.room && reservation.room.length > 0) {
       for (const roomId of reservation.room) {
-        await Room.findByIdAndUpdate(roomId, { status: 'ocupada' });
-        const room = await Room.findById(roomId);
+        const updateOptions = session ? { session } : undefined;
+        await Room.findByIdAndUpdate(roomId, { status: 'ocupada' }, updateOptions);
+        let roomQuery = Room.findById(roomId);
+        if (session) roomQuery = roomQuery.session(session);
+        const room = await roomQuery;
         console.log(`   🔒 Habitación #${room.number} marcada como ocupada en check-in`);
       }
     }
 
-    return await Reservation.findById(reservationId).populate('room client');
+    const finalQuery = Reservation.findById(reservationId).populate('room client');
+    if (session) finalQuery.session(session);
+    return await finalQuery;
 
   } catch (error) {
     console.error('❌ Error en proceso de check-in:', error);
@@ -148,9 +167,13 @@ async function processCheckin(reservationId) {
  * @param {String} reservationId - ID de la reserva
  * @returns {Promise<Object>} - Reserva actualizada
  */
-async function processCheckout(reservationId) {
+async function processCheckout(reservationId, options = {}) {
   try {
-    const reservation = await Reservation.findById(reservationId);
+    const { session } = options;
+    const reservationQuery = Reservation.findById(reservationId);
+    if (session) reservationQuery.session(session);
+    const reservation = await reservationQuery;
+
     if (!reservation) {
       throw new Error('Reserva no encontrada');
     }
@@ -160,8 +183,11 @@ async function processCheckout(reservationId) {
     // 🧹 WORKFLOW COMPLETO: checkout → limpieza → disponible
     if (reservation.room && reservation.room.length > 0) {
       for (const roomId of reservation.room) {
-        await Room.findByIdAndUpdate(roomId, { status: 'limpieza' });
-        const room = await Room.findById(roomId);
+        const updateOptions = session ? { session } : undefined;
+        await Room.findByIdAndUpdate(roomId, { status: 'limpieza' }, updateOptions);
+        let roomQuery = Room.findById(roomId);
+        if (session) roomQuery = roomQuery.session(session);
+        const room = await roomQuery;
         console.log(`   🧹 Habitación #${room.number} marcada para LIMPIEZA en check-out`);
       }
     }
@@ -180,9 +206,12 @@ async function processCheckout(reservationId) {
     // Actualizar estado a checkout
     console.log(`🔄 Reserva ${reservation._id}: ${reservation.status} → checkout`);
     reservation.status = 'checkout';
-    await reservation.save();
+    const saveOptions = session ? { session } : undefined;
+    await reservation.save(saveOptions);
 
-    return await Reservation.findById(reservationId).populate('room client');
+    const finalQuery = Reservation.findById(reservationId).populate('room client');
+    if (session) finalQuery.session(session);
+    return await finalQuery;
 
   } catch (error) {
     console.error('❌ Error en proceso de check-out:', error);

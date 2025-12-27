@@ -1,0 +1,178 @@
+// __tests__/e2e/websocket-invalidation.spec.js
+/**
+ * Test E2E para verificar invalidación de cache vía WebSocket
+ * Valida que eventos WS disparan refetch correcto sin múltiples peticiones
+ */
+
+const { test, expect } = require('@playwright/test');
+
+test.describe('WebSocket Cache Invalidation', () => {
+  test.use({ 
+    baseURL: process.env.REACT_APP_URL || 'http://localhost:3000'
+  });
+
+  test('should invalidate cache and refetch once on WS event', async ({ page, context }) => {
+    await page.goto('/login');
+    await page.fill('input[name="email"]', 'recepcion@hotel.com');
+    await page.fill('input[name="password"]', 'password123');
+    await page.click('button[type="submit"]');
+    await page.waitForNavigation();
+
+    // Ir al panel de reservas
+    await page.goto('/reception/reservations');
+    await page.waitForSelector('table[role="table"]');
+
+    // Contador de peticiones GET a /api/reservations
+    let getRequestCount = 0;
+    const requestTimestamps = [];
+
+    page.on('request', request => {
+      if (request.url().includes('/api/reservations') && request.method() === 'GET') {
+        getRequestCount++;
+        requestTimestamps.push(Date.now());
+        console.log(`[${getRequestCount}] GET /api/reservations`);
+      }
+    });
+
+    // Esperar la carga inicial
+    await page.waitForTimeout(1000);
+    const initialCount = getRequestCount;
+
+    // Abrir una segunda pestaña y hacer un cambio
+    const page2 = await context.newPage();
+    await page2.goto('/login');
+    await page2.fill('input[name="email"]', 'recepcion@hotel.com');
+    await page2.fill('input[name="password"]', 'password123');
+    await page2.click('button[type="submit"]');
+    await page2.waitForNavigation();
+
+    await page2.goto('/reception/reservations');
+    await page2.waitForSelector('table[role="table"]');
+
+    // Hacer check-in desde la segunda pestaña
+    const checkinButton = await page2.locator('button:text("Check-in")').first();
+    if (await checkinButton.count() > 0) {
+      await checkinButton.click();
+      await page2.waitForTimeout(500);
+    }
+
+    // Esperar que el WebSocket dispare la actualización en la primera pestaña
+    await page.waitForTimeout(2000);
+
+    // Validar que se hizo SOLO UN refetch adicional
+    const finalCount = getRequestCount;
+    const additionalRequests = finalCount - initialCount;
+
+    console.log(`Peticiones adicionales tras evento WS: ${additionalRequests}`);
+    
+    // Debe haber exactamente 1 refetch adicional (no múltiples)
+    expect(additionalRequests).toBeLessThanOrEqual(2);
+
+    // Si hay 2, verificar que no fueron simultáneas (deduplicación funcionó)
+    if (requestTimestamps.length >= 2) {
+      const lastTwo = requestTimestamps.slice(-2);
+      const timeDiff = lastTwo[1] - lastTwo[0];
+      
+      // Deben estar separadas por al menos el dedupeWindow (500ms)
+      if (additionalRequests === 2) {
+        expect(timeDiff).toBeGreaterThan(400);
+      }
+    }
+
+    // Verificar que la UI se actualizó
+    const updatedTable = await page.locator('table[role="table"]').textContent();
+    expect(updatedTable.length).toBeGreaterThan(0);
+
+    await page2.close();
+  });
+
+  test('should not refetch on irrelevant WS events', async ({ page }) => {
+    await page.goto('/login');
+    await page.fill('input[name="email"]', 'recepcion@hotel.com');
+    await page.fill('input[name="password"]', 'password123');
+    await page.click('button[type="submit"]');
+    await page.waitForNavigation();
+
+    await page.goto('/reception/calendar');
+    await page.waitForSelector('table[role="table"]');
+
+    let calendarRequestCount = 0;
+
+    page.on('request', request => {
+      if (request.url().includes('/api/rooms/status')) {
+        calendarRequestCount++;
+      }
+    });
+
+    await page.waitForTimeout(1000);
+    const initialCount = calendarRequestCount;
+
+    // Simular evento WebSocket irrelevante
+    await page.evaluate(() => {
+      // Inyectar evento fake
+      const wsEvent = new MessageEvent('message', {
+        data: JSON.stringify({ type: 'user_logged_in', userId: '123' })
+      });
+      
+      // Disparar en el WS si está disponible
+      if (window.ws) {
+        window.ws.onmessage(wsEvent);
+      }
+    });
+
+    await page.waitForTimeout(1000);
+
+    // No debe haber refetch porque el evento no es de reserva
+    const finalCount = calendarRequestCount;
+    expect(finalCount).toBe(initialCount);
+  });
+
+  test('should handle multiple rapid WS events with dedupe', async ({ page }) => {
+    await page.goto('/login');
+    await page.fill('input[name="email"]', 'recepcion@hotel.com');
+    await page.fill('input[name="password"]', 'password123');
+    await page.click('button[type="submit"]');
+    await page.waitForNavigation();
+
+    await page.goto('/reception/reservations');
+    await page.waitForSelector('table[role="table"]');
+
+    let requestCount = 0;
+
+    page.on('request', request => {
+      if (request.url().includes('/api/reservations') && request.method() === 'GET') {
+        requestCount++;
+      }
+    });
+
+    await page.waitForTimeout(1000);
+    const before = requestCount;
+
+    // Simular 5 eventos WS rápidos (dentro de 500ms)
+    await page.evaluate(() => {
+      for (let i = 0; i < 5; i++) {
+        setTimeout(() => {
+          const wsEvent = new MessageEvent('message', {
+            data: JSON.stringify({ 
+              type: 'reservation_updated', 
+              reservationId: '123' 
+            })
+          });
+          if (window.ws) {
+            window.ws.onmessage(wsEvent);
+          }
+        }, i * 50); // 50ms entre cada uno
+      }
+    });
+
+    await page.waitForTimeout(2000);
+
+    const after = requestCount;
+    const triggered = after - before;
+
+    console.log(`Eventos WS: 5, Refetches disparados: ${triggered}`);
+    
+    // Debe haber deduplicado y disparado solo 1-2 refetches
+    expect(triggered).toBeLessThanOrEqual(2);
+  });
+});

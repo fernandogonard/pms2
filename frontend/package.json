@@ -8,6 +8,7 @@
     "@testing-library/user-event": "^14.5.2",
     "chart.js": "^4.5.0",
     "react": "^18.3.1",
+    "react-beautiful-dnd": "^13.1.1",
     "react-chartjs-2": "^5.3.0",
     "react-dom": "^18.3.1",
     "react-router-dom": "^7.9.1",
@@ -17,7 +18,12 @@
     "start": "react-scripts start",
     "build": "react-scripts build",
     "test": "react-scripts test",
-    "eject": "react-scripts eject"
+    "eject": "react-scripts eject",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "test:e2e:headed": "playwright test --headed",
+    "analyze": "source-map-explorer 'build/static/js/*.js'",
+    "build:analyze": "npm run build && npm run analyze"
   },
   "browserslist": [
     ">0.2%",
@@ -25,7 +31,9 @@
     "not op_mini all"
   ],
   "devDependencies": {
-    "http-proxy-middleware": "^3.0.5",
-    "webpack-dev-server": "^5.2.2"
+    "@playwright/test": "^1.57.0",
+    "eslint-config-react-app": "^7.0.1",
+    "eslint-plugin-react": "^7.37.5",
+    "source-map-explorer": "^2.5.3"
   }
 }

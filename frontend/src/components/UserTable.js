@@ -1,7 +1,9 @@
 // components/UserTable.js
 // Tabla de gestión visual de usuarios (CRUD)
 import React, { useEffect, useState } from 'react';
+import useBackendReady from '../hooks/useBackendReady';
 import { apiFetch } from '../utils/api';
+import useSessionGuard from '../hooks/useSessionGuard';
 
 const API_USERS = '/api/users';
 
@@ -12,9 +14,17 @@ const UserTable = () => {
   const [form, setForm] = useState({ name: '', email: '', password: '', role: 'cliente' });
   const [editingId, setEditingId] = useState(null);
   const [success, setSuccess] = useState('');
+  const { canFetch, sessionExpired, authLoading } = useSessionGuard();
 
+  const { backendReady, backendLoading, backendError } = useBackendReady();
   // Cargar usuarios
   const fetchUsers = async () => {
+    if (!canFetch || !backendReady) {
+      setLoading(false);
+      setUsers([]);
+      setError(sessionExpired ? 'Tu sesión expiró. Inicia sesión para gestionar usuarios.' : 'Debes iniciar sesión para gestionar usuarios.');
+      return;
+    }
     try {
       const res = await apiFetch(API_USERS);
       const data = await res.json();
@@ -27,12 +37,30 @@ const UserTable = () => {
   };
 
   useEffect(() => {
+    if (!canFetch || !backendReady) {
+      if (!authLoading && !backendLoading) {
+        setLoading(false);
+        setUsers([]);
+        setError(sessionExpired ? 'Tu sesión expiró. Inicia sesión para gestionar usuarios.' : 'Debes iniciar sesión para gestionar usuarios.');
+      }
+      return;
+    }
     fetchUsers();
-  }, []);
+  }, [canFetch, sessionExpired, authLoading, backendReady, backendLoading]);
+  if (backendLoading) {
+    return <div style={{textAlign:'center',marginTop:40}}><b>Conectando con backend...</b></div>;
+  }
+  if (backendError) {
+    return <div style={{textAlign:'center',marginTop:40,color:'#ef4444'}}><b>{backendError}</b></div>;
+  }
 
   // Crear o editar usuario
   const handleSubmit = async e => {
     e.preventDefault();
+    if (!canFetch) {
+      setError(sessionExpired ? 'Tu sesión expiró. Inicia sesión para crear o editar usuarios.' : 'Debes iniciar sesión para crear o editar usuarios.');
+      return;
+    }
     setError('');
     setSuccess('');
     setLoading(true);
@@ -64,6 +92,10 @@ const UserTable = () => {
   // Eliminar usuario
   const handleDelete = async id => {
     if (!window.confirm('¿Eliminar este usuario?')) return;
+    if (!canFetch) {
+      setError(sessionExpired ? 'Tu sesión expiró. Inicia sesión para eliminar usuarios.' : 'Debes iniciar sesión para eliminar usuarios.');
+      return;
+    }
     const res = await apiFetch(`${API_USERS}/${id}`, { method: 'DELETE' });
     if (!res.ok) {
       const data = await res.json();

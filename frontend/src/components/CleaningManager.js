@@ -2,7 +2,9 @@
 // Gestión de habitaciones en limpieza
 
 import React, { useState, useEffect } from 'react';
+import useBackendReady from '../hooks/useBackendReady';
 import { apiFetch } from '../utils/api';
+import useSessionGuard from '../hooks/useSessionGuard';
 
 const CleaningManager = () => {
   const [roomsInCleaning, setRoomsInCleaning] = useState([]);
@@ -10,22 +12,34 @@ const CleaningManager = () => {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [selectedRooms, setSelectedRooms] = useState([]);
+  const { canFetch, sessionExpired, authLoading } = useSessionGuard();
 
+  const { backendReady, backendLoading, backendError } = useBackendReady();
   // Cargar habitaciones en limpieza
   const loadRoomsInCleaning = async () => {
+    if (!canFetch || !backendReady) {
+      setLoading(false);
+      setRoomsInCleaning([]);
+      setSelectedRooms([]);
+      setError(sessionExpired ? 'Tu sesión expiró. Inicia sesión nuevamente para ver las habitaciones en limpieza.' : 'Debes iniciar sesión para consultar las habitaciones en limpieza.');
+      return;
+    }
     try {
       setLoading(true);
       setError('');
       const res = await apiFetch('/api/rooms/cleaning');
       const data = await res.json();
-      
       if (res.ok) {
         setRoomsInCleaning(data.rooms || []);
       } else {
         setError(data.message || 'Error al cargar habitaciones en limpieza');
       }
     } catch (err) {
-      setError('Error de conexión al cargar habitaciones');
+      if (err.code === 429) {
+        setError('El sistema está recibiendo demasiadas peticiones. Espera unos segundos e intenta de nuevo.');
+      } else {
+        setError('Error de conexión al cargar habitaciones');
+      }
       console.error('Error loading cleaning rooms:', err);
     } finally {
       setLoading(false);
@@ -34,6 +48,10 @@ const CleaningManager = () => {
 
   // Marcar habitación individual como limpia
   const markRoomAsClean = async (roomId, roomNumber) => {
+    if (!canFetch) {
+      setError(sessionExpired ? 'Tu sesión expiró. Vuelve a iniciar sesión para actualizar habitaciones.' : 'Debes iniciar sesión para actualizar habitaciones.');
+      return;
+    }
     try {
       setError('');
       const res = await apiFetch(`/api/rooms/${roomId}/mark-clean`, {
@@ -56,6 +74,10 @@ const CleaningManager = () => {
 
   // Marcar múltiples habitaciones como limpias
   const markSelectedRoomsAsClean = async () => {
+    if (!canFetch) {
+      setError(sessionExpired ? 'Tu sesión expiró. Vuelve a iniciar sesión para actualizar habitaciones.' : 'Debes iniciar sesión para actualizar habitaciones.');
+      return;
+    }
     if (selectedRooms.length === 0) {
       setError('Selecciona al menos una habitación');
       return;
@@ -103,8 +125,23 @@ const CleaningManager = () => {
   };
 
   useEffect(() => {
+    if (!canFetch || !backendReady) {
+      if (!authLoading && !backendLoading) {
+        setLoading(false);
+        setRoomsInCleaning([]);
+        setSelectedRooms([]);
+        setError(sessionExpired ? 'Tu sesión expiró. Inicia sesión nuevamente para ver las habitaciones en limpieza.' : 'Debes iniciar sesión para consultar las habitaciones en limpieza.');
+      }
+      return;
+    }
     loadRoomsInCleaning();
-  }, []);
+  }, [canFetch, sessionExpired, authLoading, backendReady, backendLoading]);
+  if (backendLoading) {
+    return <div style={{textAlign:'center',marginTop:40}}><b>Conectando con backend...</b></div>;
+  }
+  if (backendError) {
+    return <div style={{textAlign:'center',marginTop:40,color:'#ef4444'}}><b>{backendError}</b></div>;
+  }
 
   return (
     <div className="cleaning-manager">

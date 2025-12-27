@@ -1,16 +1,123 @@
 // components/admin/AdminDashboardSection.js
 // Sección principal del dashboard con estadísticas y resumen
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import AdminStats from '../AdminStats';
+import { apiFetch } from '../../utils/api';
+import useSessionGuard from '../../hooks/useSessionGuard';
+
+const DEFAULT_DASHBOARD_STATS = { reservationsToday: 0, checkins: 0, checkouts: 0 };
 
 const AdminDashboardSection = () => {
+  const [quickStats, setQuickStats] = useState(DEFAULT_DASHBOARD_STATS);
+  const [alerts, setAlerts] = useState([]);
+  const [error, setError] = useState('');
+  const { canFetch, sessionExpired, authLoading } = useSessionGuard();
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const load = async () => {
+      try {
+        const [res, roomsRes, pendingRes] = await Promise.all([
+          apiFetch('/api/reservations'),
+          apiFetch('/api/rooms'),
+          apiFetch('/api/reservations/pending-checkouts')
+        ]);
+
+        const data = await res.json();
+        const roomsData = await roomsRes.json();
+        const pendingData = await pendingRes.json();
+
+        const list = Array.isArray(data) ? data : [];
+        const rooms = Array.isArray(roomsData) ? roomsData : [];
+        const pendingList = Array.isArray(pendingData?.reservations) ? pendingData.reservations : [];
+
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const sameDay = (a, b) => a && b && a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+        const toDate = (value) => value ? new Date(value) : null;
+
+        const reservationsToday = list.filter(r => {
+          const checkIn = toDate(r.checkIn);
+          const checkOut = toDate(r.checkOut);
+          if (!checkIn || !checkOut) return false;
+          return checkIn <= today && checkOut > today;
+        }).length;
+
+        const checkins = list.filter(r => r.status === 'checkin' && sameDay(toDate(r.checkIn), today)).length;
+        const checkouts = list.filter(r => r.status === 'checkout' && sameDay(toDate(r.checkOut), today)).length;
+
+        if (cancelled) return;
+        setQuickStats({ reservationsToday, checkins, checkouts });
+
+        // Alertas dinámicas
+        const maintenanceRooms = rooms.filter(r => r.status === 'mantenimiento');
+        const cleaningRooms = rooms.filter(r => r.status === 'limpieza');
+        const alertsList = [];
+
+        if (maintenanceRooms.length > 0) {
+          alertsList.push({
+            icon: '⚠️',
+            title: `${maintenanceRooms.length} habitación(es) en mantenimiento`,
+            subtitle: maintenanceRooms.slice(0, 3).map(r => `#${r.number}`).join(', ')
+          });
+        }
+
+        if (cleaningRooms.length > 0) {
+          alertsList.push({
+            icon: '🧹',
+            title: `${cleaningRooms.length} habitación(es) en limpieza`,
+            subtitle: cleaningRooms.slice(0, 3).map(r => `#${r.number}`).join(', ')
+          });
+        }
+
+        if (pendingList.length > 0) {
+          alertsList.push({
+            icon: '🚪',
+            title: `${pendingList.length} check-out(s) pendientes`,
+            subtitle: pendingList[0]?.client ? `${pendingList[0].client.nombre || ''} ${pendingList[0].client.apellido || ''}`.trim() : 'Revisar listado'
+          });
+        }
+
+        setAlerts(alertsList);
+        setError('');
+      } catch (error) {
+        if (cancelled) return;
+        setQuickStats(DEFAULT_DASHBOARD_STATS);
+        setAlerts([]);
+        if (!sessionExpired) {
+          setError('No se pudo cargar el resumen del dashboard.');
+        }
+      }
+    };
+
+    if (!canFetch) {
+      if (!authLoading) {
+        setQuickStats(DEFAULT_DASHBOARD_STATS);
+        setAlerts([]);
+        setError(sessionExpired ? 'Tu sesión expiró. Refresca e inicia sesión de nuevo.' : 'Esperando una sesión válida...');
+      }
+      return;
+    }
+
+    setError('');
+    load();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [canFetch, sessionExpired, authLoading]);
   return (
     <div style={containerStyle}>
       <div style={headerStyle}>
         <h2 style={titleStyle}>📊 Dashboard Ejecutivo</h2>
         <p style={subtitleStyle}>Resumen general del sistema hotelero</p>
       </div>
+
+      {error && (
+        <div style={errorBannerStyle}>{error}</div>
+      )}
 
       {/* Estadísticas principales */}
       <div style={statsContainerStyle}>
@@ -66,21 +173,21 @@ const AdminDashboardSection = () => {
             <div style={previewStatStyle}>
               <span style={previewStatIconStyle}>📅</span>
               <div>
-                <div style={previewStatValueStyle}>12</div>
+                <div style={previewStatValueStyle}>{quickStats.reservationsToday}</div>
                 <div style={previewStatLabelStyle}>Reservas Hoy</div>
               </div>
             </div>
             <div style={previewStatStyle}>
               <span style={previewStatIconStyle}>🔄</span>
               <div>
-                <div style={previewStatValueStyle}>5</div>
+                <div style={previewStatValueStyle}>{quickStats.checkins}</div>
                 <div style={previewStatLabelStyle}>Check-ins</div>
               </div>
             </div>
             <div style={previewStatStyle}>
               <span style={previewStatIconStyle}>🚪</span>
               <div>
-                <div style={previewStatValueStyle}>3</div>
+                <div style={previewStatValueStyle}>{quickStats.checkouts}</div>
                 <div style={previewStatLabelStyle}>Check-outs</div>
               </div>
             </div>
@@ -92,27 +199,18 @@ const AdminDashboardSection = () => {
       <div style={alertsContainerStyle}>
         <h3 style={sectionTitleStyle}>🔔 Alertas del Sistema</h3>
         <div style={alertsListStyle}>
-          <div style={alertItemStyle}>
-            <span style={alertIconStyle}>⚠️</span>
-            <div>
-              <div style={alertTitleStyle}>Habitación 102 en mantenimiento</div>
-              <div style={alertTimeStyle}>Hace 2 horas</div>
+          {alerts.length === 0 && (
+            <div style={{ color: '#aaa', padding: 12 }}>Sin alertas activas</div>
+          )}
+          {alerts.map((alert, idx) => (
+            <div key={idx} style={alertItemStyle}>
+              <span style={alertIconStyle}>{alert.icon}</span>
+              <div>
+                <div style={alertTitleStyle}>{alert.title}</div>
+                {alert.subtitle && <div style={alertTimeStyle}>{alert.subtitle}</div>}
+              </div>
             </div>
-          </div>
-          <div style={alertItemStyle}>
-            <span style={alertIconStyle}>💰</span>
-            <div>
-              <div style={alertTitleStyle}>5 facturas pendientes de pago</div>
-              <div style={alertTimeStyle}>Hoy</div>
-            </div>
-          </div>
-          <div style={alertItemStyle}>
-            <span style={alertIconStyle}>📅</span>
-            <div>
-              <div style={alertTitleStyle}>Check-in programado en 1 hora</div>
-              <div style={alertTimeStyle}>Reserva #12345</div>
-            </div>
-          </div>
+          ))}
         </div>
       </div>
     </div>
@@ -279,6 +377,15 @@ const previewStatLabelStyle = {
   fontSize: '11px',
   color: '#aaa',
   textTransform: 'uppercase'
+};
+
+const errorBannerStyle = {
+  background: '#dc2626',
+  color: '#fff',
+  padding: '12px 16px',
+  borderRadius: '10px',
+  marginBottom: '16px',
+  fontWeight: 600
 };
 
 export default AdminDashboardSection;

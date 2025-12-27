@@ -1,12 +1,61 @@
 // components/admin/AdminBillingSection.js
 // Sección de gestión de facturación para administradores
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
+import useBackendReady from '../../hooks/useBackendReady';
 import PricingManager from '../PricingManager';
 import FinancialDashboard from '../FinancialDashboard';
+import { apiFetch } from '../../utils/api';
+import useSessionGuard from '../../hooks/useSessionGuard';
+
+const DEFAULT_BILLING_STATS = { revenue: 0, growth: null, invoices: 0, pending: 0 };
 
 const AdminBillingSection = () => {
   const [activeTab, setActiveTab] = React.useState('dashboard');
+  const [quickStats, setQuickStats] = useState(DEFAULT_BILLING_STATS);
+  const [error, setError] = useState('');
+  const { canFetch, sessionExpired, authLoading } = useSessionGuard();
+  const { backendReady, backendLoading, backendError } = useBackendReady();
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadQuickStats = async () => {
+      try {
+        const startDate = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0];
+        const endDate = new Date().toISOString().split('T')[0];
+        const [summaryRes, invoicesRes] = await Promise.all([
+          apiFetch(`/api/billing/summary?startDate=${startDate}&endDate=${endDate}`),
+          apiFetch('/api/billing/invoices/pending')
+        ]);
+        const summaryData = await summaryRes.json();
+        const invoicesData = await invoicesRes.json();
+        const revenue = summaryRes.ok && summaryData?.data?.summary?.totalRevenue ? summaryData.data.summary.totalRevenue : 0;
+        const invoices = Array.isArray(invoicesData?.data) ? invoicesData.data.length : 0;
+        const pending = Array.isArray(invoicesData?.data) ? invoicesData.data.filter(inv => inv.pending > 0).length : 0;
+        if (cancelled) return;
+        setQuickStats({ revenue, growth: null, invoices, pending });
+        setError('');
+      } catch (err) {
+        if (cancelled) return;
+        setQuickStats(DEFAULT_BILLING_STATS);
+        if (!sessionExpired) {
+          setError('No se pudieron cargar los datos de facturación.');
+        }
+      }
+    };
+    if (!canFetch || !backendReady) {
+      if (!authLoading && !backendLoading) {
+        setQuickStats(DEFAULT_BILLING_STATS);
+        setError(sessionExpired ? 'Tu sesión expiró. Inicia sesión nuevamente para ver la facturación.' : 'Esperando una sesión válida o backend...');
+      }
+      return;
+    }
+    setError('');
+    loadQuickStats();
+    return () => {
+      cancelled = true;
+    };
+  }, [canFetch, sessionExpired, authLoading, backendReady, backendLoading]);
 
   const tabs = [
     { id: 'dashboard', label: 'Dashboard Financiero', icon: '📊' },
@@ -14,7 +63,15 @@ const AdminBillingSection = () => {
     { id: 'invoices', label: 'Facturas', icon: '🧾' },
     { id: 'payments', label: 'Pagos', icon: '💳' }
   ];
-
+  // Cerrar correctamente el array tabs
+  // (Se añadió el punto y coma al final del array)
+  
+  if (backendLoading) {
+    return <div style={{textAlign:'center',marginTop:40}}><b>Conectando con backend...</b></div>;
+  }
+  if (backendError) {
+    return <div style={{textAlign:'center',marginTop:40,color:'#ef4444'}}><b>{backendError}</b></div>;
+  }
   return (
     <div style={containerStyle}>
       <div style={headerStyle}>
@@ -23,34 +80,38 @@ const AdminBillingSection = () => {
           <p style={subtitleStyle}>Gestión completa de precios, pagos y facturación</p>
         </div>
       </div>
+    );
+  };
+
+      <div style={statsRowStyle}>
 
       {/* Estadísticas financieras rápidas */}
-      <div style={statsRowStyle}>
+      {/* (Eliminado div extra que causaba error de sintaxis) */}
         <div style={statCardStyle}>
           <div style={statIconStyle}>💵</div>
           <div>
-            <div style={statValueStyle}>$45,280</div>
+            <div style={statValueStyle}>${quickStats.revenue?.toLocaleString() || 0}</div>
             <div style={statLabelStyle}>Ingresos del Mes</div>
           </div>
         </div>
         <div style={statCardStyle}>
           <div style={statIconStyle}>📈</div>
           <div>
-            <div style={statValueStyle}>+12.5%</div>
+            <div style={statValueStyle}>{quickStats.growth !== null ? `${quickStats.growth}%` : '--'}</div>
             <div style={statLabelStyle}>Crecimiento</div>
           </div>
         </div>
         <div style={statCardStyle}>
           <div style={statIconStyle}>🧾</div>
           <div>
-            <div style={statValueStyle}>156</div>
+            <div style={statValueStyle}>{quickStats.invoices}</div>
             <div style={statLabelStyle}>Facturas Emitidas</div>
           </div>
         </div>
         <div style={statCardStyle}>
           <div style={statIconStyle}>⚠️</div>
           <div>
-            <div style={statValueStyle}>8</div>
+            <div style={statValueStyle}>{quickStats.pending}</div>
             <div style={statLabelStyle}>Pendientes de Pago</div>
           </div>
         </div>
@@ -117,9 +178,7 @@ const AdminBillingSection = () => {
       </div>
     </div>
   );
-};
-
-// Estilos
+}
 const containerStyle = {
   padding: '24px',
   maxWidth: '1400px'
@@ -262,6 +321,15 @@ const comingSoonBadgeStyle = {
   fontWeight: '600',
   textTransform: 'uppercase',
   letterSpacing: '0.5px'
+};
+
+const errorBannerStyle = {
+  background: '#dc2626',
+  color: '#fff',
+  padding: '12px 16px',
+  borderRadius: '10px',
+  marginBottom: '16px',
+  fontWeight: 600
 };
 
 export default AdminBillingSection;

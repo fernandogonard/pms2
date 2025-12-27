@@ -2,6 +2,7 @@
 // Gestión visual de clientes/huespedes (CRUD, búsqueda, historial)
 import React, { useEffect, useState } from 'react';
 import { apiFetch } from '../utils/api';
+import useSessionGuard from '../hooks/useSessionGuard';
 
 const API_CLIENTS = '/api/clients';
 
@@ -15,9 +16,16 @@ const ClientTable = () => {
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState(null);
   const [reservations, setReservations] = useState([]);
+  const { canFetch, sessionExpired, authLoading } = useSessionGuard();
 
   // Cargar clientes
   const fetchClients = async () => {
+    if (!canFetch) {
+      setLoading(false);
+      setClients([]);
+      setError(sessionExpired ? 'Tu sesión expiró. Inicia sesión nuevamente para gestionar clientes.' : 'Debes iniciar sesión para gestionar clientes.');
+      return;
+    }
     setLoading(true);
     try {
       const res = await apiFetch(`${API_CLIENTS}?q=${encodeURIComponent(search)}`);
@@ -30,11 +38,25 @@ const ClientTable = () => {
     }
   };
 
-  useEffect(() => { fetchClients(); }, [search]);
+  useEffect(() => {
+    if (!canFetch) {
+      if (!authLoading) {
+        setLoading(false);
+        setClients([]);
+        setError(sessionExpired ? 'Tu sesión expiró. Inicia sesión nuevamente para gestionar clientes.' : 'Debes iniciar sesión para gestionar clientes.');
+      }
+      return;
+    }
+    fetchClients();
+  }, [search, canFetch, sessionExpired, authLoading]);
 
   // Crear o editar cliente
   const handleSubmit = async e => {
     e.preventDefault();
+    if (!canFetch) {
+      setError(sessionExpired ? 'Tu sesión expiró. Inicia sesión nuevamente para crear o editar clientes.' : 'Debes iniciar sesión para crear o editar clientes.');
+      return;
+    }
     setError('');
     setSuccess('');
     setLoading(true);
@@ -65,6 +87,10 @@ const ClientTable = () => {
   // Eliminar cliente
   const handleDelete = async id => {
     if (!window.confirm('¿Eliminar este cliente?')) return;
+    if (!canFetch) {
+      setError(sessionExpired ? 'Tu sesión expiró. Inicia sesión nuevamente para eliminar clientes.' : 'Debes iniciar sesión para eliminar clientes.');
+      return;
+    }
     const res = await apiFetch(`${API_CLIENTS}/${id}`, { method: 'DELETE' });
     if (!res.ok) {
       const data = await res.json();
@@ -87,6 +113,10 @@ const ClientTable = () => {
 
   // Ver historial de reservas
   const handleShowHistory = async id => {
+    if (!canFetch) {
+      setError(sessionExpired ? 'Tu sesión expiró. Inicia sesión nuevamente para ver el historial.' : 'Debes iniciar sesión para ver el historial.');
+      return;
+    }
     setSelected(id);
     setReservations([]);
     setLoading(true);

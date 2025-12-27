@@ -21,7 +21,7 @@ const LoadingSpinner = () => (
 );
 
 // Componente para rutas privadas con autenticación real
-const PrivateRoute = ({ children, role }) => {
+const PrivateRoute = ({ children, role, allowRoles }) => {
   const { isAuthenticated, user, loading } = useAuth();
   
   if (loading) {
@@ -32,7 +32,9 @@ const PrivateRoute = ({ children, role }) => {
     return <Navigate to="/login" replace />;
   }
   
-  if (role && user?.role !== role) {
+  // Verificar permisos: puede ser un rol específico o varios roles permitidos
+  const rolesAllowed = allowRoles || (role ? [role] : []);
+  if (rolesAllowed.length > 0 && !rolesAllowed.includes(user?.role)) {
     return <Navigate to="/unauthorized" replace />;
   }
   
@@ -95,7 +97,7 @@ const AppRouterContent = () => {
           </PrivateRoute>
         } />
         <Route path="/recepcion" element={
-          <PrivateRoute role="recepcionista">
+          <PrivateRoute allowRoles={["admin", "recepcionista"]}>
             <ReceptionDashboard />
           </PrivateRoute>
         } />

@@ -1,5 +1,5 @@
-# Script para iniciar el servidor CRM Hotelero con configuración mejorada
-# Asegura que todas las dependencias estén instaladas y el servidor se ejecute correctamente
+﻿# Script para iniciar el servidor CRM Hotelero con configuraciÃ³n mejorada
+# Asegura que todas las dependencias estÃ©n instaladas y el servidor se ejecute correctamente
 
 Write-Host "INICIANDO CRM HOTELERO v2.0" -ForegroundColor Green
 Write-Host "============================" -ForegroundColor Green
@@ -9,7 +9,7 @@ $backendPath = ".\backend"
 # Verificar que estamos en el directorio correcto
 if (-not (Test-Path $backendPath)) {
     Write-Host "ERROR: No se encuentra el directorio backend" -ForegroundColor Red
-    Write-Host "Asegúrate de ejecutar este script desde el directorio raíz del proyecto" -ForegroundColor Yellow
+    Write-Host "AsegÃºrate de ejecutar este script desde el directorio raÃ­z del proyecto" -ForegroundColor Yellow
     exit 1
 }
 
@@ -20,18 +20,18 @@ Set-Location $backendPath
 Write-Host "`nVerificando Node.js..." -ForegroundColor Yellow
 try {
     $nodeVersion = node --version
-    Write-Host "   ✓ Node.js versión: $nodeVersion" -ForegroundColor Green
+    Write-Host "   âœ“ Node.js versiÃ³n: $nodeVersion" -ForegroundColor Green
 } catch {
-    Write-Host "   ✗ ERROR: Node.js no está instalado" -ForegroundColor Red
+    Write-Host "   âœ— ERROR: Node.js no estÃ¡ instalado" -ForegroundColor Red
     exit 1
 }
 
 # Verificar npm
 try {
     $npmVersion = npm --version
-    Write-Host "   ✓ npm versión: $npmVersion" -ForegroundColor Green
+    Write-Host "   âœ“ npm versiÃ³n: $npmVersion" -ForegroundColor Green
 } catch {
-    Write-Host "   ✗ ERROR: npm no está disponible" -ForegroundColor Red
+    Write-Host "   âœ— ERROR: npm no estÃ¡ disponible" -ForegroundColor Red
     exit 1
 }
 
@@ -41,12 +41,12 @@ if (-not (Test-Path "node_modules")) {
     Write-Host "   Instalando dependencias..." -ForegroundColor Yellow
     npm install
     if ($LASTEXITCODE -ne 0) {
-        Write-Host "   ✗ ERROR: Falló la instalación de dependencias" -ForegroundColor Red
+        Write-Host "   âœ— ERROR: FallÃ³ la instalaciÃ³n de dependencias" -ForegroundColor Red
         exit 1
     }
-    Write-Host "   ✓ Dependencias instaladas" -ForegroundColor Green
+    Write-Host "   âœ“ Dependencias instaladas" -ForegroundColor Green
 } else {
-    Write-Host "   ✓ Dependencias ya instaladas" -ForegroundColor Green
+    Write-Host "   âœ“ Dependencias ya instaladas" -ForegroundColor Green
 }
 
 # Verificar variables de entorno
@@ -55,32 +55,32 @@ $env:NODE_ENV = "development"
 $env:PORT = "5000"
 $env:JWT_SECRET = "tu_jwt_secret_super_seguro_cambiar_en_produccion"
 
-Write-Host "   ✓ NODE_ENV: $env:NODE_ENV" -ForegroundColor Green
-Write-Host "   ✓ PORT: $env:PORT" -ForegroundColor Green
-Write-Host "   ✓ JWT_SECRET: [CONFIGURADO]" -ForegroundColor Green
+Write-Host "   âœ“ NODE_ENV: $env:NODE_ENV" -ForegroundColor Green
+Write-Host "   âœ“ PORT: $env:PORT" -ForegroundColor Green
+Write-Host "   âœ“ JWT_SECRET: [CONFIGURADO]" -ForegroundColor Green
 
 # Mostrar funcionalidades habilitadas
-Write-Host "`nFUNCIONALIDAES HABILITADAS:" -ForegroundColor Cyan
-Write-Host "   ✓ JWT Authentication en todos los endpoints" -ForegroundColor Green
-Write-Host "   ✓ Rate Limiting por tipo de endpoint" -ForegroundColor Green
-Write-Host "   ✓ Sistema de logging avanzado (Winston)" -ForegroundColor Green
-Write-Host "   ✓ Monitoreo en tiempo real (/api/monitoring/*)" -ForegroundColor Green
-Write-Host "   ✓ Health checks automáticos" -ForegroundColor Green
-Write-Host "   ✓ Métricas de rendimiento" -ForegroundColor Green
-Write-Host "   ✓ Middleware de seguridad (Helmet)" -ForegroundColor Green
+Write-Host "`nFUNCIONALIDADES HABILITADAS:" -ForegroundColor Cyan
+Write-Host "   âœ“ JWT Authentication en todos los endpoints" -ForegroundColor Green
+Write-Host "   âœ“ Rate Limiting por tipo de endpoint" -ForegroundColor Green
+Write-Host "   âœ“ Sistema de logging avanzado (Winston)" -ForegroundColor Green
+Write-Host "   âœ“ Monitoreo en tiempo real (en /api/monitoring)" -ForegroundColor Green
+Write-Host "   âœ“ Health checks automÃ¡ticos" -ForegroundColor Green
+Write-Host "   âœ“ MÃ©tricas de rendimiento" -ForegroundColor Green
+Write-Host "   âœ“ Middleware de seguridad (Helmet)" -ForegroundColor Green
 
-# Información de acceso
-Write-Host "`nINFORMACIÓN DE ACCESO:" -ForegroundColor Cyan
+# InformaciÃ³n de acceso
+Write-Host "`nINFORMACIÃ“N DE ACCESO:" -ForegroundColor Cyan
 Write-Host "   Servidor: http://localhost:5000" -ForegroundColor White
 Write-Host "   Admin: admin@hotel.com / admin123" -ForegroundColor White
 Write-Host "   Recepcionista: recepcion@hotel.com / recepcion123" -ForegroundColor White
 Write-Host "   Monitoreo: http://localhost:5000/api/monitoring/health" -ForegroundColor White
 
-# Scripts de validación disponibles
-Write-Host "`nSCRIPTS DE VALIDACIÓN DISPONIBLES:" -ForegroundColor Cyan
-Write-Host "   ..\validate-final-system.ps1 - Validación completa del sistema" -ForegroundColor White
-Write-Host "   ..\test-rate-limiting.ps1 - Test específico de rate limiting" -ForegroundColor White
-Write-Host "   ..\validate-corrections.ps1 - Validación de correcciones de seguridad" -ForegroundColor White
+# Scripts de validaciÃ³n disponibles
+Write-Host "`nSCRIPTS DE VALIDACIÃ“N DISPONIBLES:" -ForegroundColor Cyan
+Write-Host "   ..\validate-final-system.ps1 - ValidaciÃ³n completa del sistema" -ForegroundColor White
+Write-Host "   ..\test-rate-limiting.ps1 - Test especÃ­fico de rate limiting" -ForegroundColor White
+Write-Host "   ..\validate-corrections.ps1 - ValidaciÃ³n de correcciones de seguridad" -ForegroundColor White
 
 Write-Host "`nINICIANDO SERVIDOR..." -ForegroundColor Yellow
 Write-Host "Presiona Ctrl+C para detener el servidor" -ForegroundColor Gray

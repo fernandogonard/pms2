@@ -52,7 +52,7 @@ const corsOptions = {
     return callback(new Error('CORS origin not allowed'));
   },
   credentials: true,
-  allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'X-Requested-With', 'Cache-Control'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'X-Requested-With', 'Cache-Control', 'expires', 'pragma'],
   methods: ['GET','POST','PUT','DELETE','OPTIONS'],
   preflightContinue: false,
   optionsSuccessStatus: 204
@@ -74,7 +74,7 @@ app.use((req, res, next) => {
   if (allowed) {
     res.header('Access-Control-Allow-Origin', origin);
     res.header('Access-Control-Allow-Credentials', 'true');
-    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, Accept, X-Requested-With, Cache-Control');
+    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, Accept, X-Requested-With, Cache-Control, expires, pragma');
     res.header('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS');
     console.log(`[CORS] Añadidas cabeceras CORS para origin=${origin}`);
   }
@@ -84,8 +84,9 @@ app.use(morgan('dev'));
 app.use(helmet());
 
 // 🔒 Sistema de rate limiting avanzado
-const { generalLimiter } = require('./config/rateLimiter');
-app.use(generalLimiter);
+const { getRateLimiterConfig } = require('./config/rateLimiter');
+const rateLimiters = getRateLimiterConfig();
+app.use(rateLimiters.general);
 app.use(advancedSecurity.rateLimitByUser);
 app.use(advancedSecurity.anomalyDetection);
 
@@ -130,8 +131,9 @@ const billingRoutes = require('./routes/billingRoutes');
 app.use('/api/billing', billingRoutes);
 
 // 🆕 Rutas de información del sistema y datos reales
+const { systemPortLimiter } = require('./config/rateLimiter');
 const systemRoutes = require('./routes/systemRoutes');
-app.use('/api/system', systemRoutes);
+app.use('/api/system', systemPortLimiter, systemRoutes);
 
 // 🆕 Rutas de gestión de limpieza
 const cleaningRoutes = require('./routes/cleaningRoutes');

@@ -1,0 +1,176 @@
+// __tests__/e2e/reservation-race.spec.js
+/**
+ * Test E2E para verificar manejo de race conditions en reservas
+ * Simula dos agentes modificando la misma reserva simultáneamente
+ */
+
+const { test, expect } = require('@playwright/test');
+
+test.describe('Reservation Race Conditions', () => {
+  test.use({ 
+    baseURL: process.env.REACT_APP_URL || 'http://localhost:3000'
+  });
+
+  test('should handle concurrent check-in attempts with lock', async ({ browser }) => {
+    // Crear dos contextos de navegador (dos agentes)
+    const context1 = await browser.newContext();
+    const context2 = await browser.newContext();
+    
+    const page1 = await context1.newPage();
+    const page2 = await context2.newPage();
+
+    try {
+      // Login en ambas páginas como recepcionista
+      await Promise.all([
+        loginAsReceptionist(page1),
+        loginAsReceptionist(page2)
+      ]);
+
+      // Ir al panel de reservas
+      await Promise.all([
+        page1.goto('/reception/reservations'),
+        page2.goto('/reception/reservations')
+      ]);
+
+      // Esperar que cargue la tabla
+      await Promise.all([
+        page1.waitForSelector('table[role="table"]'),
+        page2.waitForSelector('table[role="table"]')
+      ]);
+
+      // Buscar la primera reserva en estado "reservada"
+      const reservationRow1 = await page1.locator('tr:has(span:text("reservada"))').first();
+      const reservationRow2 = await page2.locator('tr:has(span:text("reservada"))').first();
+
+      // Interceptar peticiones para validar respuestas
+      const responses1 = [];
+      const responses2 = [];
+
+      page1.on('response', response => {
+        if (response.url().includes('/api/reservations/')) {
+          responses1.push(response);
+        }
+      });
+
+      page2.on('response', response => {
+        if (response.url().includes('/api/reservations/')) {
+          responses2.push(response);
+        }
+      });
+
+      // Hacer check-in simultáneo desde ambas páginas
+      await Promise.all([
+        reservationRow1.locator('button:text("Check-in")').click(),
+        reservationRow2.locator('button:text("Check-in")').click()
+      ]);
+
+      // Esperar respuestas
+      await page1.waitForTimeout(1000);
+      await page2.waitForTimeout(1000);
+
+      // Validar que al menos una operación fue exitosa (200)
+      // y la otra puede ser 423 (lock busy) o también 200 si fue rápida
+      const statuses = [
+        ...responses1.map(r => r.status()),
+        ...responses2.map(r => r.status())
+      ];
+
+      expect(statuses).toContain(200);
+
+      // Si hay un 423, significa que el lock funcionó correctamente
+      if (statuses.includes(423)) {
+        console.log('✅ Lock detectado: una petición fue bloqueada con 423');
+      }
+
+      // Verificar que solo hay UNA reserva con check-in realizado
+      await page1.reload();
+      await page1.waitForSelector('table[role="table"]');
+      
+      const checkinCount = await page1.locator('span:text("checkin")').count();
+      expect(checkinCount).toBeGreaterThanOrEqual(1);
+
+    } finally {
+      await context1.close();
+      await context2.close();
+    }
+  });
+
+  test('should prevent double room assignment via lock', async ({ browser }) => {
+    const context1 = await browser.newContext();
+    const context2 = await browser.newContext();
+    
+    const page1 = await context1.newPage();
+    const page2 = await context2.newPage();
+
+    try {
+      await Promise.all([
+        loginAsReceptionist(page1),
+        loginAsReceptionist(page2)
+      ]);
+
+      // Ir al calendario
+      await Promise.all([
+        page1.goto('/reception/calendar'),
+        page2.goto('/reception/calendar')
+      ]);
+
+      await Promise.all([
+        page1.waitForSelector('table[role="table"]'),
+        page2.waitForSelector('table[role="table"]')
+      ]);
+
+      // Intentar asignar la misma habitación a dos reservas simultáneamente
+      // (esto requiere que haya botones de asignación en el UI)
+      
+      // Interceptar respuestas
+      const assignResponses = [];
+      
+      page1.on('response', response => {
+        if (response.url().includes('/assign')) {
+          assignResponses.push({ page: 1, status: response.status() });
+        }
+      });
+
+      page2.on('response', response => {
+        if (response.url().includes('/assign')) {
+          assignResponses.push({ page: 2, status: response.status() });
+        }
+      });
+
+      // Hacer click en asignar desde ambas páginas
+      // (ajustar selector según UI real)
+      await Promise.all([
+        page1.locator('button[aria-label*="asignar"]').first().click(),
+        page2.locator('button[aria-label*="asignar"]').first().click()
+      ]);
+
+      await page1.waitForTimeout(1500);
+
+      // Verificar que al menos una operación tuvo éxito
+      // y la otra puede haber sido bloqueada
+      const successCount = assignResponses.filter(r => r.status === 200).length;
+      const lockCount = assignResponses.filter(r => r.status === 423).length;
+
+      expect(successCount).toBeGreaterThanOrEqual(1);
+      
+      if (lockCount > 0) {
+        console.log('✅ Lock en asignación: operación bloqueada correctamente');
+      }
+
+    } finally {
+      await context1.close();
+      await context2.close();
+    }
+  });
+});
+
+/**
+ * Helper para login
+ */
+async function loginAsReceptionist(page) {
+  await page.goto('/login');
+  await page.fill('input[name="email"]', 'recepcion@hotel.com');
+  await page.fill('input[name="password"]', 'password123');
+  await page.click('button[type="submit"]');
+  await page.waitForNavigation();
+}

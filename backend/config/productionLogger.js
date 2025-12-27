@@ -244,12 +244,13 @@ const setupGlobalErrorHandlers = () => {
     productionLoggerConfig.logSystemMetrics();
   });
 
-  process.on('SIGINT', () => {
-    logger.info('SIGINT received, shutting down gracefully', {
-      event: 'GRACEFUL_SHUTDOWN'
-    });
-    productionLoggerConfig.logSystemMetrics();
-  });
+  // Deshabilitar manejador redundante de SIGINT
+  // process.on('SIGINT', () => {
+  //   logger.info('SIGINT received, shutting down gracefully', {
+  //     event: 'GRACEFUL_SHUTDOWN'
+  //   });
+  //   productionLoggerConfig.logSystemMetrics();
+  // });
 };
 
 module.exports = {

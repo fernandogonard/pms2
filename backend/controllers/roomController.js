@@ -7,6 +7,8 @@ const {
   validateRoomBusinessRules,
   getAllowedStates 
 } = require('../services/stateValidationService');
+const { calculateRoomStates } = require('../services/AvailabilityService');
+const RoomCalendar = require('../models/RoomCalendar');
 
 // 🆕 Importar nuevo sistema de logging Winston
 const { logger } = require('../services/loggerService');
@@ -14,255 +16,36 @@ const { logger } = require('../services/loggerService');
 
 // 🆕 GET /api/rooms/status con logging avanzado
 exports.getRoomsStatus = ErrorHandlingService.asyncWrapper(async (req, res) => {
-    const startTime = Date.now();
-    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
-    const startQuery = req.query.start; // opcional YYYY-MM-DD
-    const days = parseInt(req.query.days, 10) || 14;
+  const startTime = Date.now();
+  res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  const startQuery = req.query.start; // opcional YYYY-MM-DD
+  const days = parseInt(req.query.days, 10) || 14;
 
-    // 📝 Log de acceso al estado de habitaciones
-    logger.audit.userAction(
-      'VIEW_ROOMS_STATUS',
-      req.user?.id || 'anonymous',
-      'room',
-      null,
-      { startDate: startQuery, days, ip: req.ip }
-    );
-    
-    // Crear fecha sin problemas de zona horaria
-    let startDate;
-    if (startQuery) {
-      // Crear fecha desde string YYYY-MM-DD sin conversión de zona horaria
-      const [year, month, day] = startQuery.split('-').map(Number);
-      startDate = new Date(year, month - 1, day); // mes es 0-indexed
-    } else {
-      startDate = new Date();
-    }
-    startDate.setHours(0, 0, 0, 0);
+  let startDate;
+  if (startQuery) {
+    const [year, month, day] = startQuery.split('-').map(Number);
+    startDate = new Date(year, month - 1, day);
+  } else {
+    startDate = new Date();
+  }
+  startDate.setHours(0, 0, 0, 0);
 
-    // Obtener habitaciones ordenadas por número
-    const rooms = await Room.find().sort({ number: 1 }).lean();
-    
-    // Obtener reservas activas que intersectan el período
-    const endDate = new Date(startDate);
-    endDate.setDate(endDate.getDate() + days);
-    
-    const reservations = await Reservation.find({
-      status: { $in: ['reservada', 'checkin'] },
-      checkOut: { $gt: startDate },
-      checkIn: { $lt: endDate }
-    }).populate('user').lean();
+  const rooms = await Room.find().sort({ number: 1 }).lean();
+  const endDate = new Date(startDate);
+  endDate.setDate(endDate.getDate() + days);
 
-    // Generar rango de fechas
-    const dateRange = [];
-    for (let i = 0; i < days; i++) {
-      const date = new Date(startDate);
-      date.setDate(startDate.getDate() + i);
-      dateRange.push(date.toISOString().split('T')[0]);
-    }
+  const reservations = await Reservation.find({
+    status: { $in: ['reservada', 'checkin'] },
+    checkOut: { $gt: startDate },
+    checkIn: { $lt: endDate }
+  }).populate('user').lean();
 
-    // Agrupar habitaciones por tipo
-    const roomsByType = {};
-    rooms.forEach(room => {
-      if (!roomsByType[room.type]) {
-        roomsByType[room.type] = [];
-      }
-      roomsByType[room.type].push(room);
-    });
+  const roomStates = calculateRoomStates(rooms, reservations, startDate, days);
 
-    // Calcular reservas virtuales y reales por tipo y fecha
-    const virtualReservationsByTypeAndDate = {};
-    const realReservationsByRoomAndDate = {};
-    const assignments = {};
-
-    reservations.forEach(reservation => {
-      assignments[reservation._id] = reservation.room || [];
-      
-      if (!reservation.checkIn || !reservation.checkOut) return;
-      
-      const checkIn = reservation.checkIn.toISOString().split('T')[0];
-      const checkOut = reservation.checkOut.toISOString().split('T')[0];
-      
-      // Generar fechas de la reserva (excluyendo checkout)
-      const reservationDates = [];
-      const start = new Date(checkIn);
-      const end = new Date(checkOut);
-      
-      for (let d = new Date(start); d < end; d.setDate(d.getDate() + 1)) {
-        const dateStr = d.toISOString().split('T')[0];
-        if (dateRange.includes(dateStr)) {
-          reservationDates.push(dateStr);
-        }
-      }
-
-      // Si tiene habitaciones asignadas, es una reserva real
-      if (reservation.room && reservation.room.length > 0) {
-        reservation.room.forEach(roomId => {
-          reservationDates.forEach(date => {
-            if (!realReservationsByRoomAndDate[roomId]) {
-              realReservationsByRoomAndDate[roomId] = {};
-            }
-            realReservationsByRoomAndDate[roomId][date] = reservation;
-          });
-        });
-      } else {
-        // Es una reserva virtual
-        const cantidad = reservation.cantidad || 1;
-        reservationDates.forEach(date => {
-          if (!virtualReservationsByTypeAndDate[reservation.tipo]) {
-            virtualReservationsByTypeAndDate[reservation.tipo] = {};
-          }
-          if (!virtualReservationsByTypeAndDate[reservation.tipo][date]) {
-            virtualReservationsByTypeAndDate[reservation.tipo][date] = 0;
-          }
-          virtualReservationsByTypeAndDate[reservation.tipo][date] += cantidad;
-        });
-      }
-    });
-
-    // 🚫 NO SOBREVENTA: Solo mostrar reservas que caben en habitaciones disponibles
-    // Recalcular reservas virtuales limitándolas a la capacidad real
-    const adjustedVirtualReservations = {};
-    Object.keys(virtualReservationsByTypeAndDate).forEach(tipo => {
-      const availableRooms = roomsByType[tipo] ? roomsByType[tipo].length : 0;
-      adjustedVirtualReservations[tipo] = {};
-      
-      Object.keys(virtualReservationsByTypeAndDate[tipo]).forEach(date => {
-        const virtualCount = virtualReservationsByTypeAndDate[tipo][date];
-        
-        // Contar habitaciones reales ocupadas de este tipo en esta fecha
-        const realOccupied = roomsByType[tipo] ? roomsByType[tipo].filter(room => 
-          realReservationsByRoomAndDate[room._id] && 
-          realReservationsByRoomAndDate[room._id][date]
-        ).length : 0;
-        
-        // Contar habitaciones en mantenimiento o limpieza (limpieza solo para HOY)
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        const dateObj = new Date(date);
-        dateObj.setHours(0, 0, 0, 0);
-        
-        const unavailable = roomsByType[tipo] ? roomsByType[tipo].filter(room => {
-          if (room.status === 'mantenimiento') return true;
-          if (room.status === 'limpieza' && dateObj.getTime() === today.getTime()) return true;
-          return false;
-        }).length : 0;
-        
-        const availableForVirtual = Math.max(0, availableRooms - realOccupied - unavailable);
-        
-        // Limitar reservas virtuales a la capacidad real disponible
-        adjustedVirtualReservations[tipo][date] = Math.min(virtualCount, availableForVirtual);
-        
-        // Log de advertencia si había sobreventa (no debería ocurrir con validación)
-        if (virtualCount > availableForVirtual) {
-          logger.security.anomaly(`Sobreventa detectada`, {
-            service: 'crm-hotelero',
-            endpoint: '/api/rooms/status',
-            anomalyType: 'OVERBOOKING_DETECTED',
-            roomType: tipo,
-            date,
-            virtualRequested: virtualCount,
-            availableRooms: availableForVirtual,
-            severity: 'HIGH'
-          });
-        }
-      });
-    });
-
-    // Ajustar lógica para evitar exclusión de habitaciones disponibles
-    const roomsWithCalendar = rooms.map(room => {
-      const calendar = {};
-      dateRange.forEach(date => {
-        // PRIORIDAD ABSOLUTA para mantenimiento - afecta todos los días
-        if (room.status === 'mantenimiento') {
-          calendar[date] = 'mantenimiento';
-          logger.info(`Habitación en mantenimiento`, {
-            service: 'crm-hotelero',
-            roomNumber: room.number,
-            status: 'MAINTENANCE',
-            date,
-            event: 'ROOM_STATUS_CHECK'
-          });
-          return;
-        }
-        
-        // LIMPIEZA: solo afecta el día ACTUAL, no días futuros
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        
-        // Crear fecha del calendario sin problemas de zona horaria
-        const [year, month, day] = date.split('-').map(Number);
-        const currentDate = new Date(year, month - 1, day);
-        currentDate.setHours(0, 0, 0, 0);
-        
-        if (room.status === 'limpieza' && currentDate.getTime() === today.getTime()) {
-          calendar[date] = 'limpieza';
-          logger.info(`Habitación en limpieza hoy`, {
-            service: 'crm-hotelero',
-            roomNumber: room.number,
-            status: 'CLEANING_TODAY',
-            date,
-            event: 'ROOM_STATUS_CHECK'
-          });
-          return;
-        } else if (room.status === 'limpieza' && currentDate.getTime() !== today.getTime()) {
-          logger.info(`Habitación limpieza diferida - disponible`, {
-            service: 'crm-hotelero',
-            roomNumber: room.number,
-            status: 'CLEANING_NOT_TODAY',
-            date,
-            available: true,
-            event: 'ROOM_STATUS_CHECK'
-          });
-          // Continuar con la lógica normal para otros días
-        }
-
-        // Solo después verificar reservas reales
-        if (realReservationsByRoomAndDate[room._id] && realReservationsByRoomAndDate[room._id][date]) {
-          calendar[date] = 'ocupada';
-          return;
-        }
-
-        // Reservas virtuales
-        const virtualCount = adjustedVirtualReservations[room.type]?.[date] || 0;
-        if (virtualCount > 0) {
-          const roomsOfSameType = roomsByType[room.type].sort((a, b) => a.number - b.number);
-          const roomIndex = roomsOfSameType.findIndex(r => r._id.toString() === room._id.toString());
-          let assignedVirtual = 0;
-
-          for (let i = 0; i < roomsOfSameType.length; i++) {
-            const r = roomsOfSameType[i];
-            if (realReservationsByRoomAndDate[r._id]?.[date]) continue;
-            // Saltear mantenimiento siempre, limpieza solo HOY
-            if (r.status === 'mantenimiento') continue;
-            if (r.status === 'limpieza' && currentDate.getTime() === today.getTime()) continue;
-            if (i < roomIndex) assignedVirtual++;
-          }
-
-          if (assignedVirtual < virtualCount) {
-            calendar[date] = 'ocupada_virtual';
-          } else {
-            calendar[date] = 'disponible';
-          }
-        } else {
-          calendar[date] = 'disponible';
-        }
-      });
-      return {
-        ...room,
-        calendar
-      };
-    });
-
-    res.json({
-      rooms: roomsWithCalendar,
-      dateRange,
-      assignments,
-      summary: {
-        virtualReservations: adjustedVirtualReservations,
-        realReservations: Object.keys(realReservationsByRoomAndDate).length,
-        policy: 'NO_SOBREVENTA'
-      }
-    });
+  res.json({
+    rooms: roomStates,
+    timestamp: Date.now() - startTime
+  });
 });
 
 // Crear habitación
@@ -298,7 +81,7 @@ exports.createRoom = ErrorHandlingService.asyncWrapper(async (req, res) => {
 // Obtener todas las habitaciones
 exports.getRooms = async (req, res) => {
   try {
-    const rooms = await Room.find();
+    const rooms = await Room.find().sort({ number: 1 }).lean();
     res.json(rooms);
   } catch (error) {
     res.status(500).json({ message: 'Error al obtener habitaciones.', error });
@@ -424,8 +207,8 @@ exports.getAvailableRooms = async (req, res) => {
     const { type, checkIn, checkOut, cantidad } = req.query;
     
     // Validar parámetros requeridos usando ValidationService
-    const ValidationService = require('../services/validationService');
-    const validation = ValidationService.validateRequired(req.query, ['type', 'checkIn', 'checkOut']);
+    const { validateRequiredFields, ValidationService } = require('../services/validationService');
+    const validation = validateRequiredFields(req.query, ['type', 'checkIn', 'checkOut']);
     
     // Log de entrada con timestamp
     const timestamp = new Date().toISOString();
@@ -434,50 +217,109 @@ exports.getAvailableRooms = async (req, res) => {
       event: 'ROOM_AVAILABILITY_REQUEST'
     });
     
-    if (!validation.valid) {
-      return res.status(400).json({ 
-        message: 'Faltan parámetros requeridos',
-        missingFields: validation.missing,
-        timestamp 
+    // PASO 0: Validar parámetros de entrada
+    if (!type || !checkIn || !checkOut) {
+      const errorMessage = 'Faltan parámetros obligatorios: type, checkIn o checkOut';
+      logger.error(`[${timestamp}] Error en parámetros de entrada`, {
+        type, checkIn, checkOut
       });
-    }
-    
-    // Validar rango de fechas
-    if (!ValidationService.validateDateRange(checkIn, checkOut)) {
       return res.status(400).json({
-        message: 'Rango de fechas inválido',
+        message: errorMessage,
         timestamp
       });
     }
 
-    // Crear fechas usando DateService
-    const DateService = require('../services/dateService');
-    const checkInDate = DateService.parseDate(checkIn);
-    const checkOutDate = DateService.parseDate(checkOut);
+    // Validar que checkOut sea mayor que checkIn
+    const checkInDate = new Date(checkIn);
+    const checkOutDate = new Date(checkOut);
+    if (checkInDate >= checkOutDate) {
+      const errorMessage = 'La fecha de checkOut debe ser mayor que la de checkIn';
+      logger.error(`[${timestamp}] Error en validación de fechas`, {
+        checkIn: checkInDate,
+        checkOut: checkOutDate
+      });
+      return res.status(400).json({
+        message: errorMessage,
+        timestamp
+      });
+    }
+
+    logger.info(`[${timestamp}] Parámetros recibidos`, {
+      type, checkIn, checkOut, cantidad
+    });
 
     // PASO 1: Obtener TODAS las habitaciones del tipo solicitado
-    const allRooms = await Room.find({ type }).sort({ number: 1 }).lean();
-    
-    logger.info(`[${timestamp}] Habitaciones totales encontradas`, {
-      type, count: allRooms.length,
-      rooms: allRooms.map(r => `#${r.number}(${r.status})`)
-    });
+    let allRooms;
+    try {
+      allRooms = await Room.find({ type }).sort({ number: 1 }).lean();
+      if (!allRooms || allRooms.length === 0) {
+        logger.warn(`[${timestamp}] No se encontraron habitaciones para el tipo solicitado`, { type });
+      }
+    } catch (error) {
+      logger.error(`[${timestamp}] Error al obtener habitaciones`, {
+        error: error.message,
+        stack: error.stack
+      });
+      return res.status(500).json({
+        message: 'Error al obtener habitaciones.',
+        error: error.message,
+        timestamp
+      });
+    }
+
+    // Validar que las habitaciones tengan datos consistentes
+    if (!allRooms || !Array.isArray(allRooms)) {
+      const errorMessage = 'Error al obtener habitaciones del tipo solicitado';
+      logger.error(`[${timestamp}] Error en datos de habitaciones`, {
+        type,
+        allRooms
+      });
+      return res.status(500).json({
+        message: errorMessage,
+        timestamp
+      });
+    }
 
     // PASO 2: Buscar reservas que se solapan
-    // Corregir la consulta para detectar correctamente solapamientos
-    const overlappingReservations = await Reservation.find({
-      status: { $in: ['reservada', 'checkin'] },
-      // La reserva comienza antes o durante el período solicitado
-      checkIn: { $lt: checkOutDate },
-      // Y termina después del inicio del período solicitado
-      checkOut: { $gt: checkInDate }
-    }).populate('room').lean();
+    let overlappingReservations;
+    try {
+      overlappingReservations = await Reservation.find({
+        status: { $in: ['reservada', 'checkin'] },
+        checkIn: { $lt: checkOutDate },
+        checkOut: { $gt: checkInDate }
+      }).populate('room').lean();
+    } catch (error) {
+      logger.error(`[${timestamp}] Error al obtener reservas`, {
+        error: error.message,
+        stack: error.stack
+      });
+      return res.status(500).json({
+        message: 'Error al obtener reservas.',
+        error: error.message,
+        timestamp
+      });
+    }
 
-    logger.info(`[${timestamp}] Reservas solapantes`, { 
+    logger.info(`[${timestamp}] Reservas solapantes encontradas`, {
       count: overlappingReservations.length,
-      checkInDate: checkInDate.toISOString(),
-      checkOutDate: checkOutDate.toISOString()
+      reservations: overlappingReservations.map(r => ({
+        id: r._id,
+        checkIn: r.checkIn,
+        checkOut: r.checkOut
+      }))
     });
+
+    // Validar reservas solapantes
+    if (!overlappingReservations || !Array.isArray(overlappingReservations)) {
+      const errorMessage = 'Error al obtener reservas solapantes';
+      logger.error(`[${timestamp}] Error en datos de reservas`, {
+        overlappingReservations
+      });
+      return res.status(500).json({
+        message: errorMessage,
+        timestamp
+      });
+    }
 
     // PASO 3: Procesar ocupaciones
     const occupiedRoomIds = new Set();
@@ -621,6 +463,20 @@ exports.getAvailableRooms = async (req, res) => {
       type,
       disponibles: reallyAvailable,
       candidatesCount: candidates.length
+    });
+
+    // Añadir logs adicionales para depuración
+    logger.info(`[${timestamp}] Iniciando getAvailableRooms`, {
+      query: req.query,
+      event: 'START_GET_AVAILABLE_ROOMS'
+    });
+
+    // ...existing code...
+
+    logger.info(`[${timestamp}] Finalizando getAvailableRooms`, {
+      type,
+      disponibles: reallyAvailable,
+      event: 'END_GET_AVAILABLE_ROOMS'
     });
 
     res.json({
@@ -787,5 +643,61 @@ exports.getRoomAllowedStates = async (req, res) => {
       message: 'Error al obtener estados permitidos', 
       error: error.message 
     });
+  }
+};
+
+// Automatización de estados de habitaciones
+exports.updateRoomStates = async () => {
+  try {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const reservations = await Reservation.find({
+      $or: [
+        { checkIn: { $lte: today }, checkOut: { $gte: today } },
+        { checkOut: { $lt: today }, status: 'checkin' }
+      ]
+    }).populate('room');
+
+    for (const reservation of reservations) {
+      for (const roomId of reservation.room) {
+        const room = await Room.findById(roomId);
+        if (!room) continue;
+
+        if (reservation.checkOut < today && reservation.status === 'checkin') {
+          room.status = 'disponible';
+          reservation.status = 'checkout';
+          await reservation.save();
+        } else if (reservation.checkIn <= today && reservation.checkOut >= today) {
+          room.status = 'ocupada';
+        }
+
+        await room.save();
+      }
+    }
+
+    console.log('Estados de habitaciones actualizados automáticamente.');
+  } catch (error) {
+    console.error('Error actualizando estados de habitaciones:', error);
+  }
+};
+
+// Actualizar lógica para calcular estados diarios
+exports.updateRoomCalendar = async (reservation) => {
+  const { room, checkIn, checkOut, status } = reservation;
+
+  const dates = [];
+  let currentDate = new Date(checkIn);
+  while (currentDate <= checkOut) {
+    dates.push(new Date(currentDate));
+    currentDate.setDate(currentDate.getDate() + 1);
+  }
+
+  for (const date of dates) {
+    await RoomCalendar.updateOne(
+      { room, date },
+      { room, date, status, reservation: reservation._id },
+      { upsert: true }
+    );
   }
 };
