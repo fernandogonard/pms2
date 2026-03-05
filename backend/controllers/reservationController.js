@@ -60,10 +60,9 @@ const getPendingCheckouts = async (req, res) => {
       };
     });
 
-    logger.performance.requestCompleted(
-      'GET_PENDING_CHECKOUTS',
-      Date.now() - startTime,
-      { count: reservationsWithDelay.length }
+    logger.performance.requestTime(
+      'GET', '/api/reservations/pending-checkouts',
+      Date.now() - startTime, 200, req.user?.userId
     );
 
     res.json({

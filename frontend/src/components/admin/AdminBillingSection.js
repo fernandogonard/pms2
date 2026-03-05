@@ -2,11 +2,32 @@
 // Sección de gestión de facturación para administradores
 
 import React from 'react';
+import { apiFetch } from '../../utils/api';
 import PricingManager from '../PricingManager';
 import FinancialDashboard from '../FinancialDashboard';
 
 const AdminBillingSection = () => {
   const [activeTab, setActiveTab] = React.useState('dashboard');
+  const [summary, setSummary] = React.useState(null);
+  const [pendingCount, setPendingCount] = React.useState(0);
+
+  React.useEffect(() => {
+    apiFetch('/api/billing/summary')
+      .then(r => r.json())
+      .then(data => { if (data.success) setSummary(data.data.summary); })
+      .catch(() => {});
+
+    apiFetch('/api/billing/invoices/pending')
+      .then(r => r.json())
+      .then(data => {
+        if (data.success && Array.isArray(data.invoices)) setPendingCount(data.invoices.length);
+        else if (data.success && Array.isArray(data.data)) setPendingCount(data.data.length);
+      })
+      .catch(() => {});
+  }, []);
+
+  // Formatea número como moneda
+  const fmt = (n) => n >= 1000 ? `$${Math.round(n).toLocaleString('es-AR')}` : `$${Math.round(n || 0)}`;
 
   const tabs = [
     { id: 'dashboard', label: 'Dashboard Financiero', icon: '📊' },
@@ -29,29 +50,29 @@ const AdminBillingSection = () => {
         <div style={statCardStyle}>
           <div style={statIconStyle}>💵</div>
           <div>
-            <div style={statValueStyle}>$45,280</div>
+            <div style={statValueStyle}>{summary ? fmt(summary.totalRevenue) : '—'}</div>
             <div style={statLabelStyle}>Ingresos del Mes</div>
           </div>
         </div>
         <div style={statCardStyle}>
-          <div style={statIconStyle}>📈</div>
+          <div style={statIconStyle}>✅</div>
           <div>
-            <div style={statValueStyle}>+12.5%</div>
-            <div style={statLabelStyle}>Crecimiento</div>
+            <div style={statValueStyle}>{summary ? fmt(summary.totalPaid) : '—'}</div>
+            <div style={statLabelStyle}>Total Cobrado</div>
           </div>
         </div>
         <div style={statCardStyle}>
           <div style={statIconStyle}>🧾</div>
           <div>
-            <div style={statValueStyle}>156</div>
-            <div style={statLabelStyle}>Facturas Emitidas</div>
+            <div style={statValueStyle}>{summary ? summary.totalReservations : '—'}</div>
+            <div style={statLabelStyle}>Reservas Facturadas</div>
           </div>
         </div>
         <div style={statCardStyle}>
           <div style={statIconStyle}>⚠️</div>
           <div>
-            <div style={statValueStyle}>8</div>
-            <div style={statLabelStyle}>Pendientes de Pago</div>
+            <div style={statValueStyle}>{pendingCount}</div>
+            <div style={statLabelStyle}>Facturas Pendientes</div>
           </div>
         </div>
       </div>

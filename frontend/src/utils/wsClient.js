@@ -21,6 +21,12 @@ export function createWS(urlParam, handlers = {}) {
   async function discoverServerPort() {
     if (isPortDiscoveryActive) return; // Evitar múltiples solicitudes paralelas
     
+    // En producción la URL ya viene de redirectorService — no intentar localhost
+    const IS_PRODUCTION = typeof window !== 'undefined' &&
+      window.location.hostname !== 'localhost' &&
+      window.location.hostname !== '127.0.0.1';
+    if (IS_PRODUCTION) return;
+    
     isPortDiscoveryActive = true;
     try {
       // Primero intentar con redirectorService

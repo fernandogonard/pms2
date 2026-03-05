@@ -1,5 +1,6 @@
 // Componente de Dashboard Analytics Avanzado
 import React, { useState, useEffect } from 'react';
+import { apiFetch } from '../utils/api';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -49,11 +50,11 @@ const AdvancedDashboard = () => {
     try {
       // Llamadas paralelas a múltiples endpoints de analytics
       const [occupancy, revenue, roomTypes, checkins, kpis] = await Promise.all([
-        fetch(`/api/analytics/occupancy?range=${timeRange}`).then(r => r.json()),
-        fetch(`/api/analytics/revenue?range=${timeRange}`).then(r => r.json()),
-        fetch(`/api/analytics/room-types?range=${timeRange}`).then(r => r.json()),
-        fetch(`/api/analytics/checkin-trend?range=${timeRange}`).then(r => r.json()),
-        fetch(`/api/analytics/kpis?range=${timeRange}`).then(r => r.json())
+        apiFetch(`/api/analytics/occupancy?range=${timeRange}`).then(r => r.json()),
+        apiFetch(`/api/analytics/revenue?range=${timeRange}`).then(r => r.json()),
+        apiFetch(`/api/analytics/room-types?range=${timeRange}`).then(r => r.json()),
+        apiFetch(`/api/analytics/checkin-trend?range=${timeRange}`).then(r => r.json()),
+        apiFetch(`/api/analytics/kpis?range=${timeRange}`).then(r => r.json())
       ]);
 
       setAnalytics({

@@ -2,11 +2,25 @@
 // Sección de gestión de reservas para administradores
 
 import React from 'react';
+import { apiFetch } from '../../utils/api';
 import ReservationTable from '../ReservationTable';
 import AdvancedReservationModal from '../AdvancedReservationModal';
 
 const AdminReservationsSection = () => {
   const [modalOpen, setModalOpen] = React.useState(false);
+  const [stats, setStats] = React.useState({
+    totalReservations: 0,
+    checkin: 0,
+    checkout: 0,
+    reservadas: 0
+  });
+
+  React.useEffect(() => {
+    apiFetch('/api/reservations/stats')
+      .then(r => r.json())
+      .then(data => { if (data.success && data.data?.general) setStats(data.data.general); })
+      .catch(() => {});
+  }, []);
 
   return (
     <div style={containerStyle}>
@@ -29,28 +43,28 @@ const AdminReservationsSection = () => {
         <div style={statCardStyle}>
           <div style={statIconStyle}>📊</div>
           <div>
-            <div style={statValueStyle}>24</div>
-            <div style={statLabelStyle}>Reservas Hoy</div>
+            <div style={statValueStyle}>{stats.totalReservations}</div>
+            <div style={statLabelStyle}>Total Reservas</div>
           </div>
         </div>
         <div style={statCardStyle}>
           <div style={statIconStyle}>✅</div>
           <div>
-            <div style={statValueStyle}>8</div>
-            <div style={statLabelStyle}>Check-ins</div>
+            <div style={statValueStyle}>{stats.checkin}</div>
+            <div style={statLabelStyle}>Check-ins Activos</div>
           </div>
         </div>
         <div style={statCardStyle}>
           <div style={statIconStyle}>🚪</div>
           <div>
-            <div style={statValueStyle}>6</div>
+            <div style={statValueStyle}>{stats.checkout}</div>
             <div style={statLabelStyle}>Check-outs</div>
           </div>
         </div>
         <div style={statCardStyle}>
           <div style={statIconStyle}>⏳</div>
           <div>
-            <div style={statValueStyle}>12</div>
+            <div style={statValueStyle}>{stats.reservadas}</div>
             <div style={statLabelStyle}>Pendientes</div>
           </div>
         </div>
