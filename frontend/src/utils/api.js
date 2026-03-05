@@ -9,8 +9,9 @@ let API_PORT_DISCOVERY = false;
 let API_PORT_DISCOVERY_INTERVAL = null;
 
 // En producción: usar URL estática de la variable de entorno
-const STATIC_API_URL = process.env.REACT_APP_API_URL ? process.env.REACT_APP_API_URL.trim() : '';
-const USE_STATIC_API = process.env.REACT_APP_USE_STATIC_API === 'true' || (process.env.NODE_ENV === 'production' && !!STATIC_API_URL);
+const STATIC_API_URL = process.env.REACT_APP_API_URL ? process.env.REACT_APP_API_URL.trim() : 'https://pms2-production.up.railway.app';
+const IS_PRODUCTION = process.env.NODE_ENV === 'production' || (typeof window !== 'undefined' && window.location.hostname !== 'localhost');
+const USE_STATIC_API = process.env.REACT_APP_USE_STATIC_API === 'true' || IS_PRODUCTION;
 
 if (USE_STATIC_API && STATIC_API_URL) {
   API_BASE_URL = STATIC_API_URL;
