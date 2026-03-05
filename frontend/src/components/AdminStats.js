@@ -112,7 +112,7 @@ const AdminStats = () => {
         </div>
         {stats && (
           <div style={{ marginTop: 8, fontSize: '0.8rem', color: '#888' }}>
-            Disponibles: {stats.stats.disponibles} | Limpieza: {stats.stats.limpieza} | Mantenimiento: {stats.stats.mantenimiento}
+            Disponibles: {stats?.stats?.disponibles ?? 0} | Limpieza: {stats?.stats?.limpieza ?? 0} | Mantenimiento: {stats?.stats?.mantenimiento ?? 0}
           </div>
         )}
       </div>

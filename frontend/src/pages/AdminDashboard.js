@@ -3,6 +3,27 @@ import AdminLayout from '../layouts/AdminLayout';
 import AdminSidebar from '../components/AdminSidebar';
 import { useAuth } from '../contexts/AuthContext';
 
+// ErrorBoundary: atrapa crashes de componentes hijos y muestra el error en lugar de pantalla negra
+class ErrorBoundary extends React.Component {
+  constructor(props) { super(props); this.state = { hasError: false, error: null }; }
+  static getDerivedStateFromError(error) { return { hasError: true, error }; }
+  componentDidCatch(error, info) { console.error('[ErrorBoundary] crash:', error, info); }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div style={{ padding: 40, color: '#fff', background: '#1a0000', minHeight: '100vh' }}>
+          <h2 style={{ color: '#ff4444' }}>⚠️ Error en el dashboard</h2>
+          <pre style={{ background: '#2a0000', padding: 16, borderRadius: 8, fontSize: 13, overflowX: 'auto', color: '#ffaaaa' }}>
+            {this.state.error && (this.state.error.message + '\n' + this.state.error.stack)}
+          </pre>
+          <button onClick={() => this.setState({ hasError: false, error: null })} style={{ marginTop: 16, padding: '8px 20px', background: '#333', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer' }}>Reintentar</button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 // Importar secciones modulares
 import AdminDashboardSection from '../components/admin/AdminDashboardSection';
 import AdminReservationsSection from '../components/admin/AdminReservationsSection';
@@ -77,6 +98,7 @@ const AdminDashboard = () => {
   };
 
   return (
+    <ErrorBoundary>
     <AdminLayout>
       <div style={{
         display: 'flex',
@@ -173,6 +195,7 @@ const AdminDashboard = () => {
         </div>
       </div>
     </AdminLayout>
+    </ErrorBoundary>
   );
 };
 
