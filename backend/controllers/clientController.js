@@ -36,7 +36,7 @@ exports.createClient = async (req, res) => {
     const client = await Client.create({ nombre, apellido, dni, email, whatsapp });
     
     const duration = Date.now() - startTime;
-    logger.performance.operation(`Cliente creado exitosamente`, {
+    logger.info('Cliente creado exitosamente', {
       service: 'crm-hotelero',
       operation: 'CREATE_CLIENT',
       duration,

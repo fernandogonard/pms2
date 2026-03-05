@@ -2,10 +2,25 @@
 // Sección de reportes y analytics para administradores
 
 import React from 'react';
+import { apiFetch } from '../../utils/api';
 import ReportDownload from '../ReportDownload';
 
 const AdminReportsSection = () => {
   const [selectedPeriod, setSelectedPeriod] = React.useState('month');
+  const [kpis, setKpis] = React.useState(null);
+
+  React.useEffect(() => {
+    const rangeMap = { week: '7d', month: '30d', quarter: '90d', year: '90d', custom: '30d' };
+    const range = rangeMap[selectedPeriod] || '30d';
+    apiFetch(`/api/analytics/kpis?range=${range}`)
+      .then(r => r.json())
+      .then(data => { if (data && typeof data.avgOccupancy !== 'undefined') setKpis(data); })
+      .catch(() => {});
+  }, [selectedPeriod]);
+
+  const fmt = (val, decimals = 1) =>
+    val !== null && val !== undefined ? Number(val).toFixed(decimals) : '—';
+  const fmtPct = (val) => val >= 0 ? `+${fmt(val)}%` : `${fmt(val)}%`;
 
   const reportTypes = [
     {
@@ -67,33 +82,33 @@ const AdminReportsSection = () => {
         <div style={kpiCardStyle}>
           <div style={kpiIconStyle}>📈</div>
           <div>
-            <div style={kpiValueStyle}>87.5%</div>
+            <div style={kpiValueStyle}>{kpis ? `${fmt(kpis.avgOccupancy)}%` : '—'}</div>
             <div style={kpiLabelStyle}>Tasa de Ocupación</div>
-            <div style={kpiChangeStyle}>+5.2% vs mes anterior</div>
+            <div style={kpiChangeStyle}>{kpis ? fmtPct(kpis.occupancyChange) + ' vs período anterior' : '...'}</div>
           </div>
         </div>
         <div style={kpiCardStyle}>
           <div style={kpiIconStyle}>💵</div>
           <div>
-            <div style={kpiValueStyle}>$125.50</div>
+            <div style={kpiValueStyle}>{kpis ? `$${fmt(kpis.adr, 0)}` : '—'}</div>
             <div style={kpiLabelStyle}>ADR Promedio</div>
-            <div style={kpiChangeStyle}>+8.1% vs mes anterior</div>
+            <div style={kpiChangeStyle}>{kpis ? fmtPct(kpis.adrChange) + ' vs período anterior' : '...'}</div>
           </div>
         </div>
         <div style={kpiCardStyle}>
           <div style={kpiIconStyle}>📊</div>
           <div>
-            <div style={kpiValueStyle}>$109.81</div>
+            <div style={kpiValueStyle}>{kpis ? `$${fmt(kpis.revpar, 0)}` : '—'}</div>
             <div style={kpiLabelStyle}>RevPAR</div>
-            <div style={kpiChangeStyle}>+12.3% vs mes anterior</div>
+            <div style={kpiChangeStyle}>{kpis ? fmtPct(kpis.revparChange) + ' vs período anterior' : '...'}</div>
           </div>
         </div>
         <div style={kpiCardStyle}>
-          <div style={kpiIconStyle}>⭐</div>
+          <div style={kpiIconStyle}>💰</div>
           <div>
-            <div style={kpiValueStyle}>4.7</div>
-            <div style={kpiLabelStyle}>Puntuación Promedio</div>
-            <div style={kpiChangeStyle}>+0.2 vs mes anterior</div>
+            <div style={kpiValueStyle}>{kpis ? `$${Math.round(kpis.totalRevenue || 0).toLocaleString('es-AR')}` : '—'}</div>
+            <div style={kpiLabelStyle}>Ingresos Totales</div>
+            <div style={kpiChangeStyle}>{kpis ? fmtPct(kpis.revenueChange) + ' vs período anterior' : '...'}</div>
           </div>
         </div>
       </div>

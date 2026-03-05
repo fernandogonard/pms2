@@ -757,7 +757,7 @@ function optimizarCombinacion(combinaciones) {
       }
       
       const duration = Date.now() - startTime;
-      logger.performance.operation('Limpieza de reservas fantasma completada', {
+      logger.info('Limpieza de reservas fantasma completada', {
         service: 'crm-hotelero',
         operation: 'CLEANUP_GHOST_RESERVATIONS',
         duration,

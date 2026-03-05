@@ -41,7 +41,7 @@ exports.getOccupancyTrend = ErrorHandlingService.asyncWrapper(async (req, res) =
     const reservationsInRange = await Reservation.find({
         checkIn: { $lte: endDate },
         checkOut: { $gte: startDate },
-        status: { $in: ['checkin', 'confirmed', 'checked-in'] }
+        status: { $in: ['checkin', 'reservada'] }
     }, { checkIn: 1, checkOut: 1, 'pricing.total': 1 }).lean();
 
     // Para cada día, contar reservas activas en memoria (O(días × reservas) pero sin N+1)
@@ -91,8 +91,7 @@ exports.getRevenueData = ErrorHandlingService.asyncWrapper(async (req, res) => {
         {
             $match: {
                 checkIn: { $gte: startDate, $lte: endDate },
-                status: { $in: ['confirmed', 'checked-in', 'checked-out'] },
-                totalPrice: { $exists: true, $ne: null }
+                status: { $in: ['reservada', 'checkin', 'checkout'] }
             }
         },
         {
@@ -100,7 +99,7 @@ exports.getRevenueData = ErrorHandlingService.asyncWrapper(async (req, res) => {
                 _id: {
                     $dateToString: { format: "%Y-%m-%d", date: "$checkIn" }
                 },
-                revenue: { $sum: "$totalPrice" },
+                revenue: { $sum: "$pricing.total" },
                 reservations: { $sum: 1 }
             }
         },
@@ -143,7 +142,7 @@ exports.getRoomTypeDistribution = ErrorHandlingService.asyncWrapper(async (req, 
         {
             $match: {
                 checkIn: { $gte: startDate, $lte: endDate },
-                status: { $in: ['confirmed', 'checked-in', 'checked-out'] }
+                status: { $in: ['reservada', 'checkin', 'checkout'] }
             }
         },
         {
@@ -219,7 +218,7 @@ exports.getCheckinTrend = ErrorHandlingService.asyncWrapper(async (req, res) => 
         {
             $match: {
                 checkIn: { $gte: startDate, $lte: endDate },
-                status: { $in: ['confirmed', 'checked-in', 'checked-out'] }
+                status: { $in: ['reservada', 'checkin', 'checkout'] }
             }
         },
         {
@@ -240,7 +239,7 @@ exports.getCheckinTrend = ErrorHandlingService.asyncWrapper(async (req, res) => 
         {
             $match: {
                 checkOut: { $gte: startDate, $lte: endDate },
-                status: 'checked-out'
+                status: 'checkout'
             }
         },
         {
@@ -303,18 +302,18 @@ exports.getKPIs = ErrorHandlingService.asyncWrapper(async (req, res) => {
     // Obtener datos del período actual
     const currentReservations = await Reservation.find({
         checkIn: { $gte: startDate, $lte: endDate },
-        status: { $in: ['confirmed', 'checked-in', 'checked-out'] }
-    });
+        status: { $in: ['reservada', 'checkin', 'checkout'] }
+    }).lean();
 
     // Obtener datos del período anterior
     const prevReservations = await Reservation.find({
         checkIn: { $gte: prevStartDate, $lte: prevEndDate },
-        status: { $in: ['confirmed', 'checked-in', 'checked-out'] }
-    });
+        status: { $in: ['reservada', 'checkin', 'checkout'] }
+    }).lean();
 
     const totalRooms = await Room.countDocuments();
 
-    // Calcular KPIs actuales
+    // Calcular KPIs actuales (añadir .lean() ya fue aplicado arriba)
     const currentStats = calculatePeriodStats(currentReservations, totalRooms, daysDiff);
     const prevStats = calculatePeriodStats(prevReservations, totalRooms, daysDiff);
 
@@ -349,7 +348,7 @@ exports.getKPIs = ErrorHandlingService.asyncWrapper(async (req, res) => {
 
 // Funciones auxiliares
 function calculatePeriodStats(reservations, totalRooms, days) {
-    const totalRevenue = reservations.reduce((sum, res) => sum + (res.totalPrice || 0), 0);
+    const totalRevenue = reservations.reduce((sum, res) => sum + (res.pricing?.total || 0), 0);
     const totalRoomNights = reservations.reduce((sum, res) => {
         const nights = Math.ceil((res.checkOut - res.checkIn) / (1000 * 60 * 60 * 24));
         return sum + nights;

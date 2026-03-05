@@ -34,6 +34,7 @@ import AdminReportsSection from '../components/admin/AdminReportsSection';
 import AdminUsersSection from '../components/admin/AdminUsersSection';
 import AdvancedDashboard from '../components/AdvancedDashboard';
 import PendingCheckouts from '../components/PendingCheckouts';
+import { apiFetch } from '../utils/api';
 
 const AdminDashboard = () => {
   const { user } = useAuth();
@@ -48,12 +49,8 @@ const AdminDashboard = () => {
 
     setLoading(true);
     try {
-      const response = await fetch('/api/reservations/cleanup-ghost', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
-          'Content-Type': 'application/json'
-        }
+      const response = await apiFetch('/api/reservations/cleanup-ghost', {
+        method: 'POST'
       });
 
       if (response.ok) {

@@ -2,10 +2,30 @@
 // Sección de gestión de usuarios para administradores
 
 import React from 'react';
+import { apiFetch } from '../../utils/api';
 import UserTable from '../UserTable';
 
 const AdminUsersSection = () => {
   const [showCreateModal, setShowCreateModal] = React.useState(false);
+  const [userStats, setUserStats] = React.useState({
+    total: 0, admins: 0, recepcionistas: 0, activos: 0
+  });
+
+  React.useEffect(() => {
+    apiFetch('/api/users')
+      .then(r => r.json())
+      .then(data => {
+        if (Array.isArray(data)) {
+          setUserStats({
+            total: data.length,
+            admins: data.filter(u => u.role === 'admin').length,
+            recepcionistas: data.filter(u => u.role === 'recepcionista').length,
+            activos: data.filter(u => u.isActive !== false).length
+          });
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   return (
     <div style={containerStyle}>
@@ -28,28 +48,28 @@ const AdminUsersSection = () => {
         <div style={statCardStyle}>
           <div style={statIconStyle}>👨‍💼</div>
           <div>
-            <div style={statValueStyle}>12</div>
+            <div style={statValueStyle}>{userStats.total}</div>
             <div style={statLabelStyle}>Total Usuarios</div>
           </div>
         </div>
         <div style={statCardStyle}>
           <div style={statIconStyle}>🔑</div>
           <div>
-            <div style={statValueStyle}>3</div>
+            <div style={statValueStyle}>{userStats.admins}</div>
             <div style={statLabelStyle}>Administradores</div>
           </div>
         </div>
         <div style={statCardStyle}>
           <div style={statIconStyle}>📋</div>
           <div>
-            <div style={statValueStyle}>7</div>
+            <div style={statValueStyle}>{userStats.recepcionistas}</div>
             <div style={statLabelStyle}>Recepcionistas</div>
           </div>
         </div>
         <div style={statCardStyle}>
           <div style={statIconStyle}>🟢</div>
           <div>
-            <div style={statValueStyle}>9</div>
+            <div style={statValueStyle}>{userStats.activos}</div>
             <div style={statLabelStyle}>Activos</div>
           </div>
         </div>

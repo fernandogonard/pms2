@@ -23,15 +23,8 @@ const AdminRoomsSection = () => {
   useEffect(() => {
     const fetchRoomStats = async () => {
       try {
-        // Usar fetch directo con cache: 'no-store' para evitar cacheo
-        const token = localStorage.getItem('token');
-        const res = await fetch('/api/stats/rooms', {
-          headers: { 'Authorization': `Bearer ${token}` },
-          cache: 'no-store'
-        });
+        const res = await apiFetch('/api/stats/rooms');
         const data = await res.json();
-        
-        console.log('Estadísticas actualizadas:', data);
         
         if (data.success && data.stats) {
           setRoomStats({
@@ -57,36 +50,12 @@ const AdminRoomsSection = () => {
     // Cargar datos inmediatamente
     fetchRoomStats();
     
-    // Configurar WebSocket para actualizaciones en tiempo real
-    const wsUrl = process.env.REACT_APP_WS_URL || 'ws://localhost:5001';
-    const ws = new WebSocket(wsUrl);
-    
-    ws.onmessage = (event) => {
-      try {
-        const message = JSON.parse(event.data);
-        
-        // Si hay cambio de estado de habitación, actualizar estadísticas
-        if (message.type === 'room_state_changed' || 
-            message.type === 'room_cleaned' || 
-            message.type === 'room_maintenance_started' || 
-            message.type === 'room_maintenance_completed' ||
-            message.type === 'guest_relocated') {
-          fetchRoomStats();
-        }
-      } catch (error) {
-        console.error("Error al procesar mensaje de WebSocket:", error);
-      }
-    };
-    
     // Configurar actualización periódica como respaldo
     const interval = setInterval(fetchRoomStats, 60000);
     
     // Limpiar conexiones al desmontar
     return () => {
       clearInterval(interval);
-      if (ws.readyState === 1) { // 1 = OPEN
-        ws.close();
-      }
     };
   }, []);
 

@@ -48,27 +48,9 @@ const RoomTable = () => {
 
   useEffect(() => {
     fetchRoomsAndReservations();
-    
-    // Configurar WebSocket para actualizaciones en tiempo real
-    const wsUrl = 'ws://localhost:3001'; // Ajusta según tu configuración
-    const ws = new WebSocket(wsUrl);
-    
-    ws.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data);
-        if (data.type && 
-           (data.type.startsWith('room_') || 
-            data.type.startsWith('reservation_'))) {
-          fetchRoomsAndReservations();
-        }
-      } catch (e) {
-        // Ignorar errores de parseo
-      }
-    };
-    
-    return () => {
-      if (ws) ws.close();
-    };
+    // Actualizar cada 60s como respaldo (WebSocket gestionado desde wsClient global)
+    const interval = setInterval(fetchRoomsAndReservations, 60000);
+    return () => clearInterval(interval);
   }, []);
 
   // Crear o editar habitación
@@ -93,7 +75,7 @@ const RoomTable = () => {
       setSuccess(editingId ? 'Habitación actualizada con éxito.' : 'Habitación creada con éxito.');
       setForm({ number: '', floor: '', type: 'doble', price: '', status: 'disponible' });
       setEditingId(null);
-      fetchRooms();
+      fetchRoomsAndReservations();
     } catch (err) {
       setError('Error de red');
     } finally {
@@ -103,14 +85,14 @@ const RoomTable = () => {
 
   // Eliminar habitación
   const handleDelete = async id => {
-    if (!window.confirm('¿Eliminar esta habitación?')) return;
+    if (!window.confirm('\u00bfEliminar esta habitación?')) return;
     const res = await apiFetch(`${API_ROOMS}/${id}`, { method: 'DELETE' });
     if (!res.ok) {
       const data = await res.json();
       setError(data.message || 'Error al eliminar habitación');
       return;
     }
-    fetchRooms();
+    fetchRoomsAndReservations();
   };
 
   // Editar habitación
