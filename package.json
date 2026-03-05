@@ -1,0 +1,12 @@
+{
+  "name": "pms2",
+  "version": "1.0.0",
+  "description": "CRM Hotelero PMS - root entrypoint for Railway",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "start": "cd backend && node server.js",
+    "build": "cd backend && npm install"
+  }
+}

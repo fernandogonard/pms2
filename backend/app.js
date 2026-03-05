@@ -30,11 +30,15 @@ app.use(advancedSecurity.sanitizeInput);
 // Middlewares globales
 app.use(express.json());
 // Configurar CORS para permitir credentials y origen controlado
-const allowedOrigins = (process.env.CORS_ORIGIN || 'http://localhost:3000,https://localhost:3000').split(',').map(s => s.trim());
+const CORS_ORIGIN_RAW = process.env.CORS_ORIGIN || 'http://localhost:3000,https://localhost:3000';
+const CORS_ALLOW_ALL = CORS_ORIGIN_RAW.trim() === '*';
+const allowedOrigins = CORS_ALLOW_ALL ? [] : CORS_ORIGIN_RAW.split(',').map(s => s.trim());
 const corsOptions = {
   origin: function(origin, callback) {
     // Permitir solicitudes sin origin (curl, Postman, etc.)
     if (!origin) return callback(null, true);
+    // Si CORS_ORIGIN=* aceptar cualquier origen
+    if (CORS_ALLOW_ALL) return callback(null, true);
     // Normalizar origin: quitar barra final si existe
     const originNorm = origin.replace(/\/$/, '');
     const allowed = allowedOrigins.indexOf(originNorm) !== -1;
