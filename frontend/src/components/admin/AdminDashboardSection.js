@@ -1,10 +1,90 @@
 // components/admin/AdminDashboardSection.js
-// Sección principal del dashboard con estadísticas y resumen
+// Sección principal del dashboard con estadísticas y resumen — datos reales
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import AdminStats from '../AdminStats';
+import { apiFetch } from '../../utils/api';
 
 const AdminDashboardSection = () => {
+  const [rooms, setRooms] = useState([]);
+  const [reservations, setReservations] = useState([]);
+  const [loadingAlerts, setLoadingAlerts] = useState(true);
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const [rRes, resRes] = await Promise.all([
+          apiFetch('/api/rooms'),
+          apiFetch('/api/reservations'),
+        ]);
+        const rData = await rRes.json();
+        const resData = await resRes.json();
+        setRooms(Array.isArray(rData) ? rData : []);
+        setReservations(Array.isArray(resData) ? resData : []);
+      } catch (e) {
+        console.error('Error cargando alertas:', e);
+      } finally {
+        setLoadingAlerts(false);
+      }
+    };
+    load();
+  }, []);
+
+  // ── Alertas reales ──────────────────────────────────────────────────────────
+  const today = new Date().toISOString().slice(0, 10);
+
+  const roomsInMaintenance = rooms.filter(r => r.status === 'mantenimiento');
+  const roomsInCleaning    = rooms.filter(r => r.status === 'limpieza');
+
+  const unpaidReservations = reservations.filter(r =>
+    r.payment && r.payment.status !== 'pagado' && r.status !== 'cancelada'
+  );
+
+  const todayCheckins = reservations.filter(r =>
+    r.checkIn && r.checkIn.slice(0, 10) === today && r.status === 'reservada'
+  );
+  const todayCheckouts = reservations.filter(r =>
+    r.checkOut && r.checkOut.slice(0, 10) === today && r.status === 'checkin'
+  );
+  const todayActiveReservations = reservations.filter(r => {
+    if (!r.checkIn || !r.checkOut) return false;
+    return r.checkIn.slice(0, 10) <= today && r.checkOut.slice(0, 10) >= today;
+  });
+
+  // Construir lista de alertas dinámicas
+  const alerts = [];
+  if (roomsInMaintenance.length > 0) {
+    alerts.push({
+      icon: '⚠️',
+      title: `${roomsInMaintenance.length} habitación${roomsInMaintenance.length > 1 ? 'es' : ''} en mantenimiento`,
+      detail: roomsInMaintenance.map(r => `Hab. ${r.number}`).join(', ')
+    });
+  }
+  if (roomsInCleaning.length > 0) {
+    alerts.push({
+      icon: '🧹',
+      title: `${roomsInCleaning.length} habitación${roomsInCleaning.length > 1 ? 'es' : ''} en limpieza`,
+      detail: roomsInCleaning.map(r => `Hab. ${r.number}`).join(', ')
+    });
+  }
+  if (unpaidReservations.length > 0) {
+    alerts.push({
+      icon: '💰',
+      title: `${unpaidReservations.length} factura${unpaidReservations.length > 1 ? 's' : ''} pendiente${unpaidReservations.length > 1 ? 's' : ''} de pago`,
+      detail: 'Hoy'
+    });
+  }
+  if (todayCheckins.length > 0) {
+    alerts.push({
+      icon: '📅',
+      title: `${todayCheckins.length} check-in${todayCheckins.length > 1 ? 's' : ''} programado${todayCheckins.length > 1 ? 's' : ''} para hoy`,
+      detail: 'Pendientes de ingreso'
+    });
+  }
+  if (alerts.length === 0 && !loadingAlerts) {
+    alerts.push({ icon: '✅', title: 'Sin alertas pendientes', detail: 'Todo en orden' });
+  }
+
   return (
     <div style={containerStyle}>
       <div style={headerStyle}>
@@ -52,67 +132,56 @@ const AdminDashboardSection = () => {
         </div>
       </div>
 
-      {/* Vista previa del calendario */}
+      {/* Vista previa del calendario — datos reales */}
       <div style={calendarPreviewStyle}>
         <h3 style={sectionTitleStyle}>📅 Ocupación de Habitaciones</h3>
         <div style={calendarTeaserStyle}>
           <p style={calendarMessageStyle}>
-            Para ver el calendario completo de ocupación, ve a la sección 
-            <strong style={{ color: '#00ccff', margin: '0 4px' }}>Habitaciones</strong> 
-            y selecciona la pestaña
-            <strong style={{ color: '#00ccff', margin: '0 4px' }}>Calendario</strong>
+            Para ver el calendario completo de ocupación, ve a la sección&nbsp;
+            <strong style={{ color: '#00ccff' }}>Habitaciones</strong>&nbsp;y selecciona la pestaña&nbsp;
+            <strong style={{ color: '#00ccff' }}>Calendario</strong>
           </p>
           <div style={previewStatsStyle}>
             <div style={previewStatStyle}>
               <span style={previewStatIconStyle}>📅</span>
               <div>
-                <div style={previewStatValueStyle}>12</div>
-                <div style={previewStatLabelStyle}>Reservas Hoy</div>
+                <div style={previewStatValueStyle}>{loadingAlerts ? '—' : todayActiveReservations.length}</div>
+                <div style={previewStatLabelStyle}>Reservas Activas Hoy</div>
               </div>
             </div>
             <div style={previewStatStyle}>
               <span style={previewStatIconStyle}>🔄</span>
               <div>
-                <div style={previewStatValueStyle}>5</div>
-                <div style={previewStatLabelStyle}>Check-ins</div>
+                <div style={previewStatValueStyle}>{loadingAlerts ? '—' : todayCheckins.length}</div>
+                <div style={previewStatLabelStyle}>Check-ins Hoy</div>
               </div>
             </div>
             <div style={previewStatStyle}>
               <span style={previewStatIconStyle}>🚪</span>
               <div>
-                <div style={previewStatValueStyle}>3</div>
-                <div style={previewStatLabelStyle}>Check-outs</div>
+                <div style={previewStatValueStyle}>{loadingAlerts ? '—' : todayCheckouts.length}</div>
+                <div style={previewStatLabelStyle}>Check-outs Hoy</div>
               </div>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Alertas y notificaciones */}
+      {/* Alertas y notificaciones — datos reales */}
       <div style={alertsContainerStyle}>
         <h3 style={sectionTitleStyle}>🔔 Alertas del Sistema</h3>
         <div style={alertsListStyle}>
-          <div style={alertItemStyle}>
-            <span style={alertIconStyle}>⚠️</span>
-            <div>
-              <div style={alertTitleStyle}>Habitación 102 en mantenimiento</div>
-              <div style={alertTimeStyle}>Hace 2 horas</div>
+          {loadingAlerts ? (
+            <div style={{ color: '#888', padding: 16 }}>Cargando alertas...</div>
+          ) : alerts.map((alert, i) => (
+            <div key={i} style={alertItemStyle}>
+              <span style={alertIconStyle}>{alert.icon}</span>
+              <div>
+                <div style={alertTitleStyle}>{alert.title}</div>
+                <div style={alertTimeStyle}>{alert.detail}</div>
+              </div>
             </div>
-          </div>
-          <div style={alertItemStyle}>
-            <span style={alertIconStyle}>💰</span>
-            <div>
-              <div style={alertTitleStyle}>5 facturas pendientes de pago</div>
-              <div style={alertTimeStyle}>Hoy</div>
-            </div>
-          </div>
-          <div style={alertItemStyle}>
-            <span style={alertIconStyle}>📅</span>
-            <div>
-              <div style={alertTitleStyle}>Check-in programado en 1 hora</div>
-              <div style={alertTimeStyle}>Reserva #12345</div>
-            </div>
-          </div>
+          ))}
         </div>
       </div>
     </div>

@@ -100,4 +100,9 @@ const roomSchema = new mongoose.Schema({
   }
 }, { timestamps: true });
 
+// ─── Índices para queries frecuentes ───────────────────────────────────────────
+roomSchema.index({ status: 1 });                  // filtrar por estado
+roomSchema.index({ type: 1 });                    // filtrar por tipo
+roomSchema.index({ status: 1, type: 1 });         // filtrar por estado + tipo
+
 module.exports = mongoose.model('Room', roomSchema);

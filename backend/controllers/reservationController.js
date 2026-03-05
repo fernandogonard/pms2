@@ -42,9 +42,10 @@ const getPendingCheckouts = async (req, res) => {
       status: 'checkin',
       checkOut: { $lt: today } // Checkout anterior a hoy
     })
-    .populate('client')
-    .populate('room')
-    .sort({ checkOut: 1 }); // Ordenar por fecha de checkout más antigua primero
+    .populate('client', 'nombre apellido email dni')
+    .populate('room', 'number type floor')
+    .sort({ checkOut: 1 })
+    .lean();
 
     // Calcular días de retraso para cada reserva
     const reservationsWithDelay = pendingReservations.map(reservation => {
@@ -53,7 +54,7 @@ const getPendingCheckouts = async (req, res) => {
       const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
       
       return {
-        ...reservation.toObject(),
+        ...reservation,
         daysOverdue: diffDays,
         expectedCheckout: checkoutDate.toISOString().slice(0, 10)
       };

@@ -27,7 +27,7 @@ exports.getRoomStats = ErrorHandlingService.asyncWrapper(async (req, res) => {
       number: 1, 
       status: 1, 
       type: 1 
-    });
+    }).lean();
     
     // Obtener fecha actual para verificación usando DateService
     const DateService = require('../services/dateService');
@@ -35,7 +35,7 @@ exports.getRoomStats = ErrorHandlingService.asyncWrapper(async (req, res) => {
     
     // Obtener reservas activas con check-in (ocupadas - verde) con proyección optimizada
     const activeReservations = await Reservation.find({
-        status: 'checkin',
+        status: { $in: ['checkin', 'checked-in'] },
         checkOut: { $gt: today }
     }, { 
         room: 1,

@@ -28,39 +28,41 @@ exports.getOccupancyTrend = ErrorHandlingService.asyncWrapper(async (req, res) =
             startDate.setDate(endDate.getDate() - 7);
     }
 
-    // Obtener datos de ocupación día por día
-    const occupancyData = [];
+    // ─── Reemplaza N+1 loop (1 query/día) por una sola aggregation ───────────────
     const totalRooms = await Room.countDocuments();
-    
-    for (let date = new Date(startDate); date <= endDate; date.setDate(date.getDate() + 1)) {
-        const dayStart = new Date(date);
-        dayStart.setHours(0, 0, 0, 0);
-        const dayEnd = new Date(date);
-        dayEnd.setHours(23, 59, 59, 999);
 
-        // Contar reservas activas en este día
-        const activeReservations = await Reservation.find({
-            checkIn: { $lte: dayEnd },
-            checkOut: { $gte: dayStart },
-            status: { $in: ['confirmed', 'checked-in'] }
-        });
+    // Genera array de fechas del período
+    const days = [];
+    for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
+        days.push(new Date(d).toISOString().split('T')[0]);
+    }
 
-        // Calcular ocupación y ADR
-        const occupiedRooms = activeReservations.length;
-        const occupancyRate = totalRooms > 0 ? (occupiedRooms / totalRooms) * 100 : 0;
-        
-        // Calcular ADR (Average Daily Rate)
-        const totalRevenue = activeReservations.reduce((sum, res) => sum + (res.totalPrice || 0), 0);
+    // Una sola query: reservas activas en el rango completo
+    const reservationsInRange = await Reservation.find({
+        checkIn: { $lte: endDate },
+        checkOut: { $gte: startDate },
+        status: { $in: ['checkin', 'confirmed', 'checked-in'] }
+    }, { checkIn: 1, checkOut: 1, 'pricing.total': 1 }).lean();
+
+    // Para cada día, contar reservas activas en memoria (O(días × reservas) pero sin N+1)
+    const occupancyData = days.map(dayStr => {
+        const dayStart = new Date(dayStr + 'T00:00:00.000Z');
+        const dayEnd   = new Date(dayStr + 'T23:59:59.999Z');
+        const active = reservationsInRange.filter(r =>
+            new Date(r.checkIn) <= dayEnd && new Date(r.checkOut) >= dayStart
+        );
+        const occupiedRooms  = active.length;
+        const occupancyRate  = totalRooms > 0 ? (occupiedRooms / totalRooms) * 100 : 0;
+        const totalRevenue   = active.reduce((s, r) => s + (r.pricing?.total || 0), 0);
         const adr = occupiedRooms > 0 ? totalRevenue / occupiedRooms : 0;
-
-        occupancyData.push({
-            date: date.toISOString().split('T')[0],
+        return {
+            date: dayStr,
             occupancyRate: Math.round(occupancyRate * 100) / 100,
             adr: Math.round(adr * 100) / 100,
             occupiedRooms,
             totalRooms
-        });
-    }
+        };
+    });
 
     res.json(occupancyData);
 });

@@ -200,4 +200,12 @@ reservationSchema.methods.processPayment = function(amount, method, transactionI
 reservationSchema.set('toJSON', { virtuals: true });
 reservationSchema.set('toObject', { virtuals: true });
 
+// ─── Índices para queries frecuentes ───────────────────────────────────────────
+reservationSchema.index({ status: 1 });                         // filtrar por estado
+reservationSchema.index({ checkIn: 1, checkOut: 1 });           // rango de fechas
+reservationSchema.index({ status: 1, checkIn: 1, checkOut: 1 });// query principal de ocupación
+reservationSchema.index({ client: 1 });                         // reservas de un cliente
+reservationSchema.index({ room: 1 });                           // habitaciones de una reserva
+reservationSchema.index({ 'payment.status': 1 });               // facturas pendientes
+
 module.exports = mongoose.model('Reservation', reservationSchema);
