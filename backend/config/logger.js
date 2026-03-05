@@ -4,11 +4,19 @@
 const winston = require('winston');
 const path = require('path');
 
-// Crear directorio de logs si no existe
+// Crear directorio de logs si no existe (solo en desarrollo — Railway no tiene FS persistente)
 const fs = require('fs');
 const logsDir = path.join(__dirname, '../logs');
-if (!fs.existsSync(logsDir)) {
-  fs.mkdirSync(logsDir);
+let logsAvailable = false;
+if (process.env.NODE_ENV !== 'production') {
+  try {
+    if (!fs.existsSync(logsDir)) {
+      fs.mkdirSync(logsDir, { recursive: true });
+    }
+    logsAvailable = true;
+  } catch (e) {
+    console.warn('[logger] No se pudo crear directorio de logs:', e.message);
+  }
 }
 
 // Configuración de formato personalizado
@@ -36,43 +44,43 @@ const consoleFormat = winston.format.combine(
   })
 );
 
+// Transports: Console SIEMPRE (Railway captura stdout), File solo en desarrollo
+const transports = [
+  new winston.transports.Console({
+    format: consoleFormat
+  })
+];
+
+// En desarrollo también escribir a archivos de log
+if (logsAvailable) {
+  transports.push(
+    new winston.transports.File({
+      filename: path.join(logsDir, 'error.log'),
+      level: 'error',
+      maxsize: 5242880,
+      maxFiles: 5,
+    }),
+    new winston.transports.File({
+      filename: path.join(logsDir, 'combined.log'),
+      maxsize: 5242880,
+      maxFiles: 5,
+    }),
+    new winston.transports.File({
+      filename: path.join(logsDir, 'app.log'),
+      level: 'info',
+      maxsize: 5242880,
+      maxFiles: 3,
+    })
+  );
+}
+
 // Crear el logger principal
 const logger = winston.createLogger({
   level: process.env.LOG_LEVEL || 'info',
   format: customFormat,
   defaultMeta: { service: 'crm-hotelero' },
-  transports: [
-    // Errores en archivo separado
-    new winston.transports.File({
-      filename: path.join(logsDir, 'error.log'),
-      level: 'error',
-      maxsize: 5242880, // 5MB
-      maxFiles: 5,
-    }),
-    
-    // Todos los logs en combined.log
-    new winston.transports.File({
-      filename: path.join(logsDir, 'combined.log'),
-      maxsize: 5242880, // 5MB
-      maxFiles: 5,
-    }),
-
-    // Logs de aplicación (info y superior)
-    new winston.transports.File({
-      filename: path.join(logsDir, 'app.log'),
-      level: 'info',
-      maxsize: 5242880, // 5MB
-      maxFiles: 3,
-    })
-  ],
+  transports,
 });
-
-// En desarrollo, también mostrar logs en consola
-if (process.env.NODE_ENV !== 'production') {
-  logger.add(new winston.transports.Console({
-    format: consoleFormat
-  }));
-}
 
 // Funciones helper para diferentes tipos de logs
 const logHelpers = {

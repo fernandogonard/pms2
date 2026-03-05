@@ -3,10 +3,18 @@ const winston = require('winston');
 const path = require('path');
 const fs = require('fs');
 
-// Crear directorio de logs si no existe
+// Crear directorio de logs solo en desarrollo (Railway no tiene FS persistente)
 const logsDir = path.join(__dirname, '../logs');
-if (!fs.existsSync(logsDir)) {
-  fs.mkdirSync(logsDir, { recursive: true });
+let logsAvailable = false;
+if (process.env.NODE_ENV !== 'production') {
+  try {
+    if (!fs.existsSync(logsDir)) {
+      fs.mkdirSync(logsDir, { recursive: true });
+    }
+    logsAvailable = true;
+  } catch (e) {
+    console.warn('[loggerService] No se pudo crear directorio de logs:', e.message);
+  }
 }
 
 // Configuración de formatos
@@ -34,42 +42,42 @@ const customFormat = winston.format.combine(
 
 // Configuración de transports
 const transports = [
-  // Console transport para desarrollo
+  // Console transport siempre activo (Railway captura stdout)
   new winston.transports.Console({
     format: winston.format.combine(
       winston.format.colorize(),
       customFormat
     ),
     level: process.env.LOG_LEVEL || 'info'
-  }),
-
-  // File transport para todos los logs
-  new winston.transports.File({
-    filename: path.join(logsDir, 'combined.log'),
-    format: customFormat,
-    maxsize: 5242880, // 5MB
-    maxFiles: 5,
-    level: 'info'
-  }),
-
-  // File transport solo para errores
-  new winston.transports.File({
-    filename: path.join(logsDir, 'errors.log'),
-    format: customFormat,
-    maxsize: 5242880, // 5MB
-    maxFiles: 5,
-    level: 'error'
-  }),
-
-  // File transport para actividad del sistema
-  new winston.transports.File({
-    filename: path.join(logsDir, 'system.log'),
-    format: customFormat,
-    maxsize: 5242880, // 5MB
-    maxFiles: 10,
-    level: 'debug'
   })
 ];
+
+// File transports solo en desarrollo (cuando el filesystem está disponible)
+if (logsAvailable) {
+  transports.push(
+    new winston.transports.File({
+      filename: path.join(logsDir, 'combined.log'),
+      format: customFormat,
+      maxsize: 5242880,
+      maxFiles: 5,
+      level: 'info'
+    }),
+    new winston.transports.File({
+      filename: path.join(logsDir, 'errors.log'),
+      format: customFormat,
+      maxsize: 5242880,
+      maxFiles: 5,
+      level: 'error'
+    }),
+    new winston.transports.File({
+      filename: path.join(logsDir, 'system.log'),
+      format: customFormat,
+      maxsize: 5242880,
+      maxFiles: 10,
+      level: 'debug'
+    })
+  );
+}
 
 // Crear logger principal
 const logger = winston.createLogger({
@@ -77,68 +85,40 @@ const logger = winston.createLogger({
   format: customFormat,
   transports,
   exitOnError: false,
-  // Manejar excepciones no capturadas
-  exceptionHandlers: [
-    new winston.transports.File({
-      filename: path.join(logsDir, 'exceptions.log'),
-      format: customFormat
-    })
-  ],
-  // Manejar rechazos de promesas no capturados
-  rejectionHandlers: [
-    new winston.transports.File({
-      filename: path.join(logsDir, 'rejections.log'),
-      format: customFormat
-    })
-  ]
+  // Manejar excepciones/rechazos: en producción solo Console, en dev también File
+  exceptionHandlers: logsAvailable ? [
+    new winston.transports.File({ filename: path.join(logsDir, 'exceptions.log'), format: customFormat })
+  ] : [new winston.transports.Console({ format: customFormat })],
+  rejectionHandlers: logsAvailable ? [
+    new winston.transports.File({ filename: path.join(logsDir, 'rejections.log'), format: customFormat })
+  ] : [new winston.transports.Console({ format: customFormat })]
 });
 
 // Logger específico para seguridad
 const securityLogger = winston.createLogger({
   level: 'info',
-  format: winston.format.combine(
-    winston.format.timestamp(),
-    winston.format.json()
-  ),
-  transports: [
-    new winston.transports.File({
-      filename: path.join(logsDir, 'security.log'),
-      maxsize: 10485760, // 10MB
-      maxFiles: 10
-    })
-  ]
+  format: winston.format.combine(winston.format.timestamp(), winston.format.json()),
+  transports: logsAvailable
+    ? [new winston.transports.File({ filename: path.join(logsDir, 'security.log'), maxsize: 10485760, maxFiles: 10 })]
+    : [new winston.transports.Console()]
 });
 
 // Logger específico para auditoría
 const auditLogger = winston.createLogger({
   level: 'info',
-  format: winston.format.combine(
-    winston.format.timestamp(),
-    winston.format.json()
-  ),
-  transports: [
-    new winston.transports.File({
-      filename: path.join(logsDir, 'audit.log'),
-      maxsize: 10485760, // 10MB
-      maxFiles: 20
-    })
-  ]
+  format: winston.format.combine(winston.format.timestamp(), winston.format.json()),
+  transports: logsAvailable
+    ? [new winston.transports.File({ filename: path.join(logsDir, 'audit.log'), maxsize: 10485760, maxFiles: 20 })]
+    : [new winston.transports.Console()]
 });
 
 // Logger específico para performance
 const performanceLogger = winston.createLogger({
   level: 'info',
-  format: winston.format.combine(
-    winston.format.timestamp(),
-    winston.format.json()
-  ),
-  transports: [
-    new winston.transports.File({
-      filename: path.join(logsDir, 'performance.log'),
-      maxsize: 5242880, // 5MB
-      maxFiles: 5
-    })
-  ]
+  format: winston.format.combine(winston.format.timestamp(), winston.format.json()),
+  transports: logsAvailable
+    ? [new winston.transports.File({ filename: path.join(logsDir, 'performance.log'), maxsize: 5242880, maxFiles: 5 })]
+    : [new winston.transports.Console()]
 });
 
 // Funciones de utilidad para logging estructurado
