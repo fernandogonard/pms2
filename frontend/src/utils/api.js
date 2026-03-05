@@ -121,11 +121,15 @@ export async function apiFetch(url, opts = {}) {
     
     // Manejar respuesta 401 (sesión expirada)
     if (res.status === 401) {
-      // sesión inválida/expirada: limpiar token y emitir evento global para UI
+      // Solo disparar sessionExpired si había un token activo (sesión real expirada).
+      // Si no había token, es un login fallido → no redirigir para evitar loop.
+      const hadToken = !!((() => { try { return localStorage.getItem('token'); } catch(e) { return null; } })());
       try { localStorage.removeItem('token'); } catch (e) {}
-      if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
-        const next = encodeURIComponent(window.location.pathname + window.location.search);
-        window.dispatchEvent(new CustomEvent('sessionExpired', { detail: { next } }));
+      if (hadToken && typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
+        const pathname = window.location.pathname;
+        // Nunca usar /login como ruta de retorno para evitar loops
+        const safePath = pathname.startsWith('/login') ? '/' : pathname + window.location.search;
+        window.dispatchEvent(new CustomEvent('sessionExpired', { detail: { next: encodeURIComponent(safePath) } }));
       }
       const err = new Error('Unauthorized');
       err.response = res;
