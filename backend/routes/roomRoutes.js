@@ -55,6 +55,7 @@ router.post('/',
   createValidationMiddleware('room'), // 🔄 Validar datos de habitación
   roomController.createRoom
 );
+router.put('/mark-clean-bulk', adminLimiter, protect, authorize('admin', 'recepcionista'), roomController.markRoomsAsClean);
 router.put('/:id', 
   adminLimiter, 
   protect, 
@@ -77,6 +78,9 @@ router.get('/available', roomsLimiter, protect, roomController.getAvailableRooms
 // Todos los roles pueden ver habitaciones y estado real
 router.get('/', roomsLimiter, protect, roomController.getRooms); // requiere autenticación
 router.get('/status', roomsLimiter, protect, roomController.getRoomsStatus); // requiere autenticación
+// 🔒 Rutas estáticas ANTES de /:id para evitar conflictos de Express
+router.get('/cleaning', roomsLimiter, protect, authorize('admin', 'recepcionista'), roomController.getRoomsInCleaning);
+router.get('/maintenance', roomsLimiter, protect, authorize('admin', 'recepcionista'), maintenanceController.getRoomsInMaintenance);
 router.get('/:id', 
   roomsLimiter, 
   protect, 
@@ -85,14 +89,11 @@ router.get('/:id',
 );
 
 // 🧹 GESTIÓN DE LIMPIEZA - Solo admin/recepcionista
-router.get('/cleaning', roomsLimiter, protect, authorize('admin', 'recepcionista'), roomController.getRoomsInCleaning);
 router.put('/:id/mark-clean', adminLimiter, protect, authorize('admin', 'recepcionista'), roomController.markRoomAsClean);
-router.put('/mark-clean-bulk', adminLimiter, protect, authorize('admin', 'recepcionista'), roomController.markRoomsAsClean);
 
 // 🔧 GESTIÓN DE MANTENIMIENTO - Solo admin
 router.post('/:id/maintenance', adminLimiter, protect, authorize('admin'), maintenanceMiddleware.validateMaintenance, maintenanceController.startMaintenance);
 router.put('/:id/maintenance/complete', adminLimiter, protect, authorize('admin'), maintenanceController.completeMaintenance);
-router.get('/maintenance', roomsLimiter, protect, authorize('admin', 'recepcionista'), maintenanceController.getRoomsInMaintenance);
 router.get('/:id/maintenance/history', roomsLimiter, protect, authorize('admin'), maintenanceController.getMaintenanceHistory);
 router.get('/:id/maintenance/impact', roomsLimiter, protect, authorize('admin'), maintenanceController.checkMaintenanceImpact);
 

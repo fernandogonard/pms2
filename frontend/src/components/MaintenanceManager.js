@@ -35,11 +35,11 @@ const MaintenanceManager = () => {
       const res = await apiFetch('/api/rooms');
       const data = await res.json();
 
-      if (!data || !data.data || !data.data.rooms) {
+      if (!Array.isArray(data)) {
         throw new Error('Formato de respuesta inesperado');
       }
 
-      const allRooms = data.data.rooms;
+      const allRooms = data;
       setRooms(allRooms);
       
       // Filtrar habitaciones por estado
