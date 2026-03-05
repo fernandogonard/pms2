@@ -1,6 +1,14 @@
 // redirectorService.js - Servicio para redirigir al puerto correcto del backend
 // Este servicio se encarga de detectar y redirigir las conexiones al puerto correcto
 
+// Detectar si estamos en producción (no localhost)
+const IS_PRODUCTION = typeof window !== 'undefined' &&
+  window.location.hostname !== 'localhost' &&
+  window.location.hostname !== '127.0.0.1';
+
+// URL estática del backend en producción (Railway)
+const RAILWAY_URL = (process.env.REACT_APP_API_URL || 'https://pms2-production.up.railway.app').trim();
+
 // Almacena la URL de WebSocket detectada
 let cachedWsUrl = null;
 
@@ -14,6 +22,11 @@ const CACHE_TIME = 10 * 60 * 1000;
  * Obtiene el puerto del backend y redirige el WebSocket al puerto correcto
  */
 export async function detectBackendPort() {
+  // En producción no hacemos discovery de puertos localhost — la URL es fija (Railway)
+  if (IS_PRODUCTION) {
+    return { success: true, port: null, wsEndpoint: '/ws', productionUrl: RAILWAY_URL };
+  }
+
   try {
     // Intentamos primero con la ruta relativa para aprovechar la configuración proxy
     try {
@@ -99,6 +112,11 @@ export async function detectBackendPort() {
  * @returns {string} URL WebSocket completa
  */
 export function getWebSocketUrl() {
+  // En producción usar la URL de Railway con protocolo wss
+  if (IS_PRODUCTION) {
+    return RAILWAY_URL.replace(/^https?:/, 'wss:').replace(/\/$/, '') + '/ws';
+  }
+
   // Si tenemos una URL en caché y no ha expirado, la devolvemos
   if (cachedWsUrl && (Date.now() - lastDetectionTime) < CACHE_TIME) {
     return cachedWsUrl;
@@ -106,17 +124,7 @@ export function getWebSocketUrl() {
   
   // Obtener el puerto guardado o usar el puerto por defecto
   const savedPort = localStorage.getItem('backend-port') || '5002';
-  
-  // Construir la URL WebSocket
-  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-  const hostname = window.location.hostname;
-  
-  // Para desarrollo local, usamos localhost explícitamente
-  if (hostname === 'localhost' || hostname === '127.0.0.1') {
-    return `${protocol}//localhost:${savedPort}/ws`;
-  }
-  
-  return `${protocol}//${hostname}:${savedPort}/ws`;
+  return `ws://localhost:${savedPort}/ws`;
 }
 
 /**
@@ -124,19 +132,18 @@ export function getWebSocketUrl() {
  * @returns {string} URL base de la API
  */
 export function getApiBaseUrl() {
-  const savedPort = localStorage.getItem('backend-port') || '5002';
-  const protocol = window.location.protocol;
-  const hostname = window.location.hostname;
-  
-  // Para desarrollo local, usamos localhost explícitamente
-  if (hostname === 'localhost' || hostname === '127.0.0.1') {
-    return `${protocol}//localhost:${savedPort}`;
+  // En producción devolver URL fija de Railway
+  if (IS_PRODUCTION) {
+    return RAILWAY_URL;
   }
-  
-  return `${protocol}//${hostname}:${savedPort}`;
+
+  const savedPort = localStorage.getItem('backend-port') || '5002';
+  return `http://localhost:${savedPort}`;
 }
 
-// Ejecutar la detección de puerto al cargar
-detectBackendPort().catch(console.error);
+// Solo ejecutar la detección de puerto en desarrollo local
+if (!IS_PRODUCTION) {
+  detectBackendPort().catch(console.error);
+}
 
 export default { detectBackendPort, getWebSocketUrl, getApiBaseUrl };
