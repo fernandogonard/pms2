@@ -110,7 +110,7 @@ class RequestOptimizer {
   }
 
   async executeRequest(endpoint, options) {
-    const baseURL = process.env.REACT_APP_API_URL || 'http://localhost:5001';
+    const baseURL = process.env.REACT_APP_API_URL || 'https://pms2-production.up.railway.app';
     const url = `${baseURL}${endpoint}`;
     
     const defaultOptions = {

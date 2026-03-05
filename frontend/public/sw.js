@@ -1,9 +1,9 @@
 // Service Worker para CRM Hotelero PWA
 // Versión 2.0.1 - Correcciones aplicadas para hot-update y cache
 
-const CACHE_NAME = 'crm-hotelero-v2.0.1';
-const STATIC_CACHE = 'crm-hotelero-static-v2.0.1';
-const API_CACHE = 'crm-hotelero-api-v2.0.1';
+const CACHE_NAME = 'crm-hotelero-v2.0.2';
+const STATIC_CACHE = 'crm-hotelero-static-v2.0.2';
+const API_CACHE = 'crm-hotelero-api-v2.0.2';
 
 // Recursos críticos que siempre deben estar en cache
 const CRITICAL_RESOURCES = [
@@ -106,12 +106,18 @@ self.addEventListener('fetch', event => {
     return;
   }
   
+  // NO interceptar requests a dominios externos (Railway, CDN con credenciales, etc.)
+  // Dejarlos pasar directamente para preservar headers Authorization
+  if (url.origin !== location.origin) {
+    return;
+  }
+  
   // IMPORTANTE: No cachear peticiones POST
   if (request.method === 'POST') {
     return;
   }
   
-  // Estrategia para API calls (solo GET)
+  // Estrategia para API calls same-origin (solo GET) — pasa por Vercel proxy a Railway
   if (url.pathname.startsWith('/api/') && request.method === 'GET') {
     event.respondWith(handleApiRequest(request));
     return;
