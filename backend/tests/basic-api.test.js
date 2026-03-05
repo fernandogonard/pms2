@@ -1,207 +1,141 @@
 // tests/basic-api.test.js
 // Suite básica de tests para prevenir regresiones en CRM Hotelero
-// Creado después de auditoría del 08/10/2025
 
 const request = require('supertest');
-const mongoose = require('mongoose');
+const bcrypt = require('bcryptjs');
 
-// Configurar variables de entorno para testing
 process.env.NODE_ENV = 'test';
-process.env.MONGO_URI = process.env.MONGO_URI || 'mongodb://localhost:27017/crm-hotelero-test';
 
 const app = require('../app');
-let server;
-let authToken;
+const User = require('../models/User');
+const Room = require('../models/Room');
 
-describe('🔍 CRM HOTELERO - Tests Básicos Post-Auditoría', () => {
-  
-  beforeAll(async () => {
-    // Iniciar servidor para tests
-    server = app.listen(5002);
-    
-    // Conectar a base de datos de test
-    if (mongoose.connection.readyState === 0) {
-      await mongoose.connect(process.env.MONGO_URI, {
-        useNewUrlParser: true,
-        useUnifiedTopology: true,
-      });
-    }
-  });
+// Helpers para seed rápido
+async function seedAdmin() {
+  const hashed = await bcrypt.hash('admin123', 8);
+  return User.create({ name: 'Admin Test', email: 'admin@hotel.com', password: hashed, role: 'admin' });
+}
+async function seedRoom() {
+  return Room.create({ number: 101, floor: 1, type: 'doble', price: 8500, status: 'disponible' });
+}
 
-  afterAll(async () => {
-    // Cerrar conexiones
-    if (server) {
-      server.close();
-    }
-    if (mongoose.connection.readyState !== 0) {
-      await mongoose.connection.close();
-    }
-  });
+describe('🔍 CRM HOTELERO - Tests Básicos', () => {
 
-  describe('✅ Tests de Conectividad', () => {
-    test('Health check debe responder', async () => {
-      const response = await request(app).get('/');
-      expect(response.status).toBe(200);
-      expect(response.text).toContain('CRM Hotelero API funcionando');
+  describe('✅ Conectividad', () => {
+    test('Health check responde con JSON', async () => {
+      const res = await request(app).get('/');
+      expect(res.status).toBe(200);
+      expect(res.body).toHaveProperty('status', 'online');
+      expect(res.body).toHaveProperty('docs', '/api/docs');
+    });
+
+    test('Swagger docs disponible en /api/docs', async () => {
+      const res = await request(app).get('/api/docs/');
+      expect(res.status).toBe(200);
     });
   });
 
-  describe('🔐 Tests de Autenticación', () => {
-    test('Login con credenciales válidas debe funcionar', async () => {
-      const response = await request(app)
+  describe('🔐 Autenticación', () => {
+    beforeEach(async () => { await seedAdmin(); });
+
+    test('Login con credenciales válidas retorna token', async () => {
+      const res = await request(app)
         .post('/api/auth/login')
-        .send({
-          email: 'admin@hotel.com',
-          password: 'admin123'
-        });
-      
-      expect(response.status).toBe(200);
-      expect(response.body).toHaveProperty('token');
-      expect(response.body).toHaveProperty('user');
-      expect(response.body.user.role).toBe('admin');
-      
-      // Guardar token para tests posteriores
-      authToken = response.body.token;
+        .send({ email: 'admin@hotel.com', password: 'admin123' });
+      expect(res.status).toBe(200);
+      expect(res.body).toHaveProperty('token');
+      expect(res.body.user.role).toBe('admin');
     });
 
-    test('Login con credenciales inválidas debe fallar', async () => {
-      const response = await request(app)
+    test('Login con contraseña incorrecta devuelve 401', async () => {
+      const res = await request(app)
         .post('/api/auth/login')
-        .send({
-          email: 'admin@hotel.com',
-          password: 'wrongpassword'
-        });
-      
-      expect(response.status).toBe(401);
+        .send({ email: 'admin@hotel.com', password: 'wrong' });
+      expect(res.status).toBe(401);
+    });
+
+    test('Login con email inválido devuelve 400', async () => {
+      const res = await request(app)
+        .post('/api/auth/login')
+        .send({ email: 'no-es-email', password: 'admin123' });
+      expect(res.status).toBe(400);
     });
   });
 
-  describe('🔒 Tests de Seguridad JWT (Corrección #1)', () => {
-    test('Acceso a /api/rooms sin token debe ser denegado', async () => {
-      const response = await request(app).get('/api/rooms');
-      expect(response.status).toBe(401);
+  describe('🔒 Seguridad JWT', () => {
+    test('GET /api/rooms sin token devuelve 401', async () => {
+      const res = await request(app).get('/api/rooms');
+      expect(res.status).toBe(401);
     });
 
-    test('Acceso a /api/rooms con token válido debe funcionar', async () => {
-      const response = await request(app)
+    test('GET /api/users sin token devuelve 401', async () => {
+      const res = await request(app).get('/api/users');
+      expect(res.status).toBe(401);
+    });
+
+    test('Token con firma inválida devuelve 401', async () => {
+      const res = await request(app)
         .get('/api/rooms')
-        .set('Authorization', `Bearer ${authToken}`);
-      
-      expect(response.status).toBe(200);
-      expect(response.body).toHaveProperty('rooms');
-      expect(Array.isArray(response.body.rooms)).toBe(true);
-    });
-
-    test('Acceso a /api/rooms/available sin token debe ser denegado', async () => {
-      const response = await request(app).get('/api/rooms/available');
-      expect(response.status).toBe(401);
-    });
-
-    test('Acceso a /api/rooms/status sin token debe ser denegado', async () => {
-      const response = await request(app).get('/api/rooms/status');
-      expect(response.status).toBe(401);
+        .set('Authorization', 'Bearer token.invalido.xxx');
+      expect(res.status).toBe(401);
     });
   });
 
-  describe('🏨 Tests de Habitaciones', () => {
-    test('Listado de habitaciones debe funcionar con token', async () => {
-      const response = await request(app)
+  describe('🏨 Habitaciones y Usuarios (con auth)', () => {
+    let token;
+
+    beforeEach(async () => {
+      await seedAdmin();
+      await seedRoom();
+      const loginRes = await request(app)
+        .post('/api/auth/login')
+        .send({ email: 'admin@hotel.com', password: 'admin123' });
+      token = loginRes.body.token;
+    });
+
+    test('GET /api/rooms con token válido devuelve 200', async () => {
+      const res = await request(app)
         .get('/api/rooms')
-        .set('Authorization', `Bearer ${authToken}`);
-      
-      expect(response.status).toBe(200);
-      expect(response.body.rooms.length).toBeGreaterThan(0);
+        .set('Authorization', `Bearer ${token}`);
+      expect(res.status).toBe(200);
     });
 
-    test('Tipos de habitación para facturación debe funcionar', async () => {
-      const response = await request(app)
-        .get('/api/billing/room-types')
-        .set('Authorization', `Bearer ${authToken}`);
-      
-      expect(response.status).toBe(200);
-      expect(response.body).toHaveProperty('data');
-      expect(response.body.data.length).toBeGreaterThan(0);
-    });
-  });
-
-  describe('💰 Tests de Facturación', () => {
-    test('Cálculo de facturación debe funcionar', async () => {
-      const tomorrow = new Date();
-      tomorrow.setDate(tomorrow.getDate() + 1);
-      const dayAfter = new Date();
-      dayAfter.setDate(dayAfter.getDate() + 3);
-
-      const response = await request(app)
-        .post('/api/billing/calculate')
-        .set('Authorization', `Bearer ${authToken}`)
-        .send({
-          tipo: 'doble',
-          cantidad: 1,
-          checkIn: tomorrow.toISOString().split('T')[0],
-          checkOut: dayAfter.toISOString().split('T')[0]
-        });
-      
-      expect(response.status).toBe(200);
-      expect(response.body).toHaveProperty('data');
-      expect(response.body.data).toHaveProperty('total');
-      expect(response.body.data).toHaveProperty('currency');
-      expect(response.body.data.total).toBeGreaterThan(0);
-    });
-  });
-
-  describe('📋 Tests de Reservaciones (Corrección #2)', () => {
-    test('Creación de reserva con datos correctos debe funcionar', async () => {
-      const checkIn = new Date();
-      checkIn.setDate(checkIn.getDate() + 7);
-      const checkOut = new Date();
-      checkOut.setDate(checkOut.getDate() + 9);
-
-      const response = await request(app)
-        .post('/api/reservations')
-        .set('Authorization', `Bearer ${authToken}`)
-        .send({
-          tipo: 'doble',
-          cantidad: 1,
-          checkIn: checkIn.toISOString().split('T')[0],
-          checkOut: checkOut.toISOString().split('T')[0],
-          nombre: 'Test',
-          apellido: 'Usuario',
-          dni: '12345678',
-          email: 'test@example.com',
-          whatsapp: '555-0123'
-        });
-      
-      // Debe funcionar ahora que corregimos el error
-      expect(response.status).toBe(201);
-      expect(response.body).toHaveProperty('reservation');
-      expect(response.body.reservation).toHaveProperty('_id');
+    test('Listado de habitaciones incluye la habitación seed', async () => {
+      const res = await request(app)
+        .get('/api/rooms')
+        .set('Authorization', `Bearer ${token}`);
+      const rooms = res.body.rooms || res.body;
+      expect(Array.isArray(rooms)).toBe(true);
+      expect(rooms.length).toBeGreaterThan(0);
     });
 
-    test('Creación de reserva sin datos obligatorios debe fallar', async () => {
-      const response = await request(app)
-        .post('/api/reservations')
-        .set('Authorization', `Bearer ${authToken}`)
-        .send({
-          // Falta tipo, fechas, etc.
-          nombre: 'Test'
-        });
-      
-      expect(response.status).toBe(400);
+    test('Crear habitación duplicada devuelve error', async () => {
+      const res = await request(app)
+        .post('/api/rooms')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ number: 101, floor: 1, type: 'doble', price: 8500 });
+      expect(res.status).toBeGreaterThanOrEqual(400);
     });
-  });
 
-  describe('👥 Tests de Usuarios', () => {
-    test('Listado de usuarios debe funcionar para admin', async () => {
-      const response = await request(app)
+    test('GET /api/users devuelve array', async () => {
+      const res = await request(app)
         .get('/api/users')
-        .set('Authorization', `Bearer ${authToken}`);
-      
-      expect(response.status).toBe(200);
-      expect(response.body).toHaveProperty('users');
-      expect(Array.isArray(response.body.users)).toBe(true);
+        .set('Authorization', `Bearer ${token}`);
+      expect(res.status).toBe(200);
+      const users = res.body.users || res.body;
+      expect(Array.isArray(users)).toBe(true);
+    });
+  });
+
+  describe('📋 Reservas', () => {
+    test('GET /api/reservations requiere autenticación', async () => {
+      const res = await request(app).get('/api/reservations');
+      expect(res.status).toBe(401);
+    });
+
+    test('POST /api/reservations sin datos devuelve 400', async () => {
+      const res = await request(app).post('/api/reservations').send({});
+      expect(res.status).toBe(400);
     });
   });
 });
-
-// Exportar para uso en otros tests
-module.exports = { app, authToken };

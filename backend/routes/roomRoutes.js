@@ -9,10 +9,45 @@ const { protect, authorize } = require('../middlewares/authMiddleware');
 const { roomsLimiter, adminLimiter } = require('../config/rateLimiter');
 const maintenanceMiddleware = require('../middlewares/maintenanceMiddleware');
 
-// 🆕 Importar validaciones Joi
 const { createValidationMiddleware, validateParams } = require('../services/validationService');
 
-// 🆕 Solo admin puede crear, actualizar o eliminar habitaciones con validación Joi
+/**
+ * @swagger
+ * /api/rooms:
+ *   get:
+ *     tags: [Rooms]
+ *     summary: Listar todas las habitaciones
+ *     parameters:
+ *       - in: query
+ *         name: status
+ *         schema: { type: string, enum: [disponible, ocupada, limpieza, mantenimiento] }
+ *         description: Filtrar por estado
+ *       - in: query
+ *         name: type
+ *         schema: { type: string, enum: [doble, triple, cuadruple, suite] }
+ *         description: Filtrar por tipo
+ *     responses:
+ *       200:
+ *         description: Lista de habitaciones
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items: { $ref: '#/components/schemas/Room' }
+ *       401: { description: No autorizado }
+ *   post:
+ *     tags: [Rooms]
+ *     summary: Crear habitación (solo admin)
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema: { $ref: '#/components/schemas/Room' }
+ *     responses:
+ *       201: { description: Habitación creada }
+ *       400: { description: Datos inválidos }
+ *       403: { description: Sin permisos }
+ */
 router.post('/', 
   adminLimiter, 
   protect, 

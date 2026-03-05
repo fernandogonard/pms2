@@ -1,0 +1,19 @@
+{
+  "version": 2,
+  "name": "crm-hotelero-frontend",
+  "buildCommand": "npm run build",
+  "outputDirectory": "build",
+  "routes": [
+    {
+      "src": "/api/(.*)",
+      "dest": "https://tu-backend.railway.app/api/$1"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/index.html"
+    }
+  ],
+  "env": {
+    "REACT_APP_API_URL": "https://tu-backend.railway.app"
+  }
+}

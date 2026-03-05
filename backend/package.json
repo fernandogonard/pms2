@@ -27,6 +27,8 @@
     "mongoose": "^7.8.7",
     "morgan": "^1.10.1",
     "node-cron": "^4.2.1",
+    "swagger-jsdoc": "^6.2.8",
+    "swagger-ui-express": "^5.0.1",
     "validator": "^13.12.0",
     "winston": "^3.18.3",
     "ws": "^8.18.3",

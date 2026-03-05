@@ -8,11 +8,54 @@ const reservationOptimized = require('../controllers/reservationOptimized');
 const { protect, authorize } = require('../middlewares/authMiddleware');
 const { reservationLimiter, adminLimiter } = require('../config/rateLimiter');
 
-// 🆕 Importar validaciones Joi
 const { createValidationMiddleware, validateParams, validateQuery } = require('../services/validationService');
 
-// 🆕 Crear reserva con validación Joi (pública o autenticada)
-// Si hay token, se asigna usuario; si no, reserva pública
+/**
+ * @swagger
+ * /api/reservations:
+ *   get:
+ *     tags: [Reservations]
+ *     summary: Listar reservas (admin y recepcionista)
+ *     parameters:
+ *       - in: query
+ *         name: status
+ *         schema: { type: string, enum: [reservada, checkin, checkout, cancelada] }
+ *       - in: query
+ *         name: page
+ *         schema: { type: integer, default: 1 }
+ *       - in: query
+ *         name: limit
+ *         schema: { type: integer, default: 20 }
+ *     responses:
+ *       200:
+ *         description: Lista de reservas
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items: { $ref: '#/components/schemas/Reservation' }
+ *       401: { description: No autorizado }
+ *   post:
+ *     tags: [Reservations]
+ *     summary: Crear nueva reserva
+ *     security: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [tipo, cantidad, checkIn, checkOut, client]
+ *             properties:
+ *               tipo: { type: string, enum: [doble, triple, cuadruple, suite] }
+ *               cantidad: { type: integer, minimum: 1 }
+ *               checkIn: { type: string, format: date }
+ *               checkOut: { type: string, format: date }
+ *               client: { type: string, description: 'ID del cliente o datos nuevos' }
+ *     responses:
+ *       201: { description: Reserva creada }
+ *       400: { description: Sin disponibilidad o datos inválidos }
+ */
 router.post('/', 
   reservationLimiter, 
   createValidationMiddleware('reservation'), // 🔄 Validar datos de reserva

@@ -70,143 +70,171 @@ const Login = () => {
     }
   };
 
-  // Estilos para la página de login con gradiente de fondo
-  const pageStyle = {
-    height: '100vh',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    background: 'linear-gradient(135deg, #1e3c72 0%, #2a5298 100%)',
-    position: 'relative'
-  };
-
-  // Estilos para el formulario con mayor contraste
-  const formContainerStyle = {
-    maxWidth: 400,
-    padding: 32,
-    background: 'rgba(0, 0, 0, 0.7)',
-    borderRadius: 12,
-    boxShadow: '0 4px 20px rgba(0, 100, 255, 0.3)',
-    border: '1px solid rgba(0, 100, 255, 0.2)',
-    color: 'white',
-    backdropFilter: 'blur(5px)',
-    zIndex: 2
-  };
-
-  // Estilo para el overlay decorativo
-  const overlayStyle = {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.1)',
-    zIndex: 1
-  };
-
   // Mostrar spinner de carga inicial
   if (loading) {
     return (
-      <div className="d-flex justify-content-center align-items-center" style={{ height: '100vh' }}>
-        <div className="spinner-border text-primary" role="status">
-          <span className="visually-hidden">Cargando...</span>
-        </div>
+      <div style={{ height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#0f1117' }}>
+        <div style={{ fontSize: 24, color: '#60a5fa' }}>⏳ Cargando...</div>
       </div>
     );
   }
 
   return (
-    <div style={pageStyle}>
-      <div style={overlayStyle}></div>
-      <div style={formContainerStyle}>
-        <h2 style={{ color: '#0099ff', marginBottom: 24, textAlign: 'center', fontWeight: 600, textShadow: '0 0 8px rgba(0, 153, 255, 0.5)' }}>
-          Iniciar sesión
-        </h2>
-        
-        {error && (
-          <div className="alert alert-danger" role="alert" style={{ backgroundColor: 'rgba(220, 53, 69, 0.8)', border: '1px solid #dc3545', color: 'white' }}>
-            {error}
-          </div>
-        )}
-        
-        <form onSubmit={handleSubmit}>
-          <div style={{ marginBottom: 20 }}>
-            <label style={{ color: '#fff', display: 'block', marginBottom: 5, fontSize: '14px' }}>
-              Email
-            </label>
-            <input 
-              type="email" 
-              value={email} 
-              onChange={e => setEmail(e.target.value)} 
-              disabled={isSubmitting}
-              required 
-              style={{ 
-                width: '100%', 
-                padding: 10, 
-                marginTop: 4, 
-                backgroundColor: 'rgba(255, 255, 255, 0.1)', 
-                color: 'white', 
-                border: '1px solid rgba(0, 153, 255, 0.3)', 
-                borderRadius: 6,
-                opacity: isSubmitting ? 0.6 : 1
-              }} 
-            />
-          </div>
-          <div style={{ marginBottom: 20 }}>
-            <label style={{ color: '#fff', display: 'block', marginBottom: 5, fontSize: '14px' }}>
-              Contraseña
-            </label>
-            <input 
-              type="password" 
-              value={password} 
-              onChange={e => setPassword(e.target.value)} 
-              disabled={isSubmitting}
-              required 
-              style={{ 
-                width: '100%', 
-                padding: 10, 
-                marginTop: 4, 
-                backgroundColor: 'rgba(255, 255, 255, 0.1)', 
-                color: 'white', 
-                border: '1px solid rgba(0, 153, 255, 0.3)', 
-                borderRadius: 6,
-                opacity: isSubmitting ? 0.6 : 1
-              }} 
-            />
-          </div>
-          
-          <button 
-            type="submit" 
-            disabled={isSubmitting}
-            style={{ 
-              width: '100%', 
-              background: isSubmitting 
-                ? 'rgba(0, 153, 255, 0.6)' 
-                : 'linear-gradient(135deg, #0099ff, #004c99)', 
-              color: '#fff', 
-              padding: 12, 
-              border: 'none', 
-              borderRadius: 6, 
-              fontWeight: 'bold', 
-              boxShadow: '0 4px 10px rgba(0, 100, 255, 0.3)',
-              cursor: isSubmitting ? 'not-allowed' : 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: 8
-            }}
-          >
-            {isSubmitting && (
-              <div className="spinner-border spinner-border-sm" role="status">
-                <span className="visually-hidden">Cargando...</span>
+    <div style={loginStyles.page}>
+      {/* Panel izquierdo decorativo */}
+      <div style={loginStyles.leftPanel}>
+        <div style={loginStyles.leftContent}>
+          <div style={{ fontSize: 48, marginBottom: 16 }}>🏨</div>
+          <h2 style={{ fontSize: 28, fontWeight: 800, color: '#fff', margin: '0 0 12px' }}>MiHotel PMS</h2>
+          <p style={{ color: '#94a3b8', fontSize: 15, lineHeight: 1.7, maxWidth: 280 }}>
+            Sistema de gestión hotelera completo. Reservas, habitaciones, facturación y más.
+          </p>
+          <div style={{ marginTop: 36, display: 'flex', flexDirection: 'column', gap: 14 }}>
+            {['Gestión de reservas en tiempo real', 'Panel de administración completo', 'Reportes y analíticas avanzadas'].map(f => (
+              <div key={f} style={{ display: 'flex', alignItems: 'center', gap: 10, color: '#64748b', fontSize: 14 }}>
+                <span style={{ color: '#3b82f6' }}>✓</span> {f}
               </div>
-            )}
-            {isSubmitting ? 'Iniciando sesión...' : 'Entrar'}
-          </button>
-        </form>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Formulario */}
+      <div style={loginStyles.rightPanel}>
+        <div style={loginStyles.formBox}>
+          <div style={{ marginBottom: 32 }}>
+            <h1 style={{ fontSize: 26, fontWeight: 800, color: '#fff', margin: '0 0 8px' }}>Iniciar sesión</h1>
+            <p style={{ color: '#64748b', fontSize: 14, margin: 0 }}>Ingresá tus credenciales para continuar</p>
+          </div>
+
+          {error && (
+            <div style={loginStyles.errorBox} role="alert">
+              ⚠️ {error}
+            </div>
+          )}
+
+          <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+            <div>
+              <label style={loginStyles.label}>Email</label>
+              <input
+                type="email"
+                value={email}
+                onChange={e => setEmail(e.target.value)}
+                disabled={isSubmitting}
+                required
+                placeholder="admin@hotel.com"
+                style={{ ...loginStyles.input, opacity: isSubmitting ? 0.6 : 1 }}
+              />
+            </div>
+            <div>
+              <label style={loginStyles.label}>Contraseña</label>
+              <input
+                type="password"
+                value={password}
+                onChange={e => setPassword(e.target.value)}
+                disabled={isSubmitting}
+                required
+                placeholder="••••••••"
+                style={{ ...loginStyles.input, opacity: isSubmitting ? 0.6 : 1 }}
+              />
+            </div>
+
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              style={{ ...loginStyles.submitBtn, opacity: isSubmitting ? 0.75 : 1, cursor: isSubmitting ? 'not-allowed' : 'pointer' }}
+            >
+              {isSubmitting ? '⏳ Iniciando sesión...' : 'Entrar →'}
+            </button>
+          </form>
+
+          <p style={{ marginTop: 28, textAlign: 'center', fontSize: 13, color: '#334155' }}>
+            ¿Problemas para acceder? Contactá al administrador del sistema.
+          </p>
+        </div>
       </div>
     </div>
   );
+};
+
+const loginStyles = {
+  page: {
+    height: '100vh',
+    display: 'flex',
+    background: '#0f1117',
+    overflow: 'hidden',
+  },
+  leftPanel: {
+    flex: '0 0 420px',
+    background: 'linear-gradient(160deg, #1e3a5f 0%, #0f1117 60%)',
+    borderRight: '1px solid rgba(255,255,255,0.06)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 40,
+    '@media (max-width: 768px)': { display: 'none' },
+  },
+  leftContent: {
+    maxWidth: 320,
+  },
+  rightPanel: {
+    flex: 1,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 24,
+  },
+  formBox: {
+    width: '100%',
+    maxWidth: 400,
+    background: 'rgba(255,255,255,0.04)',
+    border: '1px solid rgba(255,255,255,0.08)',
+    borderRadius: 16,
+    padding: 40,
+  },
+  label: {
+    display: 'block',
+    fontSize: 13,
+    fontWeight: 600,
+    color: '#94a3b8',
+    marginBottom: 8,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  input: {
+    width: '100%',
+    padding: '12px 14px',
+    background: 'rgba(255,255,255,0.06)',
+    border: '1px solid rgba(255,255,255,0.1)',
+    borderRadius: 8,
+    color: '#e2e8f0',
+    fontSize: 15,
+    boxSizing: 'border-box',
+    outline: 'none',
+    transition: 'border-color 0.2s',
+  },
+  submitBtn: {
+    width: '100%',
+    padding: '14px',
+    background: 'linear-gradient(135deg, #3b82f6, #2563eb)',
+    color: '#fff',
+    border: 'none',
+    borderRadius: 8,
+    fontSize: 16,
+    fontWeight: 700,
+    boxShadow: '0 4px 20px rgba(59,130,246,0.35)',
+    transition: 'transform 0.2s, box-shadow 0.2s',
+    marginTop: 4,
+  },
+  errorBox: {
+    background: 'rgba(239,68,68,0.12)',
+    border: '1px solid rgba(239,68,68,0.3)',
+    color: '#fca5a5',
+    borderRadius: 8,
+    padding: '12px 16px',
+    fontSize: 14,
+    marginBottom: 20,
+  },
 };
 
 export default Login;

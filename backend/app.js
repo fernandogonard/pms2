@@ -5,13 +5,12 @@ const express = require('express');
 const cors = require('cors');
 const morgan = require('morgan');
 const helmet = require('helmet');
-const { requestLogger } = require('./config/logger');
-const { advancedRequestLogger, setupGlobalErrorHandlers, startPeriodicMetricsLogging } = require('./config/productionLogger');
+const { setupGlobalErrorHandlers, startPeriodicMetricsLogging } = require('./config/productionLogger');
 const { rateLimiterMonitor, startRateLimitMetricsLogging } = require('./config/rateLimiterMonitor');
 
-// 🔒 Nuevo sistema de seguridad avanzado
+// 🔒 Seguridad avanzada
 const advancedSecurity = require('./middlewares/advancedSecurity');
-// 📝 Nuevo sistema de logging profesional
+// 📝 Logging profesional Winston (único sistema activo)
 const { logger, requestLogger: newRequestLogger, errorLogger } = require('./services/loggerService');
 
 const app = express();
@@ -34,19 +33,14 @@ app.use(express.json());
 const allowedOrigins = (process.env.CORS_ORIGIN || 'http://localhost:3000,https://localhost:3000').split(',').map(s => s.trim());
 const corsOptions = {
   origin: function(origin, callback) {
-    // permitir solicitudes desde herramientas como curl/postman sin origin
-    if (!origin) {
-      console.log('[CORS] Sin origin (herramienta) - permitiendo');
-      return callback(null, true);
-    }
+    // Permitir solicitudes sin origin (curl, Postman, etc.)
+    if (!origin) return callback(null, true);
     // Normalizar origin: quitar barra final si existe
     const originNorm = origin.replace(/\/$/, '');
     const allowed = allowedOrigins.indexOf(originNorm) !== -1;
-    console.log(`[CORS] Origin=${origin} normalized=${originNorm} allowed=${allowed}`);
     if (allowed) return callback(null, true);
-    // En desarrollo aceptar cualquier localhost explícito (incluye puerto y slash opcional)
+    // En desarrollo aceptar cualquier localhost
     if (process.env.NODE_ENV !== 'production' && /^https?:\/\/localhost(:\d+)?\/?$/.test(origin)) {
-      console.log(`[CORS] DEV: permitiendo origin localhost dinámico: ${origin}`);
       return callback(null, true);
     }
     return callback(new Error('CORS origin not allowed'));
@@ -61,26 +55,10 @@ app.use(cors(corsOptions));
 // Habilitar preflight para todas las rutas
 app.options('*', cors(corsOptions));
 
-// Logging avanzado de requests (antes de las rutas)
-app.use(requestLogger);
-app.use(advancedRequestLogger);
-app.use(newRequestLogger); // 📝 Nuevo sistema de logging
+// 📝 Logging de requests (único middleware, Winston)
+app.use(newRequestLogger);
 app.use(rateLimiterMonitor.middleware());
-// Middleware adicional para garantizar cabeceras CORS necesarias (por seguridad explicita)
-app.use((req, res, next) => {
-  const origin = req.headers.origin;
-  if (!origin) return next();
-  const allowed = allowedOrigins.indexOf(origin) !== -1 || (process.env.NODE_ENV !== 'production' && /^https?:\/\/localhost(:\d+)?$/.test(origin));
-  if (allowed) {
-    res.header('Access-Control-Allow-Origin', origin);
-    res.header('Access-Control-Allow-Credentials', 'true');
-    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, Accept, X-Requested-With, Cache-Control');
-    res.header('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS');
-    console.log(`[CORS] Añadidas cabeceras CORS para origin=${origin}`);
-  }
-  next();
-});
-app.use(morgan('dev'));
+app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
 app.use(helmet());
 
 // 🔒 Sistema de rate limiting avanzado
@@ -88,6 +66,15 @@ const { generalLimiter } = require('./config/rateLimiter');
 app.use(generalLimiter);
 app.use(advancedSecurity.rateLimitByUser);
 app.use(advancedSecurity.anomalyDetection);
+
+// 📊 Documentación Swagger/OpenAPI
+const swaggerUi = require('swagger-ui-express');
+const swaggerSpec = require('./config/swagger');
+app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
+  customSiteTitle: 'CRM Hotelero — API Docs',
+  customCss: '.swagger-ui .topbar { background-color: #1a202c; }',
+  swaggerOptions: { persistAuthorization: true }
+}));
 
 // Rutas de autenticación
 const authRoutes = require('./routes/authRoutes');
@@ -141,9 +128,16 @@ app.use('/api/cleaning', cleaningRoutes);
 const analyticsRoutes = require('./routes/analyticsRoutes');
 app.use('/api/analytics', analyticsRoutes);
 
-// Ruta de prueba
+// Ruta de health check pública
 app.get('/', (req, res) => {
-  res.send('CRM Hotelero API funcionando');
+  res.json({
+    status: 'online',
+    system: 'CRM Hotelero API',
+    version: '1.0.0',
+    environment: process.env.NODE_ENV || 'development',
+    docs: '/api/docs',
+    timestamp: new Date().toISOString()
+  });
 });
 
 // Middlewares de manejo de errores (deben ir al final)

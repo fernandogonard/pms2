@@ -8,6 +8,15 @@ let API_BASE_URL = '';
 let API_PORT_DISCOVERY = false;
 let API_PORT_DISCOVERY_INTERVAL = null;
 
+// En producción: usar URL estática de la variable de entorno
+const STATIC_API_URL = process.env.REACT_APP_API_URL ? process.env.REACT_APP_API_URL.trim() : '';
+const USE_STATIC_API = process.env.REACT_APP_USE_STATIC_API === 'true' || (process.env.NODE_ENV === 'production' && !!STATIC_API_URL);
+
+if (USE_STATIC_API && STATIC_API_URL) {
+  API_BASE_URL = STATIC_API_URL;
+  API_PORT_DISCOVERY = true; // Evitar el discovery en producción
+}
+
 // Función para descubrir el puerto del backend usando redirectorService
 export async function discoverBackendPort() {
   try {

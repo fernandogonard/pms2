@@ -11,10 +11,10 @@ module.exports = function(app) {
   app.use(
     '/api',
     createProxyMiddleware({
-      target: 'http://localhost:5001',
+      target: process.env.REACT_APP_API_URL || 'http://localhost:5000',
       changeOrigin: true,
       secure: false,
-      logLevel: 'info',
+      logLevel: 'warn',
       onProxyRes: function (proxyRes, req, res) {
         // Agregar cabeceras de seguridad y codificación
         proxyRes.headers['Content-Type'] = proxyRes.headers['content-type'] || 'application/json; charset=utf-8';
@@ -40,7 +40,7 @@ module.exports = function(app) {
   app.use(
     '/ws',
     createProxyMiddleware({
-      target: 'http://localhost:5001',
+      target: process.env.REACT_APP_API_URL || 'http://localhost:5000',
       ws: true,
       changeOrigin: true
     })

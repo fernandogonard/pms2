@@ -39,6 +39,52 @@ button {
 }
 
 button:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+}
+
+/* ── Scrollbar personalizada ── */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: rgba(255,255,255,0.03);
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.12);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255,255,255,0.2);
+}
+
+/* ── Responsive helpers ── */
+@media (max-width: 768px) {
+  .hide-mobile { display: none !important; }
+  body { font-size: 14px; }
+}
+
+/* ── Animaciones ── */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.fade-in {
+  animation: fadeIn 0.3s ease forwards;
+}
+
+/* ── Inputs mejorados uniforme ── */
+select {
+  box-sizing: border-box;
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 6px;
+  outline: none;
+  transition: border-color 0.2s;
+  background: rgba(255,255,255,0.06);
+  color: #e2e8f0;
+}
+select:focus, input:focus {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
 }
