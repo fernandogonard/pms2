@@ -58,7 +58,7 @@ const { createValidationMiddleware, validateParams, validateQuery } = require('.
  */
 router.post('/', 
   reservationLimiter, 
-  createValidationMiddleware('reservation'), // 🔄 Validar datos de reserva
+  createValidationMiddleware('reservationCreate'), // 🔄 Validar datos de reserva (tipo, nombre, apellido, dni, email)
   reservationController.createReservation
 );
 
