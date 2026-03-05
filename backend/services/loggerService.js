@@ -84,14 +84,8 @@ const logger = winston.createLogger({
   level: process.env.LOG_LEVEL || 'info',
   format: customFormat,
   transports,
-  exitOnError: false,
-  // Manejar excepciones/rechazos: en producción solo Console, en dev también File
-  exceptionHandlers: logsAvailable ? [
-    new winston.transports.File({ filename: path.join(logsDir, 'exceptions.log'), format: customFormat })
-  ] : [new winston.transports.Console({ format: customFormat })],
-  rejectionHandlers: logsAvailable ? [
-    new winston.transports.File({ filename: path.join(logsDir, 'rejections.log'), format: customFormat })
-  ] : [new winston.transports.Console({ format: customFormat })]
+  exitOnError: false
+  // Sin exceptionHandlers/rejectionHandlers: los maneja productionLogger.js sin process.exit
 });
 
 // Logger específico para seguridad
