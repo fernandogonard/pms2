@@ -424,7 +424,7 @@ exports.getAvailableRooms = async (req, res) => {
     const { type, checkIn, checkOut, cantidad } = req.query;
     
     // Validar parámetros requeridos usando ValidationService
-    const ValidationService = require('../services/validationService');
+    const { ValidationService } = require('../services/validationService');
     const validation = ValidationService.validateRequired(req.query, ['type', 'checkIn', 'checkOut']);
     
     // Log de entrada con timestamp
