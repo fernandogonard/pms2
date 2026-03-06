@@ -43,6 +43,8 @@ const corsOptions = {
     const originNorm = origin.replace(/\/$/, '');
     const allowed = allowedOrigins.indexOf(originNorm) !== -1;
     if (allowed) return callback(null, true);
+    // Siempre permitir dominios de Vercel (deploy del frontend)
+    if (/^https:\/\/[a-z0-9-]+\.vercel\.app$/.test(originNorm)) return callback(null, true);
     // En desarrollo aceptar cualquier localhost
     if (process.env.NODE_ENV !== 'production' && /^https?:\/\/localhost(:\d+)?\/?$/.test(origin)) {
       return callback(null, true);

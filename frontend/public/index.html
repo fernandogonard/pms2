@@ -446,7 +446,7 @@
       // Registrar Service Worker para PWA
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', function() {
-          navigator.serviceWorker.register('/sw.js?v=2.0.1')
+          navigator.serviceWorker.register('/sw.js?v=2.0.3')
             .then(function(registration) {
               console.log('SW registrado exitosamente v2.0.3:', registration.scope);
               
