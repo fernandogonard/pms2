@@ -73,7 +73,7 @@ const AdminDashboard = () => {
   const renderActiveSection = () => {
     switch (activeSection) {
       case 'dashboard':
-        return <AdminDashboardSection />;
+        return <AdminDashboardSection onSectionChange={setActiveSection} />;
       case 'analytics':
         return <AdvancedDashboard />;
       case 'pending-checkouts':

@@ -5,10 +5,12 @@ import React, { useEffect, useState } from 'react';
 import AdminStats from '../AdminStats';
 import { apiFetch } from '../../utils/api';
 
-const AdminDashboardSection = () => {
+const AdminDashboardSection = ({ onSectionChange }) => {
   const [rooms, setRooms] = useState([]);
   const [reservations, setReservations] = useState([]);
   const [loadingAlerts, setLoadingAlerts] = useState(true);
+
+  const goTo = (section) => onSectionChange && onSectionChange(section);
 
   useEffect(() => {
     const load = async () => {
@@ -101,28 +103,28 @@ const AdminDashboardSection = () => {
       <div style={quickActionsStyle}>
         <h3 style={sectionTitleStyle}>⚡ Acciones Rápidas</h3>
         <div style={actionsGridStyle}>
-          <button style={actionButtonStyle}>
+          <button style={actionButtonStyle} onClick={() => goTo('reservas')}>
             <span style={actionIconStyle}>➕</span>
             <div>
               <div style={actionTitleStyle}>Nueva Reserva</div>
               <div style={actionDescStyle}>Crear reserva rápida</div>
             </div>
           </button>
-          <button style={actionButtonStyle}>
+          <button style={actionButtonStyle} onClick={() => goTo('reservas')}>
             <span style={actionIconStyle}>✅</span>
             <div>
               <div style={actionTitleStyle}>Check-in Rápido</div>
               <div style={actionDescStyle}>Registrar llegada</div>
             </div>
           </button>
-          <button style={actionButtonStyle}>
+          <button style={actionButtonStyle} onClick={() => goTo('pending-checkouts')}>
             <span style={actionIconStyle}>🚪</span>
             <div>
               <div style={actionTitleStyle}>Check-out</div>
               <div style={actionDescStyle}>Procesar salida</div>
             </div>
           </button>
-          <button style={actionButtonStyle}>
+          <button style={actionButtonStyle} onClick={() => goTo('reportes')}>
             <span style={actionIconStyle}>📊</span>
             <div>
               <div style={actionTitleStyle}>Reporte Diario</div>
