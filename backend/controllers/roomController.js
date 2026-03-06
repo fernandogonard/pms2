@@ -723,6 +723,49 @@ exports.markRoomAsClean = async (req, res) => {
   }
 };
 
+// PUT /api/rooms/:id/complete-task - Completar repaso o limpieza profunda (mid-stay)
+exports.completeHousekeeping = async (req, res) => {
+  try {
+    const roomId = req.params.id;
+    const room = await Room.findById(roomId);
+    if (!room) return res.status(404).json({ message: 'Habitación no encontrada' });
+
+    if (!room.pendingHousekeeping) {
+      return res.status(400).json({ message: 'No hay tarea de housekeeping pendiente para esta habitación' });
+    }
+
+    const taskLabel = room.pendingHousekeeping === 'repaso'
+      ? 'Repaso'
+      : room.pendingHousekeeping === 'limpieza_profunda'
+        ? 'Limpieza profunda'
+        : 'Limpieza checkout';
+
+    // limpieza_checkout → disponible (la habitación queda libre)
+    // repaso / limpieza_profunda → vuelve a ocupada (el huésped sigue)
+    const newStatus = room.pendingHousekeeping === 'limpieza_checkout' ? 'disponible' : 'ocupada';
+
+    room.status = newStatus;
+    room.pendingHousekeeping = null;
+    room.pendingHousekeepingAt = null;
+    room.lastCleaning = new Date();
+    await room.save();
+
+    const wss = req.app.get('wss');
+    if (wss) {
+      wss.clients.forEach(client => {
+        if (client.readyState === 1) {
+          client.send(JSON.stringify({ type: 'room_task_completed', room: { id: room._id, number: room.number, status: room.status } }));
+        }
+      });
+    }
+
+    res.json({ message: `${taskLabel} completado. Habitación #${room.number} → ${newStatus}`, room });
+  } catch (error) {
+    console.error('Error completando tarea housekeeping:', error);
+    res.status(500).json({ message: error.message || 'Error al completar tarea' });
+  }
+};
+
 // PUT /api/rooms/mark-clean-bulk - Marcar múltiples habitaciones como disponibles
 exports.markRoomsAsClean = async (req, res) => {
   try {

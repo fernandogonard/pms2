@@ -97,6 +97,17 @@ const roomSchema = new mongoose.Schema({
   },
   notes: {
     type: String
+  },
+  // Tarea de housekeeping pendiente
+  // null = sin tarea | 'repaso' = repaso diario | 'limpieza_profunda' = limpieza cada 3 noches | 'limpieza_checkout' = post-checkout
+  pendingHousekeeping: {
+    type: String,
+    enum: [null, 'repaso', 'limpieza_profunda', 'limpieza_checkout'],
+    default: null
+  },
+  pendingHousekeepingAt: {
+    type: Date,
+    default: null
   }
 }, { timestamps: true });
 

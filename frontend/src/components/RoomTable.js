@@ -107,6 +107,20 @@ const RoomTable = () => {
     setEditingId(room._id);
   };
 
+  // Completar tarea de housekeeping (repaso / limpieza profunda / limpieza checkout)
+  const handleCompleteTask = async (roomId, task) => {
+    const labels = { repaso: 'repaso', limpieza_profunda: 'limpieza profunda', limpieza_checkout: 'limpieza post-checkout' };
+    if (!window.confirm(`¿Confirmar ${labels[task] || 'tarea'} completado?`)) return;
+    setError(''); setSuccess('');
+    try {
+      const res = await apiFetch(`${API_ROOMS}/${roomId}/complete-task`, { method: 'PUT' });
+      const data = await res.json();
+      if (!res.ok) { setError(data.message || 'Error al completar tarea'); return; }
+      setSuccess(data.message || 'Tarea completada');
+      fetchRoomsAndReservations();
+    } catch { setError('Error de red'); }
+  };
+
   const tableStyle = {
     borderCollapse: 'collapse',
     width: '100%',
@@ -201,14 +215,43 @@ const RoomTable = () => {
                   <td style={{ padding: 10 }}>{room.type}</td>
                   <td style={{ padding: 10 }}>${room.price}</td>
                   <td style={{ padding: 10 }}>
-                    <span style={statusStyle}>
-                      {room.status}
-                      {room.status !== realStatus && ' (físico)'}
-                    </span>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      <span style={statusStyle}>
+                        {room.status === 'disponible' ? '✅ Disponible' :
+                         room.status === 'ocupada' ? '🔴 Ocupada' :
+                         room.status === 'limpieza' ? '🧹 Limpieza' :
+                         '🔧 Mantenimiento'}
+                      </span>
+                      {room.pendingHousekeeping && (
+                        <span style={{
+                          fontSize: 11, fontWeight: 700, padding: '2px 6px', borderRadius: 4,
+                          background: room.pendingHousekeeping === 'repaso' ? '#1e3a5f' :
+                                      room.pendingHousekeeping === 'limpieza_profunda' ? '#3b1e5f' : '#5f1e1e',
+                          color: room.pendingHousekeeping === 'repaso' ? '#60a5fa' :
+                                 room.pendingHousekeeping === 'limpieza_profunda' ? '#c084fc' : '#fca5a5'
+                        }}>
+                          {room.pendingHousekeeping === 'repaso' ? '🧹 Repaso pendiente' :
+                           room.pendingHousekeeping === 'limpieza_profunda' ? '🧼 Limpieza profunda' :
+                           '🚪 Limpiar post-checkout'}
+                        </span>
+                      )}
+                    </div>
                   </td>
                   <td style={{ padding: 10 }}>
-                    <button onClick={() => handleEdit(room)} style={{ marginRight: 8, ...buttonStyle }}>Editar</button>
-                    <button onClick={() => handleDelete(room._id)} style={{ ...buttonStyle, background: '#ef4444' }}>Eliminar</button>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                      {room.pendingHousekeeping && (
+                        <button
+                          onClick={() => handleCompleteTask(room._id, room.pendingHousekeeping)}
+                          style={{ background: '#22c55e', color: '#000', border: 'none', borderRadius: 6, padding: '6px 12px', fontWeight: 700 }}
+                        >
+                          {room.pendingHousekeeping === 'repaso' ? '✅ Repaso hecho' :
+                           room.pendingHousekeeping === 'limpieza_profunda' ? '✅ Limpieza hecha' :
+                           '✅ Disponible'}
+                        </button>
+                      )}
+                      <button onClick={() => handleEdit(room)} style={{ ...buttonStyle }}>Editar</button>
+                      <button onClick={() => handleDelete(room._id)} style={{ ...buttonStyle, background: '#ef4444' }}>Eliminar</button>
+                    </div>
                   </td>
                 </tr>
               );

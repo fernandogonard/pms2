@@ -160,7 +160,11 @@ async function processCheckout(reservationId) {
     // 🧹 WORKFLOW COMPLETO: checkout → limpieza → disponible
     if (reservation.room && reservation.room.length > 0) {
       for (const roomId of reservation.room) {
-        await Room.findByIdAndUpdate(roomId, { status: 'limpieza' });
+        await Room.findByIdAndUpdate(roomId, {
+          status: 'limpieza',
+          pendingHousekeeping: 'limpieza_checkout',
+          pendingHousekeepingAt: new Date()
+        });
         const room = await Room.findById(roomId);
         console.log(`   🧹 Habitación #${room.number} marcada para LIMPIEZA en check-out`);
       }
@@ -207,6 +211,9 @@ async function markRoomAsClean(roomId) {
     }
 
     room.status = 'disponible';
+    room.lastCleaning = new Date();
+    room.pendingHousekeeping = null;
+    room.pendingHousekeepingAt = null;
     await room.save();
 
     console.log(`✨ Habitación #${room.number} marcada como DISPONIBLE después de limpieza`);
