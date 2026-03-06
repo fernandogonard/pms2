@@ -61,7 +61,7 @@ router.put('/:id',
   protect, 
   authorize('admin'), 
   validateParams('mongoId'), // 🔄 Validar ID de MongoDB
-  createValidationMiddleware('room'), // 🔄 Validar datos de habitación
+  createValidationMiddleware('roomUpdate'), // 🔄 Validar actualización parcial de habitación
   roomController.updateRoom
 );
 router.delete('/:id', 

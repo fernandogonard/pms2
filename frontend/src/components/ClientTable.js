@@ -120,7 +120,7 @@ const ClientTable = () => {
         <button type="submit" style={{ background: '#2563eb', color: '#fff', border: 'none', padding: '8px 16px', borderRadius: 6, fontWeight: 500, minWidth: 100 }} disabled={loading}>
           {loading ? 'Guardando...' : (editingId ? 'Actualizar' : 'Crear')}
         </button>
-        {editingId && <button type="button" onClick={() => { setEditingId(null); setForm({ nombre: '', apellido: '', email: '', whatsapp: '' }); setError(''); setSuccess(''); }} style={{ background: '#444', color: '#fff', border: 'none', padding: '8px 16px', borderRadius: 6 }}>Cancelar</button>}
+        {editingId && <button type="button" onClick={() => { setEditingId(null); setForm({ nombre: '', apellido: '', dni: '', email: '', whatsapp: '' }); setError(''); setSuccess(''); }} style={{ background: '#444', color: '#fff', border: 'none', padding: '8px 16px', borderRadius: 6 }}>Cancelar</button>}
       </form>
       {success && <div style={{ color: '#22c55e', marginBottom: 8, fontWeight: 600, fontSize: 15 }}>{success}</div>}
       {error && <div style={{ color: '#ef4444', marginBottom: 8, fontWeight: 600, fontSize: 15 }}>{error}</div>}

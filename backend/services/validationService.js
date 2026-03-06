@@ -79,6 +79,19 @@ const schemas = {
     confirmPassword: Joi.string().valid(Joi.ref('newPassword')).required()
   }),
 
+  // Habitación — actualización parcial (todos los campos opcionales)
+  roomUpdate: Joi.object({
+    number: Joi.number().integer().min(1).max(9999).optional(),
+    type: Joi.string().min(3).max(50).optional(),
+    price: Joi.number().min(0).optional(),
+    floor: Joi.number().integer().min(0).max(50).optional(),
+    status: Joi.string().valid('disponible', 'ocupada', 'limpieza', 'mantenimiento', 'fuera de servicio').optional(),
+    capacity: Joi.number().integer().min(1).max(10).optional(),
+    amenities: Joi.array().items(Joi.string()).optional(),
+    images: Joi.array().items(Joi.string().uri()).optional(),
+    description: Joi.string().max(500).allow('').optional()
+  }),
+
   // MongoDB ObjectId
   mongoId: Joi.string().pattern(/^[0-9a-fA-F]{24}$/).required(),
 
