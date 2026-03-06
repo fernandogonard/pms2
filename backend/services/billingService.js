@@ -3,6 +3,7 @@
 
 const RoomType = require('../models/RoomType');
 const Reservation = require('../models/Reservation');
+const Room = require('../models/Room');
 
 class BillingService {
   
@@ -14,9 +15,22 @@ class BillingService {
       const { tipo, cantidad, checkIn, checkOut } = reservationData;
       
       // Obtener precio base por tipo de habitación
-      const roomType = await RoomType.findOne({ name: tipo, isActive: true });
+      let roomType = await RoomType.findOne({ name: tipo, isActive: true });
+      
+      // Fallback: si no hay RoomType seedeado, usar el precio de la colección Room
       if (!roomType) {
-        throw new Error(`Tipo de habitación '${tipo}' no encontrado o inactivo`);
+        const roomSample = await Room.findOne({ type: tipo });
+        if (!roomSample) {
+          throw new Error(`Tipo de habitación '${tipo}' no encontrado en el sistema`);
+        }
+        const CAPACITY_MAP = { doble: 2, triple: 3, cuadruple: 4, suite: 2 };
+        roomType = {
+          basePrice: roomSample.price,
+          currency: 'ARS',
+          capacity: CAPACITY_MAP[tipo] || 2,
+          name: tipo,
+          description: ''
+        };
       }
       
       // Calcular noches

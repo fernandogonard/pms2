@@ -35,9 +35,26 @@ mongoose.connect(MONGO_URI, {
   useNewUrlParser: true,
   useUnifiedTopology: true,
 })
-  .then(() => {
+  .then(async () => {
     logHelpers.system.dbConnected();
-    
+
+    // Auto-seed: crear RoomTypes si no existen (necesarios para facturación)
+    try {
+      const RoomType = require('./models/RoomType');
+      const count = await RoomType.countDocuments();
+      if (count === 0) {
+        const ROOM_TYPES_DATA = [
+          { name: 'doble',     basePrice: 8500,  currency: 'ARS', capacity: 2, description: 'Habitación doble', isActive: true },
+          { name: 'triple',    basePrice: 11500, currency: 'ARS', capacity: 3, description: 'Habitación triple', isActive: true },
+          { name: 'cuadruple', basePrice: 15000, currency: 'ARS', capacity: 4, description: 'Habitación cuádruple', isActive: true },
+        ];
+        await RoomType.insertMany(ROOM_TYPES_DATA);
+        logger.info('✅ RoomTypes sembrados automáticamente (doble, triple, cuadruple)');
+      }
+    } catch (seedErr) {
+      logger.warn('⚠️  Auto-seed de RoomTypes falló (no crítico):', seedErr.message);
+    }
+
     // Iniciar tareas programadas (sincronización automática de estados)
     initScheduledJobs();
     logger.info('🔄 Sistema de sincronización automática activado');
