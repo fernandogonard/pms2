@@ -92,6 +92,7 @@ router.get('/:id',
 );
 
 // 🧹 GESTIÓN DE LIMPIEZA - Solo admin/recepcionista
+router.put('/:id/set-status', adminLimiter, protect, authorize('admin', 'recepcionista'), roomController.setRoomStatus);
 router.put('/:id/mark-clean', adminLimiter, protect, authorize('admin', 'recepcionista'), roomController.markRoomAsClean);
 router.put('/:id/complete-task', adminLimiter, protect, authorize('admin', 'recepcionista'), roomController.completeHousekeeping);
 

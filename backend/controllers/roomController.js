@@ -816,6 +816,35 @@ exports.markRoomsAsClean = async (req, res) => {
   }
 };
 
+// PUT /api/rooms/:id/set-status - Cambio manual de estado (admin + recepcionista)
+exports.setRoomStatus = async (req, res) => {
+  try {
+    const { status } = req.body;
+    const ALLOWED = ['disponible', 'limpieza', 'mantenimiento', 'ocupada'];
+    if (!status || !ALLOWED.includes(status)) {
+      return res.status(400).json({ message: `Estado inválido. Valores permitidos: ${ALLOWED.join(', ')}` });
+    }
+    const room = await Room.findById(req.params.id);
+    if (!room) return res.status(404).json({ message: 'Habitación no encontrada' });
+    const prev = room.status;
+    room.status = status;
+    if (status === 'disponible') {
+      room.lastCleaning = new Date();
+      room.pendingHousekeeping = null;
+      room.pendingHousekeepingAt = null;
+    }
+    await room.save();
+    const wss = req.app.get('wss');
+    if (wss) wss.clients.forEach(c => {
+      if (c.readyState === 1) c.send(JSON.stringify({ type: 'room_state_changed', room: { id: room._id, number: room.number, status: room.status, previousStatus: prev } }));
+    });
+    res.json({ message: `Habitación #${room.number}: ${prev} → ${status}`, room });
+  } catch (error) {
+    res.status(500).json({ message: 'Error cambiando estado', error: error.message });
+  }
+};
+
+// GET /api/rooms/:id/allowed-states - Obtener estados permitidos para una habitación
 // GET /api/rooms/:id/allowed-states - Obtener estados permitidos para una habitación
 exports.getRoomAllowedStates = async (req, res) => {
   try {

@@ -107,6 +107,24 @@ const RoomTable = () => {
     setEditingId(room._id);
   };
 
+  // Cambio rápido de estado (limpieza / disponible / mantenimiento)
+  const handleSetStatus = async (roomId, newStatus, roomNumber) => {
+    const labels = { limpieza: 'enviar a limpieza', disponible: 'marcar como disponible', mantenimiento: 'enviar a mantenimiento' };
+    if (!window.confirm(`¿Confirmar: ${labels[newStatus] || newStatus} la Hab. ${roomNumber}?`)) return;
+    setError(''); setSuccess('');
+    try {
+      const res = await apiFetch(`${API_ROOMS}/${roomId}/set-status`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus })
+      });
+      const data = await res.json();
+      if (!res.ok) { setError(data.message || 'Error'); return; }
+      setSuccess(data.message);
+      fetchRoomsAndReservations();
+    } catch { setError('Error de red'); }
+  };
+
   // Completar tarea de housekeeping (repaso / limpieza profunda / limpieza checkout)
   const handleCompleteTask = async (roomId, task) => {
     const labels = { repaso: 'repaso', limpieza_profunda: 'limpieza profunda', limpieza_checkout: 'limpieza post-checkout' };
@@ -247,6 +265,31 @@ const RoomTable = () => {
                           {room.pendingHousekeeping === 'repaso' ? '✅ Repaso hecho' :
                            room.pendingHousekeeping === 'limpieza_profunda' ? '✅ Limpieza hecha' :
                            '✅ Disponible'}
+                        </button>
+                      )}
+                      {/* Botones de cambio rápido de estado */}
+                      {(room.status === 'ocupada' || room.status === 'disponible') && (
+                        <button
+                          onClick={() => handleSetStatus(room._id, 'limpieza', room.number)}
+                          style={{ background: '#92400e', color: '#fde68a', border: 'none', borderRadius: 6, padding: '6px 10px', fontWeight: 600, fontSize: 12 }}
+                          title="Enviar a limpieza manualmente">
+                          🧹 Limpieza
+                        </button>
+                      )}
+                      {room.status === 'limpieza' && (
+                        <button
+                          onClick={() => handleSetStatus(room._id, 'disponible', room.number)}
+                          style={{ background: '#14532d', color: '#86efac', border: 'none', borderRadius: 6, padding: '6px 10px', fontWeight: 600, fontSize: 12 }}
+                          title="Marcar como disponible">
+                          ✅ Disponible
+                        </button>
+                      )}
+                      {(room.status === 'disponible' || room.status === 'limpieza') && (
+                        <button
+                          onClick={() => handleSetStatus(room._id, 'mantenimiento', room.number)}
+                          style={{ background: '#1e3a5f', color: '#93c5fd', border: 'none', borderRadius: 6, padding: '6px 10px', fontWeight: 600, fontSize: 12 }}
+                          title="Enviar a mantenimiento">
+                          🔧 Mant.
                         </button>
                       )}
                       <button onClick={() => handleEdit(room)} style={{ ...buttonStyle }}>Editar</button>
