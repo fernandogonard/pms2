@@ -8,6 +8,7 @@ const mongoose = require('mongoose');
 const Client = require('../models/Client');
 const { assignRoomsToReservation, processCheckin, processCheckout } = require('../services/roomAssignmentService');
 const BillingService = require('../services/billingService');
+const notificationService = require('../services/notificationService');
 
 // 🆕 Importar nuevo sistema de logging Winston
 const { logger } = require('../services/loggerService');
@@ -291,8 +292,14 @@ const createReservation = async (req, res) => {
     );
 
     logger.performance.requestTime(req.method, req.originalUrl, duration, 201, user);
-    
-    res.status(201).json(updatedReservation);
+
+    // Generar links de WhatsApp para notificaciones al huésped
+    const whatsAppLinks = notificationService.getReservationLinks({
+      reservation: updatedReservation,
+      client: updatedReservation.client,
+    });
+
+    res.status(201).json({ ...updatedReservation.toObject(), whatsAppLinks });
   } catch (error) {
     // 📝 Log de error
     const duration = Date.now() - startTime;

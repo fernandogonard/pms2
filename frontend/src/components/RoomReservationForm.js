@@ -9,7 +9,7 @@ const API_RESERVATIONS = '/api/reservations';
 
 
 
-const RoomReservationForm = ({ roomType, cantidad, checkIn, checkOut, disabled }) => {
+const RoomReservationForm = ({ roomType, cantidad, checkIn, checkOut, disabled, onSuccess }) => {
   const [nombre, setNombre] = useState('');
   const [apellido, setApellido] = useState('');
   const [dni, setDni] = useState('');
@@ -20,6 +20,7 @@ const RoomReservationForm = ({ roomType, cantidad, checkIn, checkOut, disabled }
   const [loading, setLoading] = useState(false);
   const [pricing, setPricing] = useState(null);
   const [loadingPrice, setLoadingPrice] = useState(false);
+  const [confirmed, setConfirmed] = useState(null); // datos de la reserva confirmada
 
   useEffect(() => {
     if (roomType && cantidad && checkIn && checkOut) {
@@ -63,7 +64,7 @@ const RoomReservationForm = ({ roomType, cantidad, checkIn, checkOut, disabled }
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || 'Error al reservar');
-      setMessage('¡Reserva realizada con éxito!');
+      setConfirmed(data);
       setNombre('');
       setApellido('');
       setDni('');
@@ -75,6 +76,81 @@ const RoomReservationForm = ({ roomType, cantidad, checkIn, checkOut, disabled }
       setLoading(false);
     }
   };
+
+  // —— Pantalla de confirmación ———————————————————————————————————————————————
+  if (confirmed) {
+    const ref  = confirmed._id ? String(confirmed._id).slice(-6).toUpperCase() : '------';
+    const ci   = confirmed.checkIn  ? new Date(confirmed.checkIn).toLocaleDateString('es-AR')  : checkIn;
+    const co   = confirmed.checkOut ? new Date(confirmed.checkOut).toLocaleDateString('es-AR') : checkOut;
+    const total = confirmed.pricing?.total
+      ? `$${confirmed.pricing.total.toLocaleString('es-AR')}`
+      : null;
+    const waLink = confirmed.whatsAppLinks?.confirmation;
+
+    return (
+      <div style={{ textAlign: 'center', padding: '8px 0' }}>
+        <div style={{ fontSize: 56, marginBottom: 8 }}>✅</div>
+        <h2 style={{ color: '#22c55e', fontWeight: 800, marginBottom: 4 }}>¡Reserva confirmada!</h2>
+        <div style={{ color: '#9ca3af', marginBottom: 24, fontSize: 15 }}>Tu reserva fue registrada correctamente</div>
+
+        <div style={{ background: '#0d1117', border: '1px solid #1f2937', borderRadius: 14, padding: '20px 24px', maxWidth: 380, margin: '0 auto 24px', textAlign: 'left' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+            <span style={{ color: '#6b7280', fontSize: 13 }}>Referencia</span>
+            <span style={{ color: '#60a5fa', fontWeight: 700, fontSize: 15 }}>#{ref}</span>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+            <span style={{ color: '#6b7280', fontSize: 13 }}>Tipo</span>
+            <span style={{ color: '#f9fafb', fontWeight: 600, textTransform: 'capitalize' }}>{confirmed.tipo || roomType}</span>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+            <span style={{ color: '#6b7280', fontSize: 13 }}>Check-in</span>
+            <span style={{ color: '#f9fafb' }}>{ci}</span>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+            <span style={{ color: '#6b7280', fontSize: 13 }}>Check-out</span>
+            <span style={{ color: '#f9fafb' }}>{co}</span>
+          </div>
+          {confirmed.pricing?.totalNights && (
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+              <span style={{ color: '#6b7280', fontSize: 13 }}>Noches</span>
+              <span style={{ color: '#f9fafb' }}>{confirmed.pricing.totalNights}</span>
+            </div>
+          )}
+          {total && (
+            <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: 8, borderTop: '1px solid #1f2937' }}>
+              <span style={{ color: '#6b7280', fontSize: 13, fontWeight: 600 }}>Total</span>
+              <span style={{ color: '#22c55e', fontWeight: 800, fontSize: 16 }}>{total}</span>
+            </div>
+          )}
+        </div>
+
+        {waLink && (
+          <a
+            href={waLink}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 8,
+              background: '#25d366', color: '#000', textDecoration: 'none',
+              fontWeight: 700, fontSize: 15, padding: '12px 24px', borderRadius: 10,
+              marginBottom: 12, boxShadow: '0 4px 12px #25d36633'
+            }}
+          >
+            📲 Enviar confirmación por WhatsApp
+          </a>
+        )}
+
+        <div>
+          <button
+            onClick={() => { setConfirmed(null); setPricing(null); setMessage(''); setError(''); if (onSuccess) onSuccess(); }}
+            style={{ background: '#1f2937', color: '#d1d5db', border: '1px solid #374151', borderRadius: 8, padding: '10px 24px', fontWeight: 600, cursor: 'pointer', fontSize: 14 }}
+          >
+            Hacer otra reserva
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <form className="room-reservation-form" onSubmit={handleSubmit}>

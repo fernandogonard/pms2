@@ -72,6 +72,9 @@ router.delete('/:id',
   roomController.deleteRoom
 );
 
+// Endpoint público: tipos de habitación disponibles (sin auth — usado por el motor de reservas)
+router.get('/types', roomsLimiter, roomController.getRoomTypes);
+
 // Endpoint para consultar habitaciones disponibles por tipo y fechas
 router.get('/available', roomsLimiter, protect, roomController.getAvailableRooms);
 

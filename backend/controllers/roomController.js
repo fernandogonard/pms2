@@ -11,6 +11,15 @@ const {
 // 🆕 Importar nuevo sistema de logging Winston
 const { logger } = require('../services/loggerService');
 
+// GET /api/rooms/types — público, sin auth — usado por el motor de reservas web
+exports.getRoomTypes = async (req, res) => {
+  try {
+    const types = await Room.distinct('type', { status: { $nin: ['mantenimiento'] } });
+    res.json(types.filter(Boolean).sort());
+  } catch (err) {
+    res.status(500).json({ message: 'Error al obtener tipos de habitación' });
+  }
+};
 
 // 🆕 GET /api/rooms/status con logging avanzado
 exports.getRoomsStatus = ErrorHandlingService.asyncWrapper(async (req, res) => {

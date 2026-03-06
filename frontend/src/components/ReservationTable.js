@@ -2,6 +2,30 @@
 // Tabla de gestión visual de reservas (CRUD)
 import React, { useEffect, useState } from 'react';
 
+// Construye un link wa.me con el mensaje de confirmación pre-completado
+function buildWaLink(r) {
+  const phone = r.client?.whatsapp;
+  if (!phone) return null;
+  const n = String(phone).replace(/\D/g, '');
+  const normalized = n.startsWith('54') ? n : '54' + (n.startsWith('0') ? n.slice(1) : n);
+  const ref   = r._id ? String(r._id).slice(-6).toUpperCase() : '------';
+  const ci    = r.checkIn  ? new Date(r.checkIn).toLocaleDateString('es-AR')  : '-';
+  const co    = r.checkOut ? new Date(r.checkOut).toLocaleDateString('es-AR') : '-';
+  const tipo  = (r.tipo || '').toUpperCase();
+  const total = r.pricing?.total ? `$${r.pricing.total.toLocaleString('es-AR')}` : 'a confirmar';
+  const nombre = r.client?.nombre || 'Huésped';
+  const msg =
+    `\ud83c\udfe8 *MiHotel* \u2014 Confirmación de reserva\n\n` +
+    `Hola *${nombre}*, tu reserva fue registrada \u2705\n\n` +
+    `\ud83d\udccb *Referencia:* #${ref}\n` +
+    `\ud83d\udecf\ufe0f *Tipo:* ${tipo}\n` +
+    `\ud83d\udcc5 *Check-in:* ${ci}\n` +
+    `\ud83d\udcc5 *Check-out:* ${co}\n` +
+    `\ud83d\udcb0 *Total:* ${total}\n\n` +
+    `\u00a1Te esperamos!`;
+  return `https://wa.me/${normalized}?text=${encodeURIComponent(msg)}`;
+}
+
 // Usar rutas relativas y apiFetch('/api/...') para manejar base URL y Authorization
 const API_RESERVATIONS = '/api/reservations';
 const API_ROOMS = '/api/rooms';
@@ -346,6 +370,12 @@ const ReservationTable = () => {
                     {r.status === 'checkin' && (
                       <button onClick={() => handleCheckout(r._id)} style={{ background: '#f59e0b', color: '#000', border: 'none', borderRadius: 6, padding: '6px 12px', fontWeight: 700 }}>🚪 Check-out</button>
                     )}
+                    {(() => { const waLink = buildWaLink(r); return waLink ? (
+                      <a href={waLink} target="_blank" rel="noopener noreferrer"
+                        title="Enviar confirmación por WhatsApp"
+                        style={{ background: '#25d366', color: '#000', border: 'none', borderRadius: 6, padding: '6px 12px', fontWeight: 700, textDecoration: 'none', fontSize: 13 }}
+                      >📲 WA</a>
+                    ) : null; })()}
                     <button onClick={() => handleEdit(r)} style={{ background: '#2563eb', color: '#fff', border: 'none', borderRadius: 6, padding: '6px 12px', fontWeight: 500 }}>Editar</button>
                     <button onClick={() => handleDelete(r._id)} style={{ background: '#ef4444', color: '#fff', border: 'none', borderRadius: 6, padding: '6px 12px', fontWeight: 500 }}>Eliminar</button>
                     <button onClick={() => openAssignModal(r)} style={{ background: '#f59e42', color: '#000', border: 'none', borderRadius: 6, padding: '6px 12px', fontWeight: 700 }}>Habitación</button>
