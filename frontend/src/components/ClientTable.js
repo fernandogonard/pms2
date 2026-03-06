@@ -9,7 +9,7 @@ const ClientTable = () => {
   const [clients, setClients] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [form, setForm] = useState({ nombre: '', apellido: '', email: '', whatsapp: '' });
+  const [form, setForm] = useState({ nombre: '', apellido: '', dni: '', email: '', whatsapp: '' });
   const [editingId, setEditingId] = useState(null);
   const [success, setSuccess] = useState('');
   const [search, setSearch] = useState('');
@@ -79,6 +79,7 @@ const ClientTable = () => {
     setForm({
       nombre: client.nombre,
       apellido: client.apellido,
+      dni: client.dni || '',
       email: client.email,
       whatsapp: client.whatsapp
     });
@@ -113,6 +114,7 @@ const ClientTable = () => {
       <form onSubmit={handleSubmit} style={{ display: 'flex', gap: 8, marginBottom: 16, background: '#222', padding: 16, borderRadius: 12, alignItems: 'center' }}>
         <input type="text" placeholder="Nombre" value={form.nombre} onChange={e => setForm({ ...form, nombre: e.target.value })} required style={{ background: '#18191A', color: '#fff', border: '1px solid #444', borderRadius: 6, padding: 8 }} />
         <input type="text" placeholder="Apellido" value={form.apellido} onChange={e => setForm({ ...form, apellido: e.target.value })} required style={{ background: '#18191A', color: '#fff', border: '1px solid #444', borderRadius: 6, padding: 8 }} />
+        <input type="text" placeholder="DNI" value={form.dni} onChange={e => setForm({ ...form, dni: e.target.value })} required style={{ background: '#18191A', color: '#fff', border: '1px solid #444', borderRadius: 6, padding: 8, width: 110 }} />
         <input type="email" placeholder="Correo electrónico" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} required style={{ background: '#18191A', color: '#fff', border: '1px solid #444', borderRadius: 6, padding: 8 }} />
         <input type="text" placeholder="WhatsApp" value={form.whatsapp} onChange={e => setForm({ ...form, whatsapp: e.target.value })} required style={{ background: '#18191A', color: '#fff', border: '1px solid #444', borderRadius: 6, padding: 8 }} />
         <button type="submit" style={{ background: '#2563eb', color: '#fff', border: 'none', padding: '8px 16px', borderRadius: 6, fontWeight: 500, minWidth: 100 }} disabled={loading}>
@@ -128,6 +130,7 @@ const ClientTable = () => {
             <tr style={{ background: '#18191A', color: '#fff' }}>
               <th style={{ padding: 10 }}>Nombre</th>
               <th style={{ padding: 10 }}>Apellido</th>
+              <th style={{ padding: 10 }}>DNI</th>
               <th style={{ padding: 10 }}>Correo electrónico</th>
               <th style={{ padding: 10 }}>WhatsApp</th>
               <th style={{ padding: 10 }}>Acciones</th>
@@ -138,6 +141,7 @@ const ClientTable = () => {
               <tr key={client._id} style={{ background: '#222', color: '#fff', borderBottom: '1px solid #333' }}>
                 <td style={{ padding: 10 }}>{client.nombre}</td>
                 <td style={{ padding: 10 }}>{client.apellido}</td>
+                <td style={{ padding: 10 }}>{client.dni || <span style={{ color: '#4b5563' }}>-</span>}</td>
                 <td style={{ padding: 10 }}>{client.email}</td>
                 <td style={{ padding: 10 }}>{client.whatsapp}</td>
                 <td style={{ padding: 10 }}>
@@ -154,28 +158,51 @@ const ClientTable = () => {
         <div style={{ background: '#18191A', color: '#fff', borderRadius: 12, padding: 16, marginTop: 24 }}>
           <h3>Historial de reservas</h3>
           {reservations.length === 0 ? (
-            <p>No hay reservas para este cliente.</p>
+            <p style={{ color: '#6b7280' }}>No hay reservas para este cliente.</p>
           ) : (
             <table style={{ borderCollapse: 'collapse', width: '100%', background: '#222', borderRadius: 8, overflow: 'hidden', marginTop: 8 }}>
               <thead>
                 <tr style={{ background: '#18191A', color: '#fff' }}>
                   <th style={{ padding: 8 }}>Check-in</th>
                   <th style={{ padding: 8 }}>Check-out</th>
+                  <th style={{ padding: 8 }}>Tipo</th>
+                  <th style={{ padding: 8 }}>Hab.</th>
+                  <th style={{ padding: 8 }}>Total</th>
                   <th style={{ padding: 8 }}>Estado</th>
                 </tr>
               </thead>
               <tbody>
                 {reservations.map(r => (
-                  <tr key={r._id}>
+                  <tr key={r._id} style={{ borderBottom: '1px solid #333' }}>
                     <td style={{ padding: 8 }}>{r.checkIn ? r.checkIn.slice(0, 10) : ''}</td>
                     <td style={{ padding: 8 }}>{r.checkOut ? r.checkOut.slice(0, 10) : ''}</td>
-                    <td style={{ padding: 8 }}>{r.status}</td>
+                    <td style={{ padding: 8, textTransform: 'capitalize' }}>{r.tipo || '-'}</td>
+                    <td style={{ padding: 8 }}>
+                      {Array.isArray(r.room) && r.room.length > 0
+                        ? r.room.map(rm => rm.number || rm).join(', ')
+                        : '-'}
+                    </td>
+                    <td style={{ padding: 8, color: '#22c55e', fontWeight: 600 }}>
+                      {r.pricing?.total ? `$${r.pricing.total.toLocaleString('es-AR')}` : '-'}
+                    </td>
+                    <td style={{ padding: 8 }}>
+                      <span style={{
+                        padding: '2px 8px', borderRadius: 10, fontSize: 12, fontWeight: 600,
+                        background: r.status === 'checkin' ? '#052e16' : r.status === 'checkout' ? '#1e3a5f' : r.status === 'cancelada' ? '#1a0606' : '#1c1400',
+                        color: r.status === 'checkin' ? '#22c55e' : r.status === 'checkout' ? '#60a5fa' : r.status === 'cancelada' ? '#f87171' : '#f59e0b',
+                      }}>{r.status}</span>
+                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           )}
-          <button onClick={() => { setSelected(null); setReservations([]); }} style={{ marginTop: 12, background: '#444', color: '#fff', border: 'none', borderRadius: 6, padding: '8px 16px' }}>Cerrar</button>
+          <div style={{ marginTop: 12, color: '#6b7280', fontSize: 13 }}>
+            Total gastado: <strong style={{ color: '#22c55e' }}>
+              ${reservations.filter(r => r.status !== 'cancelada').reduce((sum, r) => sum + (r.pricing?.total || 0), 0).toLocaleString('es-AR')}
+            </strong> en {reservations.filter(r => r.status !== 'cancelada').length} reserva(s)
+          </div>
+          <button onClick={() => { setSelected(null); setReservations([]); }} style={{ marginTop: 12, background: '#374151', color: '#d1d5db', border: 'none', borderRadius: 6, padding: '8px 16px', cursor: 'pointer' }}>Cerrar</button>
         </div>
       )}
     </div>

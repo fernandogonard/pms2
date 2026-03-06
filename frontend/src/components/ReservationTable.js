@@ -42,6 +42,37 @@ const ReservationTable = () => {
   const [success, setSuccess] = useState('');
   const [assignModal, setAssignModal] = useState({ open: false, reservation: null, candidates: [], loading: false });
   const [selectedRooms, setSelectedRooms] = useState([]);
+  const [clientLookup, setClientLookup] = useState(null); // null | 'searching' | 'found' | 'new'
+
+  // —— DNI autocomplete: buscar cliente existente al escribir el DNI ————————————————
+  useEffect(() => {
+    if (!form.dni || form.dni.length < 7 || editingId) { setClientLookup(null); return; }
+    setClientLookup('searching');
+    const timer = setTimeout(async () => {
+      try {
+        const { apiFetch } = await import('../utils/api');
+        const res = await apiFetch(`/api/clients/lookup?dni=${encodeURIComponent(form.dni)}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.found && data.client) {
+            setForm(prev => ({
+              ...prev,
+              nombre:   data.client.nombre   || prev.nombre,
+              apellido: data.client.apellido || prev.apellido,
+              email:    data.client.email    || prev.email,
+              whatsapp: data.client.whatsapp || prev.whatsapp,
+            }));
+            setClientLookup('found');
+          } else {
+            setClientLookup('new');
+          }
+        } else {
+          setClientLookup('new');
+        }
+      } catch { setClientLookup(null); }
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [form.dni, editingId]);
 
   // Cargar datos
   const fetchData = async () => {
@@ -97,6 +128,7 @@ const ReservationTable = () => {
       }
       setSuccess(editingId ? 'Reserva actualizada con éxito.' : 'Reserva creada con éxito.');
       setForm({ tipo: '', cantidad: 1, user: '', checkIn: '', checkOut: '', status: 'reservada', nombre: '', apellido: '', dni: '', email: '', whatsapp: '' });
+      setClientLookup(null);
       setEditingId(null);
       fetchData();
     } catch (err) {
@@ -252,7 +284,10 @@ const ReservationTable = () => {
         {/* Fila 2: datos del cliente */}
         <input value={form.nombre} onChange={e => setForm({ ...form, nombre: e.target.value })} required style={{ background: '#18191A', color: '#fff', border: '1px solid #444', borderRadius: 6, padding: 8, width: 120 }} placeholder="Nombre" />
         <input value={form.apellido} onChange={e => setForm({ ...form, apellido: e.target.value })} required style={{ background: '#18191A', color: '#fff', border: '1px solid #444', borderRadius: 6, padding: 8, width: 120 }} placeholder="Apellido" />
-        <input value={form.dni} onChange={e => setForm({ ...form, dni: e.target.value })} required style={{ background: '#18191A', color: '#fff', border: '1px solid #444', borderRadius: 6, padding: 8, width: 100 }} placeholder="DNI" />
+        <input value={form.dni} onChange={e => setForm({ ...form, dni: e.target.value })} required style={{ background: '#18191A', color: '#fff', border: `1px solid ${clientLookup === 'found' ? '#22c55e' : clientLookup === 'new' ? '#f59e0b' : '#444'}`, borderRadius: 6, padding: 8, width: 100 }} placeholder="DNI" />
+        {clientLookup === 'searching' && <span style={{ color: '#60a5fa', fontSize: 12 }}>⏳ buscando…</span>}
+        {clientLookup === 'found' && <span style={{ color: '#22c55e', fontSize: 12, fontWeight: 600 }}>✅ Cliente encontrado</span>}
+        {clientLookup === 'new' && <span style={{ color: '#f59e0b', fontSize: 12, fontWeight: 600 }}>🆕 Cliente nuevo</span>}
         <input type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} required style={{ background: '#18191A', color: '#fff', border: '1px solid #444', borderRadius: 6, padding: 8, width: 160 }} placeholder="Email" />
         <input value={form.whatsapp} onChange={e => setForm({ ...form, whatsapp: e.target.value })} style={{ background: '#18191A', color: '#fff', border: '1px solid #444', borderRadius: 6, padding: 8, width: 120 }} placeholder="WhatsApp" />
         <button type="submit" style={{ background: '#2563eb', color: '#fff', border: 'none', padding: '8px 16px', borderRadius: 6, fontWeight: 500, minWidth: 100 }} disabled={loading}>
