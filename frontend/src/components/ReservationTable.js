@@ -44,6 +44,13 @@ const ReservationTable = () => {
   const [selectedRooms, setSelectedRooms] = useState([]);
   const [clientLookup, setClientLookup] = useState(null); // null | 'searching' | 'found' | 'new'
 
+  // —— Filtros de búsqueda ——————————————————————————————————————
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const [filterFrom,   setFilterFrom]   = useState('');
+  const [filterTo,     setFilterTo]     = useState('');
+  const [filterStatus, setFilterStatus] = useState('');
+  const [filterSearch, setFilterSearch] = useState('');
+
   // —— DNI autocomplete: buscar cliente existente al escribir el DNI ————————————————
   useEffect(() => {
     if (!form.dni || form.dni.length < 7 || editingId) { setClientLookup(null); return; }
@@ -183,7 +190,12 @@ const ReservationTable = () => {
 
   // Check-out
   const handleCheckout = async id => {
-    if (!window.confirm('¿Confirmar check-out?')) return;
+    const r = reservations.find(res => res._id === id);
+    const total  = r?.pricing?.total          || 0;
+    const paid   = r?.payment?.amountPaid     || 0;
+    const saldo  = Math.max(0, total - paid);
+    const saldoMsg = saldo > 0 ? `\n\n⚠️ Saldo pendiente: $${saldo.toLocaleString('es-AR')}` : '\n\n✅ Saldo saldado.';
+    if (!window.confirm(`¿Confirmar check-out?${saldoMsg}`)) return;
     setError(''); setSuccess('');
     const { apiFetch } = await import('../utils/api');
     const res = await apiFetch(`${API_RESERVATIONS}/${id}/checkout`, { method: 'POST' });
@@ -270,7 +282,35 @@ const ReservationTable = () => {
           <style>{`@keyframes spin { 0% { transform: rotate(0deg);} 100% {transform: rotate(360deg);} }`}</style>
         </div>
       )}
-      <form onSubmit={handleSubmit} style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 16, background: '#222', padding: 16, borderRadius: 12, alignItems: 'center' }}>
+
+      {/* ── Barra de filtros ──────────────────────────────────────────── */}
+      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 12, background: '#1a1a2e', padding: 12, borderRadius: 10, alignItems: 'center' }}>
+        <input placeholder="Buscar nombre, apellido, DNI..." value={filterSearch}
+          onChange={e => setFilterSearch(e.target.value)}
+          style={{ background: '#18191A', color: '#fff', border: '1px solid #444', borderRadius: 6, padding: '6px 10px', minWidth: 200, fontSize: 13 }} />
+        <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)}
+          style={{ background: '#18191A', color: '#fff', border: '1px solid #444', borderRadius: 6, padding: '6px 10px', fontSize: 13 }}>
+          <option value="">Todos los estados</option>
+          <option value="reservada">⏳ Reservada</option>
+          <option value="checkin">✅ Check-in</option>
+          <option value="checkout">🚪 Check-out</option>
+          <option value="cancelada">❌ Cancelada</option>
+        </select>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: '#aaa' }}>
+          Check-in desde
+          <input type="date" value={filterFrom} onChange={e => setFilterFrom(e.target.value)}
+            style={{ background: '#18191A', color: '#fff', border: '1px solid #444', borderRadius: 6, padding: '5px 8px', fontSize: 13 }} />
+          hasta
+          <input type="date" value={filterTo} onChange={e => setFilterTo(e.target.value)}
+            style={{ background: '#18191A', color: '#fff', border: '1px solid #444', borderRadius: 6, padding: '5px 8px', fontSize: 13 }} />
+        </div>
+        {(filterSearch || filterStatus || filterFrom || filterTo) && (
+          <button onClick={() => { setFilterSearch(''); setFilterStatus(''); setFilterFrom(''); setFilterTo(''); }}
+            style={{ background: '#374151', color: '#d1d5db', border: 'none', borderRadius: 6, padding: '5px 12px', fontSize: 12, cursor: 'pointer' }}>
+            ✕ Limpiar filtros
+          </button>
+        )}
+      </div> style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 16, background: '#222', padding: 16, borderRadius: 12, alignItems: 'center' }}>
         {/* Fila 1: datos de la reserva */}
         <select value={form.tipo} onChange={e => setForm({ ...form, tipo: e.target.value })} required style={{ background: '#18191A', color: '#fff', border: '1px solid #444', borderRadius: 6, padding: 8 }}>
           <option value="">Tipo</option>
@@ -303,7 +343,27 @@ const ReservationTable = () => {
       </form>
       {success && <div style={{ color: '#22c55e', marginBottom: 8, fontWeight: 600, fontSize: 15 }}>{success}</div>}
       {error && <div style={{ color: '#ef4444', marginBottom: 8, fontWeight: 600, fontSize: 15 }}>{error}</div>}
-      {!loading && (
+      {!loading && (() => {
+        const filtered = reservations.filter(r => {
+          if (filterStatus && r.status !== filterStatus) return false;
+          if (filterFrom && r.checkIn && r.checkIn.slice(0, 10) < filterFrom) return false;
+          if (filterTo   && r.checkIn && r.checkIn.slice(0, 10) > filterTo)   return false;
+          if (filterSearch) {
+            const q = filterSearch.toLowerCase();
+            const nombre   = (r.client?.nombre   || r.nombre   || '').toLowerCase();
+            const apellido = (r.client?.apellido || r.apellido || '').toLowerCase();
+            const dni      = (r.client?.dni      || r.dni      || '').toLowerCase();
+            if (!nombre.includes(q) && !apellido.includes(q) && !dni.includes(q)) return false;
+          }
+          return true;
+        });
+        return (
+        <>
+        {(filterSearch || filterStatus || filterFrom || filterTo) && (
+          <div style={{ color: '#aaa', fontSize: 13, marginBottom: 8 }}>
+            Mostrando {filtered.length} de {reservations.length} reservas
+          </div>
+        )}
         <table style={tableStyle}>
           <thead>
             <tr style={{ background: '#18191A', color: '#fff' }}>
@@ -322,7 +382,7 @@ const ReservationTable = () => {
             </tr>
           </thead>
           <tbody>
-            {reservations.map(r => (
+            {filtered.map(r => (
               <tr key={r._id} style={{ background: '#222', color: '#fff', borderBottom: '1px solid #333' }}>
                 <td style={{ padding: 10 }}>{r.tipo || '-'}</td>
                 <td style={{ padding: 10 }}>{r.cantidad || 1}</td>
@@ -420,7 +480,9 @@ const ReservationTable = () => {
             ))}
           </tbody>
         </table>
-      )}
+        </>
+        );
+        })()}
       {/* Modal simple para asignación */}
       {assignModal.open && (
         <div style={{ position: 'fixed', left: 0, top: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>

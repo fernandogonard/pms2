@@ -9,6 +9,30 @@ const AdminReportsSection = () => {
   const [selectedPeriod, setSelectedPeriod] = React.useState('month');
   const [kpis, setKpis] = React.useState(null);
 
+  // Reporte financiero
+  const today = new Date().toISOString().slice(0, 10);
+  const firstOfMonth = today.slice(0, 8) + '01';
+  const [finStart, setFinStart] = React.useState(firstOfMonth);
+  const [finEnd,   setFinEnd]   = React.useState(today);
+  const [finLoading, setFinLoading] = React.useState(false);
+  const [finError,   setFinError]   = React.useState('');
+
+  const handleDownloadFinancial = async () => {
+    setFinError(''); setFinLoading(true);
+    try {
+      const r = await apiFetch(`/api/reports/financial?start=${finStart}&end=${finEnd}`);
+      if (!r.ok) { const d = await r.json(); setFinError(d.message || 'Error'); setFinLoading(false); return; }
+      const blob = await r.blob();
+      const url  = window.URL.createObjectURL(blob);
+      const a    = document.createElement('a');
+      a.href     = url;
+      a.download = `reporte_financiero_${finStart}_${finEnd}.xlsx`;
+      document.body.appendChild(a); a.click(); a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch { setFinError('Error de red'); }
+    finally { setFinLoading(false); }
+  };
+
   React.useEffect(() => {
     const rangeMap = { week: '7d', month: '30d', quarter: '90d', year: '90d', custom: '30d' };
     const range = rangeMap[selectedPeriod] || '30d';
@@ -128,19 +152,42 @@ const AdminReportsSection = () => {
             <div style={reportContentStyle}>
               <h3 style={reportTitleStyle}>{report.title}</h3>
               <p style={reportDescStyle}>{report.description}</p>
-              <div style={reportActionsStyle}>
-                <button 
-                  style={{
-                    ...reportButtonStyle,
-                    background: `linear-gradient(135deg, ${report.color}, ${report.color}dd)`
-                  }}
-                >
-                  📄 Generar PDF
-                </button>
-                <button style={reportButtonSecondaryStyle}>
-                  📊 Ver Online
-                </button>
-              </div>
+              {/* Card especial para reporte financiero */}
+              {report.id === 'financial' ? (
+                <div>
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
+                    <div>
+                      <div style={{ color: '#aaa', fontSize: 11, marginBottom: 2 }}>Desde</div>
+                      <input type="date" value={finStart} onChange={e => setFinStart(e.target.value)}
+                        style={{ background: '#18191A', color: '#fff', border: '1px solid #444', borderRadius: 6, padding: '5px 8px', fontSize: 13 }} />
+                    </div>
+                    <div>
+                      <div style={{ color: '#aaa', fontSize: 11, marginBottom: 2 }}>Hasta</div>
+                      <input type="date" value={finEnd} onChange={e => setFinEnd(e.target.value)}
+                        style={{ background: '#18191A', color: '#fff', border: '1px solid #444', borderRadius: 6, padding: '5px 8px', fontSize: 13 }} />
+                    </div>
+                  </div>
+                  {finError && <div style={{ color: '#ef4444', fontSize: 12, marginBottom: 6 }}>{finError}</div>}
+                  <button onClick={handleDownloadFinancial} disabled={finLoading}
+                    style={{ ...reportButtonStyle, background: `linear-gradient(135deg, ${report.color}, ${report.color}dd)`, opacity: finLoading ? 0.6 : 1 }}>
+                    {finLoading ? '⏳ Generando...' : '📊 Descargar Excel'}
+                  </button>
+                </div>
+              ) : (
+                <div style={reportActionsStyle}>
+                  <button 
+                    style={{
+                      ...reportButtonStyle,
+                      background: `linear-gradient(135deg, ${report.color}, ${report.color}dd)`
+                    }}
+                  >
+                    📄 Generar PDF
+                  </button>
+                  <button style={reportButtonSecondaryStyle}>
+                    📊 Ver Online
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         ))}

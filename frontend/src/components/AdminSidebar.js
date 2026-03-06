@@ -13,6 +13,7 @@ const AdminSidebar = ({ activeSection, onSectionChange }) => {
     { id: 'reservas', label: 'Reservas', icon: '📅' },
     { id: 'habitaciones', label: 'Habitaciones', icon: '🛏️' },
     { id: 'housekeeping', label: 'Housekeeping', icon: '🧹' },
+    { id: 'mantenimiento', label: 'Mantenimiento', icon: '🔧' },
     { id: 'clientes', label: 'Clientes', icon: '👥' },
     { id: 'facturacion', label: 'Facturación', icon: '💰' },
     { id: 'reportes', label: 'Reportes', icon: '📋' },
