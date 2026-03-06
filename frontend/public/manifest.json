@@ -34,7 +34,7 @@
   "start_url": "/",
   "display": "standalone",
   "theme_color": "#0088cc",
-  "background_color": "#ffffff",
+  "background_color": "#121212",
   "description": "Sistema de gestión hotelera para Hotel DIVA",
   "orientation": "any",
   "shortcuts": [
