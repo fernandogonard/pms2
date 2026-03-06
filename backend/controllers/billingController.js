@@ -197,17 +197,13 @@ const getReservationBilling = async (req, res) => {
     const { id } = req.params;
     
     const reservation = await Reservation.findById(id)
-      .populate('client', 'nombre apellido email telefono')
+      .populate('client', 'nombre apellido email telefono dni')
       .populate('room', 'number type');
     
     if (!reservation) {
-      return res.status(404).json({
-        success: false,
-        message: 'Reserva no encontrada'
-      });
+      return res.status(404).json({ success: false, message: 'Reserva no encontrada' });
     }
     
-    // Si no tiene información de precios, calcularla
     if (!reservation.pricing || !reservation.pricing.total) {
       const pricing = await BillingService.calculateReservationPricing({
         tipo: reservation.tipo,
@@ -215,20 +211,23 @@ const getReservationBilling = async (req, res) => {
         checkIn: reservation.checkIn,
         checkOut: reservation.checkOut
       });
-      
       reservation.pricing = pricing;
       await reservation.save();
     }
+    
+    const total = reservation.pricing.total || 0;
+    const paid = reservation.payment.amountPaid || 0;
     
     res.json({
       success: true,
       data: {
         id: reservation._id,
-        client: {
+        client: reservation.client ? {
           name: `${reservation.client.nombre} ${reservation.client.apellido}`,
           email: reservation.client.email,
-          phone: reservation.client.telefono
-        },
+          phone: reservation.client.telefono,
+          dni: reservation.client.dni
+        } : null,
         reservation: {
           tipo: reservation.tipo,
           cantidad: reservation.cantidad,
@@ -238,23 +237,44 @@ const getReservationBilling = async (req, res) => {
           rooms: reservation.room
         },
         pricing: reservation.pricing,
+        extras: reservation.extras || [],
         payment: reservation.payment,
+        paymentHistory: reservation.paymentHistory || [],
         invoice: reservation.invoice,
-        balance: {
-          total: reservation.pricing.total,
-          paid: reservation.payment.amountPaid,
-          pending: reservation.pricing.total - reservation.payment.amountPaid
-        }
+        balance: { total, paid, pending: Math.max(0, total - paid) }
       }
     });
     
   } catch (error) {
     console.error('Error obteniendo información de facturación:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Error obteniendo información de facturación',
-      error: error.message
+    res.status(500).json({ success: false, message: 'Error obteniendo información de facturación', error: error.message });
+  }
+};
+
+/**
+ * Agregar cargo extra a una reserva activa
+ */
+const addCharge = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { description, amount, category } = req.body;
+    if (!description || !amount) {
+      return res.status(400).json({ success: false, message: 'Faltan campos: description, amount' });
+    }
+    const result = await BillingService.addCharge(id, {
+      description,
+      amount: parseFloat(amount),
+      category
     });
+    const wss = req.app.get('wss');
+    if (wss) {
+      wss.clients.forEach(c => {
+        if (c.readyState === 1) c.send(JSON.stringify({ type: 'charge_added', reservationId: id, extras: result.extras }));
+      });
+    }
+    res.json({ success: true, message: 'Cargo agregado correctamente', data: result });
+  } catch (error) {
+    res.status(400).json({ success: false, message: error.message || 'Error agregando cargo' });
   }
 };
 
@@ -378,5 +398,6 @@ module.exports = {
   getReservationBilling,
   getFinancialSummary,
   getPendingInvoices,
-  generateInvoice
+  generateInvoice,
+  addCharge
 };

@@ -12,7 +12,8 @@ const {
   getReservationBilling,
   getFinancialSummary,
   getPendingInvoices,
-  generateInvoice
+  generateInvoice,
+  addCharge
 } = require('../controllers/billingController');
 
 // 📋 TIPOS DE HABITACIÓN Y PRECIOS
@@ -29,6 +30,9 @@ router.post('/calculate', protect, calculateReservationPrice);
 // 💳 PAGOS
 // POST /api/billing/reservations/:id/payment - Procesar pago
 router.post('/reservations/:id/payment', protect, authorize('admin', 'recepcionista'), processPayment);
+
+// POST /api/billing/reservations/:id/charge - Agregar cargo extra (minibar, lavanderia, etc.)
+router.post('/reservations/:id/charge', protect, authorize('admin', 'recepcionista'), addCharge);
 
 // GET /api/billing/reservations/:id - Obtener información de facturación de reserva
 router.get('/reservations/:id', protect, getReservationBilling);

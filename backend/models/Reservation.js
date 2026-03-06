@@ -96,6 +96,21 @@ const reservationSchema = new mongoose.Schema({
     transactionId: String,
     notes: String
   },
+  // Historial completo de pagos (múltiples parciales)
+  paymentHistory: [{
+    amount: { type: Number, required: true },
+    method: { type: String, enum: ['efectivo', 'tarjeta', 'transferencia', 'cheque'], required: true },
+    date: { type: Date, default: Date.now },
+    transactionId: String,
+    notes: String
+  }],
+  // Cargos extra durante la estadía (minibar, lavandería, room service, etc.)
+  extras: [{
+    description: { type: String, required: true },
+    amount: { type: Number, required: true, min: 0 },
+    date: { type: Date, default: Date.now },
+    category: { type: String, enum: ['minibar', 'lavanderia', 'room_service', 'telefono', 'spa', 'parking', 'otro'], default: 'otro' }
+  }],
   invoice: {
     number: {
       type: String,

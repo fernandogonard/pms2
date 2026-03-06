@@ -126,19 +126,29 @@ class BillingService {
       }
       
       const remainingAmount = reservation.pricing.total - reservation.payment.amountPaid;
-      if (amount > remainingAmount) {
-        throw new Error(`El monto excede el saldo pendiente de $${remainingAmount}`);
+      if (amount > remainingAmount + 0.01) {
+        throw new Error(`El monto excede el saldo pendiente de $${Math.round(remainingAmount)}`);
       }
       
-      // Procesar pago
+      // Registrar en historial de pagos
+      if (!reservation.paymentHistory) reservation.paymentHistory = [];
+      reservation.paymentHistory.push({
+        amount,
+        method,
+        date: new Date(),
+        transactionId: transactionId || null,
+        notes: notes || ''
+      });
+
+      // Actualizar resumen de pago
       reservation.payment.amountPaid += amount;
       reservation.payment.method = method;
       reservation.payment.paymentDate = new Date();
-      reservation.payment.transactionId = transactionId;
-      reservation.payment.notes = notes;
+      if (transactionId) reservation.payment.transactionId = transactionId;
+      if (notes) reservation.payment.notes = notes;
       
       // Actualizar estado de pago
-      if (reservation.payment.amountPaid >= reservation.pricing.total) {
+      if (reservation.payment.amountPaid >= reservation.pricing.total - 0.01) {
         reservation.payment.status = 'pagado';
         reservation.invoice.isPaid = true;
       } else if (reservation.payment.amountPaid > 0) {
@@ -149,7 +159,7 @@ class BillingService {
       if (!reservation.invoice.number) {
         reservation.invoice.number = this.generateInvoiceNumber();
         reservation.invoice.issueDate = new Date();
-        reservation.invoice.dueDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 días
+        reservation.invoice.dueDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
       }
       
       await reservation.save();
@@ -160,13 +170,70 @@ class BillingService {
         payment: {
           amountPaid: amount,
           totalPaid: reservation.payment.amountPaid,
-          remaining: reservation.pricing.total - reservation.payment.amountPaid,
-          status: reservation.payment.status
+          remaining: Math.max(0, reservation.pricing.total - reservation.payment.amountPaid),
+          status: reservation.payment.status,
+          history: reservation.paymentHistory
         }
       };
       
     } catch (error) {
       console.error('Error procesando pago:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Agregar cargo extra a una reserva en curso
+   */
+  static async addCharge(reservationId, chargeData) {
+    try {
+      const { description, amount, category } = chargeData;
+
+      const reservation = await Reservation.findById(reservationId)
+        .populate('client', 'nombre apellido');
+      if (!reservation) throw new Error('Reserva no encontrada');
+      if (!['reservada', 'checkin'].includes(reservation.status)) {
+        throw new Error('Solo se pueden agregar cargos a reservas activas o en check-in');
+      }
+      if (!amount || amount <= 0) throw new Error('El monto debe ser mayor a 0');
+
+      if (!reservation.extras) reservation.extras = [];
+      reservation.extras.push({
+        description,
+        amount,
+        category: category || 'otro',
+        date: new Date()
+      });
+
+      // Recalcular total sumando extras
+      const extrasTotal = reservation.extras.reduce((sum, e) => sum + e.amount, 0);
+      if (reservation.pricing) {
+        const subtotal = reservation.pricing.subtotal || 0;
+        const taxes = reservation.pricing.taxes || 0;
+        reservation.pricing.extrasTotal = extrasTotal;
+        reservation.pricing.total = subtotal + taxes + extrasTotal;
+      }
+
+      // Actualizar estado de pago si el nuevo total cambia el saldo
+      const totalPaid = reservation.payment.amountPaid || 0;
+      const newTotal = reservation.pricing.total;
+      if (totalPaid >= newTotal) {
+        reservation.payment.status = 'pagado';
+      } else if (totalPaid > 0) {
+        reservation.payment.status = 'parcial';
+      } else {
+        reservation.payment.status = 'pendiente';
+      }
+
+      await reservation.save();
+      return {
+        success: true,
+        extras: reservation.extras,
+        pricing: reservation.pricing,
+        paymentStatus: reservation.payment.status
+      };
+    } catch (error) {
+      console.error('Error agregando cargo:', error);
       throw error;
     }
   }
