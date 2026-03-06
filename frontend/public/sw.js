@@ -48,27 +48,27 @@ const CACHE_CONFIG = {
 
 // Instalación del Service Worker
 self.addEventListener('install', event => {
-  console.log('[SW] Instalando Service Worker v2.0.0');
-  
+  console.log('[SW] Instalando Service Worker v2.0.3');
+  // skipWaiting SIEMPRE, independiente de si el cache de recursos falla
+  self.skipWaiting();
+
   event.waitUntil(
     caches.open(STATIC_CACHE)
       .then(cache => {
         console.log('[SW] Cache abierto, guardando recursos críticos');
-        return cache.addAll(CRITICAL_RESOURCES);
+        // addAll individual para no bloquear si uno falla
+        return Promise.allSettled(
+          CRITICAL_RESOURCES.map(url => cache.add(url).catch(err => console.warn('[SW] No se pudo cachear:', url, err)))
+        );
       })
-      .then(() => {
-        console.log('[SW] Recursos críticos cacheados exitosamente');
-        return self.skipWaiting(); // Forzar activación inmediata
-      })
-      .catch(error => {
-        console.error('[SW] Error al cachear recursos críticos:', error);
-      })
+      .then(() => console.log('[SW] Instalación completa v2.0.3'))
+      .catch(error => console.error('[SW] Error en install:', error))
   );
 });
 
 // Activación del Service Worker
 self.addEventListener('activate', event => {
-  console.log('[SW] Activando Service Worker v2.0.0');
+  console.log('[SW] Activando Service Worker v2.0.3');
   
   event.waitUntil(
     caches.keys()

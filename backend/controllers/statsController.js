@@ -12,12 +12,6 @@ const { logger } = require('../config/logger');
  * @route GET /api/stats/rooms
  */
 exports.getRoomStats = ErrorHandlingService.asyncWrapper(async (req, res) => {
-    // Añadir cabeceras CORS específicas para evitar problemas con cabeceras personalizadas
-    res.header('Access-Control-Allow-Origin', req.headers.origin || '*');
-    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, Accept, X-Requested-With, Cache-Control');
-    res.header('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS');
-    res.header('Access-Control-Allow-Credentials', 'true');
-    
     // No permitir caché
     res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
     
