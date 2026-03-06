@@ -13,7 +13,7 @@ const ReservationTable = () => {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [form, setForm] = useState({ tipo: '', cantidad: 1, user: '', checkIn: '', checkOut: '', status: 'reservada' });
+  const [form, setForm] = useState({ tipo: '', cantidad: 1, user: '', checkIn: '', checkOut: '', status: 'reservada', nombre: '', apellido: '', dni: '', email: '', whatsapp: '' });
   const [editingId, setEditingId] = useState(null);
   const [success, setSuccess] = useState('');
   const [assignModal, setAssignModal] = useState({ open: false, reservation: null, candidates: [], loading: false });
@@ -72,7 +72,7 @@ const ReservationTable = () => {
         return;
       }
       setSuccess(editingId ? 'Reserva actualizada con éxito.' : 'Reserva creada con éxito.');
-      setForm({ tipo: '', cantidad: 1, user: '', checkIn: '', checkOut: '', status: 'reservada' });
+      setForm({ tipo: '', cantidad: 1, user: '', checkIn: '', checkOut: '', status: 'reservada', nombre: '', apellido: '', dni: '', email: '', whatsapp: '' });
       setEditingId(null);
       fetchData();
     } catch (err) {
@@ -103,7 +103,12 @@ const ReservationTable = () => {
       user: r.user,
       checkIn: r.checkIn ? r.checkIn.slice(0, 10) : '',
       checkOut: r.checkOut ? r.checkOut.slice(0, 10) : '',
-      status: r.status
+      status: r.status,
+      nombre: r.client?.nombre || '',
+      apellido: r.client?.apellido || '',
+      dni: r.client?.dni || '',
+      email: r.client?.email || '',
+      whatsapp: r.client?.whatsapp || ''
     });
     setEditingId(r._id);
   };
@@ -185,26 +190,23 @@ const ReservationTable = () => {
           <style>{`@keyframes spin { 0% { transform: rotate(0deg);} 100% {transform: rotate(360deg);} }`}</style>
         </div>
       )}
-      <form onSubmit={handleSubmit} style={{ display: 'flex', gap: 8, marginBottom: 16, background: '#222', padding: 16, borderRadius: 12, alignItems: 'center' }}>
+      <form onSubmit={handleSubmit} style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 16, background: '#222', padding: 16, borderRadius: 12, alignItems: 'center' }}>
+        {/* Fila 1: datos de la reserva */}
         <select value={form.tipo} onChange={e => setForm({ ...form, tipo: e.target.value })} required style={{ background: '#18191A', color: '#fff', border: '1px solid #444', borderRadius: 6, padding: 8 }}>
           <option value="">Tipo</option>
           <option value="doble">Doble</option>
           <option value="triple">Triple</option>
           <option value="cuadruple">Cuádruple</option>
         </select>
-        <input type="number" min={1} value={form.cantidad} onChange={e => setForm({ ...form, cantidad: Math.max(1, Number(e.target.value)) })} required style={{ background: '#18191A', color: '#fff', border: '1px solid #444', borderRadius: 6, padding: 8, width: 80 }} placeholder="Cantidad" />
-        <select value={form.user} onChange={e => setForm({ ...form, user: e.target.value })} required style={{ background: '#18191A', color: '#fff', border: '1px solid #444', borderRadius: 6, padding: 8 }}>
-          <option value="">Usuario</option>
-          {users.map(user => <option key={user._id} value={user._id}>{user.name} ({user.role})</option>)}
-        </select>
+        <input type="number" min={1} value={form.cantidad} onChange={e => setForm({ ...form, cantidad: Math.max(1, Number(e.target.value)) })} required style={{ background: '#18191A', color: '#fff', border: '1px solid #444', borderRadius: 6, padding: 8, width: 70 }} placeholder="Cant." />
         <input type="date" value={form.checkIn} onChange={e => setForm({ ...form, checkIn: e.target.value })} required style={{ background: '#18191A', color: '#fff', border: '1px solid #444', borderRadius: 6, padding: 8 }} />
         <input type="date" value={form.checkOut} onChange={e => setForm({ ...form, checkOut: e.target.value })} required style={{ background: '#18191A', color: '#fff', border: '1px solid #444', borderRadius: 6, padding: 8 }} />
-        <select value={form.status} onChange={e => setForm({ ...form, status: e.target.value })} style={{ background: '#18191A', color: '#fff', border: '1px solid #444', borderRadius: 6, padding: 8 }}>
-          <option value="reservada">Reservada</option>
-          <option value="checkin">Check-in</option>
-          <option value="checkout">Check-out</option>
-          <option value="cancelada">Cancelada</option>
-        </select>
+        {/* Fila 2: datos del cliente */}
+        <input value={form.nombre} onChange={e => setForm({ ...form, nombre: e.target.value })} required style={{ background: '#18191A', color: '#fff', border: '1px solid #444', borderRadius: 6, padding: 8, width: 120 }} placeholder="Nombre" />
+        <input value={form.apellido} onChange={e => setForm({ ...form, apellido: e.target.value })} required style={{ background: '#18191A', color: '#fff', border: '1px solid #444', borderRadius: 6, padding: 8, width: 120 }} placeholder="Apellido" />
+        <input value={form.dni} onChange={e => setForm({ ...form, dni: e.target.value })} required style={{ background: '#18191A', color: '#fff', border: '1px solid #444', borderRadius: 6, padding: 8, width: 100 }} placeholder="DNI" />
+        <input type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} required style={{ background: '#18191A', color: '#fff', border: '1px solid #444', borderRadius: 6, padding: 8, width: 160 }} placeholder="Email" />
+        <input value={form.whatsapp} onChange={e => setForm({ ...form, whatsapp: e.target.value })} style={{ background: '#18191A', color: '#fff', border: '1px solid #444', borderRadius: 6, padding: 8, width: 120 }} placeholder="WhatsApp" />
         <button type="submit" style={{ background: '#2563eb', color: '#fff', border: 'none', padding: '8px 16px', borderRadius: 6, fontWeight: 500, minWidth: 100 }} disabled={loading}>
           {loading ? (
             <span>
@@ -214,7 +216,7 @@ const ReservationTable = () => {
             </span>
           ) : (editingId ? 'Actualizar' : 'Crear')}
         </button>
-        {editingId && <button type="button" onClick={() => { setEditingId(null); setForm({ tipo: '', cantidad: 1, user: '', checkIn: '', checkOut: '', status: 'reservada' }); setError(''); setSuccess(''); }} style={{ background: '#444', color: '#fff', border: 'none', padding: '8px 16px', borderRadius: 6 }}>Cancelar</button>}
+        {editingId && <button type="button" onClick={() => { setEditingId(null); setForm({ tipo: '', cantidad: 1, user: '', checkIn: '', checkOut: '', status: 'reservada', nombre: '', apellido: '', dni: '', email: '', whatsapp: '' }); setError(''); setSuccess(''); }} style={{ background: '#444', color: '#fff', border: 'none', padding: '8px 16px', borderRadius: 6 }}>Cancelar</button>}
       </form>
       {success && <div style={{ color: '#22c55e', marginBottom: 8, fontWeight: 600, fontSize: 15 }}>{success}</div>}
       {error && <div style={{ color: '#ef4444', marginBottom: 8, fontWeight: 600, fontSize: 15 }}>{error}</div>}
