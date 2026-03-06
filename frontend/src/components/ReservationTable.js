@@ -228,8 +228,8 @@ const ReservationTable = () => {
               <th style={{ padding: 10 }}>Cantidad</th>
               <th style={{ padding: 10 }}>Habitación asignada</th>
               <th style={{ padding: 10 }}>Usuario</th>
-              <th style={{ padding: 10 }}>Nombre público</th>
-              <th style={{ padding: 10 }}>Email público</th>
+              <th style={{ padding: 10 }}>Cliente</th>
+              <th style={{ padding: 10 }}>Email</th>
               <th style={{ padding: 10 }}>Check-in</th>
               <th style={{ padding: 10 }}>Check-out</th>
               <th style={{ padding: 10 }}>💰 Total</th>
@@ -286,8 +286,8 @@ const ReservationTable = () => {
                   (r.user && typeof r.user === 'object' && r.user.name) ? r.user.name :
                   users.find(user => user._id === (typeof r.user === 'object' && r.user ? r.user._id : r.user))?.name || '-'
                 }</td>
-                <td style={{ padding: 10 }}>{r.name || '-'}</td>
-                <td style={{ padding: 10 }}>{r.email || '-'}</td>
+                <td style={{ padding: 10 }}>{r.client ? `${r.client.nombre || ''} ${r.client.apellido || ''}`.trim() || '-' : '-'}</td>
+                <td style={{ padding: 10 }}>{r.client?.email || '-'}</td>
                 <td style={{ padding: 10 }}>{r.checkIn ? r.checkIn.slice(0, 10) : '-'}</td>
                 <td style={{ padding: 10 }}>{r.checkOut ? r.checkOut.slice(0, 10) : '-'}</td>
                 <td style={{ padding: 10, fontWeight: 600, color: '#22c55e' }}>
