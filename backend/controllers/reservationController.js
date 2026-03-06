@@ -11,8 +11,7 @@ const BillingService = require('../services/billingService');
 const notificationService = require('../services/notificationService');
 
 // 🆕 Importar nuevo sistema de logging Winston
-const { logger } = require('../services/loggerService');
-
+const { logger } = require('../services/loggerService');const auditService = require('../services/auditService');
 /**
  * Obtiene las reservas con checkout pendiente (que deberían haber terminado pero siguen activas)
  * @param {Object} req - Request object
@@ -816,6 +815,16 @@ const checkinReservation = async (req, res) => {
       });
     }
     
+    auditService.log({
+      action: 'CHECKIN_REALIZADO',
+      entity: 'Reservation',
+      entityId: id,
+      userId: req.user?._id || req.user?.id,
+      userEmail: req.user?.email || 'sistema',
+      userRole: req.user?.role || 'sistema',
+      description: `Check-in realizado en reserva ${String(id).slice(-6).toUpperCase()}`,
+      ip: req.ip
+    });
     res.json({
       message: 'Check-in procesado exitosamente',
       reservation
@@ -844,6 +853,16 @@ const checkoutReservation = async (req, res) => {
       });
     }
     
+    auditService.log({
+      action: 'CHECKOUT_REALIZADO',
+      entity: 'Reservation',
+      entityId: id,
+      userId: req.user?._id || req.user?.id,
+      userEmail: req.user?.email || 'sistema',
+      userRole: req.user?.role || 'sistema',
+      description: `Check-out realizado en reserva ${String(id).slice(-6).toUpperCase()}`,
+      ip: req.ip
+    });
     res.json({
       message: 'Check-out procesado exitosamente',
       reservation

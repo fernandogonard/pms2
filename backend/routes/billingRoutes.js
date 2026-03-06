@@ -13,6 +13,7 @@ const {
   getFinancialSummary,
   getPendingInvoices,
   generateInvoice,
+  generateInvoicePDF,
   addCharge
 } = require('../controllers/billingController');
 
@@ -40,6 +41,9 @@ router.get('/reservations/:id', protect, getReservationBilling);
 // 🧾 FACTURAS
 // POST /api/billing/reservations/:id/invoice - Generar factura
 router.post('/reservations/:id/invoice', protect, authorize('admin', 'recepcionista'), generateInvoice);
+
+// GET /api/billing/reservations/:id/invoice/pdf - Descargar factura en PDF
+router.get('/reservations/:id/invoice/pdf', protect, authorize('admin', 'recepcionista'), generateInvoicePDF);
 
 // GET /api/billing/invoices/pending - Obtener facturas pendientes
 router.get('/invoices/pending', protect, authorize('admin', 'recepcionista'), getPendingInvoices);

@@ -35,6 +35,7 @@ import AdminUsersSection from '../components/admin/AdminUsersSection';
 import AdminHousekeepingSection from '../components/admin/AdminHousekeepingSection';
 import MaintenanceManager from '../components/MaintenanceManager';
 import AdvancedDashboard from '../components/AdvancedDashboard';
+import AdminAuditSection from '../components/admin/AdminAuditSection';
 import PendingCheckouts from '../components/PendingCheckouts';
 import { apiFetch } from '../utils/api';
 
@@ -87,6 +88,8 @@ const AdminDashboard = () => {
         return <AdminHousekeepingSection />;
       case 'mantenimiento':
         return <MaintenanceManager />;
+      case 'auditoria':
+        return <AdminAuditSection />;
       case 'clientes':
         return <AdminClientsSection />;
       case 'facturacion':

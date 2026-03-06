@@ -98,6 +98,22 @@ const AdminBillingSection = () => {
     } catch { setInvoicesError('Error de red'); }
   };
 
+  const handleDownloadPDF = async (reservationId) => {
+    if (!reservationId) return;
+    setInvoicesError('');
+    try {
+      const r = await apiFetch(`/api/billing/reservations/${reservationId}/invoice/pdf`);
+      if (!r.ok) { const d = await r.json().catch(() => ({})); setInvoicesError(d.message || 'Error generando PDF'); return; }
+      const blob = await r.blob();
+      const url  = window.URL.createObjectURL(blob);
+      const a    = document.createElement('a');
+      a.href     = url;
+      a.download = `factura_${reservationId.slice(-8).toUpperCase()}.pdf`;
+      document.body.appendChild(a); a.click(); a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch { setInvoicesError('Error de red al generar PDF'); }
+  };
+
   const handleProcessPayment = async (e) => {
     e.preventDefault();
     if (!paymentTarget) return;
@@ -286,6 +302,7 @@ const AdminBillingSection = () => {
                       <th style={{ padding: '10px 12px' }}>Saldo</th>
                       <th style={{ padding: '10px 12px' }}>Vence</th>
                       <th style={{ padding: '10px 12px' }}>Estado</th>
+                      <th style={{ padding: '10px 12px' }}>PDF</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -306,6 +323,14 @@ const AdminBillingSection = () => {
                             background: inv.paymentStatus === 'completado' ? '#052e16' : inv.paymentStatus === 'parcial' ? '#1c1400' : '#1a0606',
                             color: inv.paymentStatus === 'completado' ? '#22c55e' : inv.paymentStatus === 'parcial' ? '#f59e0b' : '#f87171',
                           }}>{inv.paymentStatus || 'pendiente'}</span>
+                        </td>
+                        <td style={{ padding: '10px 12px' }}>
+                          <button
+                            onClick={() => handleDownloadPDF(inv.id)}
+                            title="Descargar factura en PDF"
+                            style={{ background: '#1e3a5f', color: '#60a5fa', border: '1px solid #1e4080', borderRadius: 6, padding: '5px 10px', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
+                            🖨️ PDF
+                          </button>
                         </td>
                       </tr>
                     ))}

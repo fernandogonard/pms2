@@ -134,6 +134,10 @@ app.use('/api/cleaning', cleaningRoutes);
 const analyticsRoutes = require('./routes/analyticsRoutes');
 app.use('/api/analytics', analyticsRoutes);
 
+// 📜 Rutas de auditoría (solo admin)
+const auditRoutes = require('./routes/auditRoutes');
+app.use('/api/audit', auditRoutes);
+
 // Ruta de health check pública
 app.get('/', (req, res) => {
   res.json({

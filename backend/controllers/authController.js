@@ -5,6 +5,7 @@ const authService = require('../services/authService');
 const { validateRequestBody, validationSchemas } = require('../middlewares/validationMiddleware');
 // 🆕 Usar nuevo sistema de logging Winston (eliminado el anterior)
 const { logger } = require('../services/loggerService');
+const auditService = require('../services/auditService');
 
 // Registro de usuario
 exports.register = async (req, res) => {
@@ -62,6 +63,17 @@ exports.login = async (req, res) => {
 
     // Log del login exitoso
     logger.security.loginSuccess(result.user.id, email, ip, userAgent);
+
+    // Registrar en auditoría
+    auditService.log({
+      action: 'LOGIN',
+      entity: 'User',
+      entityId: result.user.id,
+      userEmail: email,
+      userRole: result.user.role || 'sistema',
+      description: `Login exitoso de ${email}`,
+      ip
+    });
 
     res.json({
       success: true,

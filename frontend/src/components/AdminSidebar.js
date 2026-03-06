@@ -17,6 +17,7 @@ const AdminSidebar = ({ activeSection, onSectionChange }) => {
     { id: 'clientes', label: 'Clientes', icon: '👥' },
     { id: 'facturacion', label: 'Facturación', icon: '💰' },
     { id: 'reportes', label: 'Reportes', icon: '📋' },
+    { id: 'auditoria', label: 'Auditoría', icon: '📜' },
     { id: 'usuarios', label: 'Usuarios', icon: '⚙️' }
   ];
 
