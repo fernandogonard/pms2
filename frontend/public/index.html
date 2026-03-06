@@ -448,7 +448,7 @@
         window.addEventListener('load', function() {
           navigator.serviceWorker.register('/sw.js?v=2.0.1')
             .then(function(registration) {
-              console.log('SW registrado exitosamente v2.0.1:', registration.scope);
+              console.log('SW registrado exitosamente v2.0.3:', registration.scope);
               
               // Escuchar actualizaciones del SW
               registration.addEventListener('updatefound', function() {

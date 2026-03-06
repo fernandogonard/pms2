@@ -1,15 +1,12 @@
 // Service Worker para CRM Hotelero PWA
-// Versión 2.0.1 - Correcciones aplicadas para hot-update y cache
+// Versión 2.0.3 - Bump para limpiar caché de bundle anterior
 
-const CACHE_NAME = 'crm-hotelero-v2.0.2';
-const STATIC_CACHE = 'crm-hotelero-static-v2.0.2';
-const API_CACHE = 'crm-hotelero-api-v2.0.2';
+const CACHE_NAME = 'crm-hotelero-v2.0.3';
+const STATIC_CACHE = 'crm-hotelero-static-v2.0.3';
+const API_CACHE = 'crm-hotelero-api-v2.0.3';
 
-// Recursos críticos que siempre deben estar en cache
+// Solo recursos que NO cambian de nombre entre deploys
 const CRITICAL_RESOURCES = [
-  '/',
-  '/static/js/bundle.js',
-  '/static/css/main.css',
   '/manifest.json',
   '/icons/icon-16x16.png',
   '/icons/icon-72x72.png',
@@ -123,18 +120,29 @@ self.addEventListener('fetch', event => {
     return;
   }
   
-  // Estrategia para recursos estáticos
-  if (request.destination === 'script' || 
-      request.destination === 'style' || 
-      request.destination === 'image' ||
+  // Los bundles JS/CSS generados por React (con hash) NUNCA se cachean — siempre red
+  if (url.pathname.match(/\/static\/(js|css)\/main\.[a-f0-9]+\.(js|css)(\.map)?$/)) {
+    return; // pasar directamente sin interceptar
+  }
+
+  // Estrategia para recursos estáticos (imágenes, iconos, libs externas)
+  if (request.destination === 'image' ||
       url.hostname !== location.hostname) {
     event.respondWith(handleStaticResource(request));
     return;
   }
+
+  // Scripts/styles que NO son bundles de la app (bootstrap, etc.) → cache normal
+  if (request.destination === 'script' || request.destination === 'style') {
+    event.respondWith(handleStaticResource(request));
+    return;
+  }
   
-  // Estrategia para páginas HTML
+  // Estrategia para páginas HTML — network first para obtener index.html actualizado
   if (request.mode === 'navigate') {
-    event.respondWith(handlePageRequest(request));
+    event.respondWith(
+      fetch(request).catch(() => caches.match(request))
+    );
     return;
   }
   
