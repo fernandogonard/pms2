@@ -12,6 +12,7 @@ const AdminSidebar = ({ activeSection, onSectionChange }) => {
     { id: 'pending-checkouts', label: 'Checkouts Pendientes', icon: '🚪' },
     { id: 'reservas', label: 'Reservas', icon: '📅' },
     { id: 'habitaciones', label: 'Habitaciones', icon: '🛏️' },
+    { id: 'housekeeping', label: 'Housekeeping', icon: '🧹' },
     { id: 'clientes', label: 'Clientes', icon: '👥' },
     { id: 'facturacion', label: 'Facturación', icon: '💰' },
     { id: 'reportes', label: 'Reportes', icon: '📋' },
