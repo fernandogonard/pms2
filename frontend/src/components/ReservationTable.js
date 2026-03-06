@@ -113,6 +113,30 @@ const ReservationTable = () => {
     setEditingId(r._id);
   };
 
+  // Check-in
+  const handleCheckin = async id => {
+    if (!window.confirm('¿Confirmar check-in?')) return;
+    setError(''); setSuccess('');
+    const { apiFetch } = await import('../utils/api');
+    const res = await apiFetch(`${API_RESERVATIONS}/${id}/checkin`, { method: 'POST' });
+    const data = await res.json();
+    if (!res.ok) { setError(data.message || data.error || 'Error al hacer check-in'); return; }
+    setSuccess('Check-in realizado correctamente');
+    fetchData();
+  };
+
+  // Check-out
+  const handleCheckout = async id => {
+    if (!window.confirm('¿Confirmar check-out?')) return;
+    setError(''); setSuccess('');
+    const { apiFetch } = await import('../utils/api');
+    const res = await apiFetch(`${API_RESERVATIONS}/${id}/checkout`, { method: 'POST' });
+    const data = await res.json();
+    if (!res.ok) { setError(data.message || data.error || 'Error al hacer check-out'); return; }
+    setSuccess('Check-out realizado correctamente');
+    fetchData();
+  };
+
   // Asignar habitación manualmente a una reserva
   const openAssignModal = async (r) => {
     setAssignModal({ open: true, reservation: r, candidates: [], loading: true });
@@ -315,9 +339,17 @@ const ReservationTable = () => {
                 </td>
                 <td style={{ padding: 10 }}>{r.status}</td>
                 <td style={{ padding: 10 }}>
-                  <button onClick={() => handleEdit(r)} style={{ marginRight: 8, background: '#2563eb', color: '#fff', border: 'none', borderRadius: 6, padding: '6px 12px', fontWeight: 500 }}>Editar</button>
-                  <button onClick={() => handleDelete(r._id)} style={{ background: '#ef4444', color: '#fff', border: 'none', borderRadius: 6, padding: '6px 12px', fontWeight: 500 }}>Eliminar</button>
-                  <button onClick={() => openAssignModal(r)} style={{ marginLeft: 8, background: '#f59e42', color: '#000', border: 'none', borderRadius: 6, padding: '6px 12px', fontWeight: 700 }}>Asignar habitación</button>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                    {r.status === 'reservada' && (
+                      <button onClick={() => handleCheckin(r._id)} style={{ background: '#22c55e', color: '#000', border: 'none', borderRadius: 6, padding: '6px 12px', fontWeight: 700 }}>✅ Check-in</button>
+                    )}
+                    {r.status === 'checkin' && (
+                      <button onClick={() => handleCheckout(r._id)} style={{ background: '#f59e0b', color: '#000', border: 'none', borderRadius: 6, padding: '6px 12px', fontWeight: 700 }}>🚪 Check-out</button>
+                    )}
+                    <button onClick={() => handleEdit(r)} style={{ background: '#2563eb', color: '#fff', border: 'none', borderRadius: 6, padding: '6px 12px', fontWeight: 500 }}>Editar</button>
+                    <button onClick={() => handleDelete(r._id)} style={{ background: '#ef4444', color: '#fff', border: 'none', borderRadius: 6, padding: '6px 12px', fontWeight: 500 }}>Eliminar</button>
+                    <button onClick={() => openAssignModal(r)} style={{ background: '#f59e42', color: '#000', border: 'none', borderRadius: 6, padding: '6px 12px', fontWeight: 700 }}>Habitación</button>
+                  </div>
                 </td>
               </tr>
             ))}
