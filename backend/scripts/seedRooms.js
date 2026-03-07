@@ -6,7 +6,7 @@ require('dotenv').config();
 const mongoose = require('mongoose');
 const Room = require('../models/Room');
 
-const MONGO_URI = process.env.MONGO_URI || 'mongodb+srv://matiasgonard1_db_user:RHSQQGbznTlVsbOC@pms2.pcm2o1i.mongodb.net/crm_hotelero?retryWrites=true&w=majority&appName=pms2';
+const MONGO_URI = process.env.MONGO_URI;
 
 // Precios por tipo (en pesos argentinos)
 const PRICES = {
