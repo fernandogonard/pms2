@@ -171,24 +171,31 @@ const createReservation = async (req, res) => {
       
       // Limpiar reservas fantasma (checkout anticipado)
       for (const reserva of reservasEnFecha) {
-        if (reserva.status === 'checkin' && new Date(reserva.checkOut) < new Date()) {
-          reserva.status = 'checkout';
-          await reserva.save();
-          
-          // Liberar habitaciones si estaban asignadas
-          if (reserva.room && reserva.room.length > 0) {
-            for (const roomId of reserva.room) {
-              const room = await Room.findById(roomId);
-              if (room && room.status === 'ocupada') {
-                room.status = 'disponible';
-                await room.save();
-                console.log(`[API] Habitación ${room.number} liberada automáticamente por checkout anticipado`);
+        try {
+          if (reserva.status === 'checkin' && new Date(reserva.checkOut) < new Date()) {
+            reserva.status = 'checkout';
+            await reserva.save();
+            // Liberar habitaciones si estaban asignadas
+            if (reserva.room && reserva.room.length > 0) {
+              for (const roomId of reserva.room) {
+                try {
+                  const room = await Room.findById(roomId);
+                  if (room && room.status === 'ocupada') {
+                    room.status = 'disponible';
+                    await room.save();
+                    logger.info(`[API] Habitación ${room.number} liberada automáticamente por checkout anticipado`);
+                  }
+                } catch (roomErr) {
+                  logger.error('Error liberando habitación en reserva fantasma', { roomId, error: roomErr.message });
+                }
               }
             }
+            continue; // No contar esta reserva como ocupada
           }
-          continue; // No contar esta reserva como ocupada
+        } catch (ghostErr) {
+          logger.error('Error procesando reserva fantasma', { reservaId: reserva._id, error: ghostErr.message });
         }
-      };
+      }
       
       let habitacionesOcupadas = 0;
       
@@ -221,7 +228,7 @@ const createReservation = async (req, res) => {
       }
     }
     
-    console.log(`✅ Validación pasada: Creando reserva ${tipo} x${cantidadSolicitada} del ${checkIn} al ${checkOut}`);
+    logger.info(`Validación pasada: Creando reserva ${tipo} x${cantidadSolicitada} del ${checkIn} al ${checkOut}`);
     
     // 🆕 CALCULAR PRECIOS AUTOMÁTICAMENTE
     const reservationData = { tipo, cantidad, checkIn, checkOut };
@@ -253,10 +260,10 @@ const createReservation = async (req, res) => {
     });
     
     await reservation.save();
-    console.log(`💰 Precios calculados: $${pricing.total} por ${pricing.totalNights} noches`);
+    logger.info(`Precios calculados: $${pricing.total} por ${pricing.totalNights} noches`);
     
     // 🏠 ASIGNACIÓN AUTOMÁTICA: Intentar asignar habitaciones inmediatamente
-    console.log('🔄 Intentando asignación automática de habitaciones...');
+    logger.info('Intentando asignación automática de habitaciones...');
     await assignRoomsToReservation(reservation);
     
     // Recargar reserva con habitaciones asignadas
@@ -309,10 +316,8 @@ const createReservation = async (req, res) => {
       userAgent: req.get('User-Agent'),
       duration
     });
-
     logger.performance.requestTime(req.method, req.originalUrl, duration, 500, user);
-
-    res.status(500).json({ message: 'Error al crear reserva.', error });
+    res.status(500).json({ message: 'Error al crear reserva.', error: error.message });
   }
 };
 
