@@ -124,7 +124,28 @@ class BillingService {
       if (amount <= 0) {
         throw new Error('El monto debe ser mayor a 0');
       }
-      
+
+      // Guard: si pricing.total es 0 o no está calculado, calcularlo ahora
+      if (!reservation.pricing || !reservation.pricing.total) {
+        try {
+          const pricing = await this.calculateReservationPricing({
+            tipo: reservation.tipo,
+            cantidad: reservation.cantidad,
+            checkIn: reservation.checkIn,
+            checkOut: reservation.checkOut
+          });
+          reservation.pricing = pricing;
+          // Aplicar también extras ya cargados
+          if (reservation.extras && reservation.extras.length > 0) {
+            const extrasTotal = reservation.extras.reduce((s, e) => s + (e.amount || 0), 0);
+            reservation.pricing.total = pricing.total + extrasTotal;
+          }
+          await reservation.save();
+        } catch (pricingErr) {
+          throw new Error(`No se pudo calcular el precio de la reserva: ${pricingErr.message}`);
+        }
+      }
+
       const remainingAmount = reservation.pricing.total - reservation.payment.amountPaid;
       if (amount > remainingAmount + 0.01) {
         throw new Error(`El monto excede el saldo pendiente de $${Math.round(remainingAmount)}`);
