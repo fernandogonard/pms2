@@ -52,7 +52,8 @@ const corsOptions = {
     return callback(new Error('CORS origin not allowed'));
   },
   credentials: true,
-  allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'X-Requested-With', 'Cache-Control', 'expires'],
+  // Aceptar también encabezados que usan los navegadores/proxies (Pragma, If-None-Match, etc.)
+  allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'X-Requested-With', 'Cache-Control', 'expires', 'Pragma', 'If-None-Match', 'If-Modified-Since'],
   methods: ['GET','POST','PUT','DELETE','OPTIONS'],
   preflightContinue: false,
   optionsSuccessStatus: 204
