@@ -29,6 +29,19 @@ app.use(advancedSecurity.sanitizeInput);
 
 // Middlewares globales
 app.use(express.json());
+// Middleware rápido para forzar cabeceras CORS en respuestas preflight
+app.use((req, res, next) => {
+  if (req.method === 'OPTIONS') {
+    const origin = req.headers.origin || '*';
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+    res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization,Accept,X-Requested-With,Cache-Control,expires,Pragma,If-None-Match,If-Modified-Since');
+    res.setHeader('Vary', 'Origin');
+    return res.sendStatus(204);
+  }
+  next();
+});
 // Configurar CORS para permitir credentials y origen controlado
 const CORS_ORIGIN_RAW = process.env.CORS_ORIGIN || 'http://localhost:3000,https://localhost:3000';
 const CORS_ALLOW_ALL = CORS_ORIGIN_RAW.trim() === '*';
