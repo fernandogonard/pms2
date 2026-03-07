@@ -382,12 +382,9 @@ const generateInvoice = async (req, res) => {
       });
     }
     
-    // Generar número de factura si no existe
+    // Generar número de factura si no existe (usar helper con reintentos ante duplicados)
     if (!reservation.invoice.number) {
-      reservation.invoice.number = BillingService.generateInvoiceNumber();
-      reservation.invoice.issueDate = new Date();
-      reservation.invoice.dueDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 días
-      await reservation.save();
+      await BillingService.assignUniqueInvoiceNumberAndSave(reservation);
     }
     
     res.json({
@@ -443,12 +440,10 @@ const generateInvoicePDF = async (req, res) => {
       await reservation.save();
     }
 
-    // Asignar número de factura si no existe
+    // Asignar número de factura si no existe (usar helper con reintentos ante duplicados)
     if (!reservation.invoice || !reservation.invoice.number) {
       if (!reservation.invoice) reservation.invoice = {};
-      reservation.invoice.number = BillingService.generateInvoiceNumber();
-      reservation.invoice.issueDate = new Date();
-      await reservation.save();
+      await BillingService.assignUniqueInvoiceNumberAndSave(reservation);
     }
 
     const doc = new PDFDocument({ margin: 50, size: 'A4' });

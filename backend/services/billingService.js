@@ -107,6 +107,33 @@ class BillingService {
     
     return `INV-${year}${month}${day}${hour}${minute}-${random}`;
   }
+
+  /**
+   * Asignar un número de factura único y guardar la reserva con reintentos
+   */
+  static async assignUniqueInvoiceNumberAndSave(reservation, maxAttempts = 5) {
+    let attempt = 0;
+    while (attempt < maxAttempts) {
+      attempt += 1;
+      reservation.invoice = reservation.invoice || {};
+      reservation.invoice.number = this.generateInvoiceNumber();
+      reservation.invoice.issueDate = reservation.invoice.issueDate || new Date();
+      reservation.invoice.dueDate = reservation.invoice.dueDate || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+      try {
+        await reservation.save();
+        return reservation;
+      } catch (err) {
+        // Si es un duplicate key error en invoice.number, intentar de nuevo
+        if (err && err.code === 11000 && err.message && err.message.includes('invoice.number')) {
+          // esperar un poco antes de reintentar para reducir colisiones
+          await new Promise(r => setTimeout(r, 50 * attempt));
+          continue;
+        }
+        throw err;
+      }
+    }
+    throw new Error('No se pudo generar un número de factura único después de varios intentos');
+  }
   
   /**
    * Procesar pago de reserva
@@ -176,14 +203,12 @@ class BillingService {
         reservation.payment.status = 'parcial';
       }
       
-      // Generar factura si no existe
+      // Generar factura si no existe (usar helper con reintentos ante duplicados)
       if (!reservation.invoice.number) {
-        reservation.invoice.number = this.generateInvoiceNumber();
-        reservation.invoice.issueDate = new Date();
-        reservation.invoice.dueDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+        await this.assignUniqueInvoiceNumberAndSave(reservation);
+      } else {
+        await reservation.save();
       }
-      
-      await reservation.save();
       
       return {
         success: true,
