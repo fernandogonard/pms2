@@ -207,9 +207,15 @@ class MaintenanceService {
       }
       
       // Actualizar estado - después de mantenimiento va a limpieza
-      room.status = completionData.requiresCleaning !== false ? 
-        ROOM_STATES.LIMPIEZA : 
+      room.status = completionData.requiresCleaning !== false ?
+        ROOM_STATES.LIMPIEZA :
         ROOM_STATES.DISPONIBLE;
+
+      // Si quedó en limpieza, crear una tarea de housekeeping (limpieza profunda)
+      if (room.status === ROOM_STATES.LIMPIEZA) {
+        room.pendingHousekeeping = 'limpieza_profunda';
+        room.pendingHousekeepingAt = new Date();
+      }
       
       // Limpiar mantenimiento actual
       room.currentMaintenance = null;
