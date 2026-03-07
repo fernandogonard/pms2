@@ -241,35 +241,6 @@ function BookingWizard() {
 
 export default BookingWizard;
 
-// ...existing code...
-
-// ...existing code...
-
-// Paso 3: Mostrar habitaciones disponibles
-function AvailableRoomsList({ disponibilidad, onSelect, onBack, error }) {
-  const [cantidad, setCantidad] = React.useState(1);
-  if (!disponibilidad) return null;
-  const max = disponibilidad.disponibles || 0;
-  return (
-    <div style={{ marginBottom: 24 }}>
-      <h2>3. Selecciona cantidad a reservar</h2>
-      <button onClick={onBack} style={{ marginBottom: 16, padding: '8px 18px', borderRadius: 8 }}>Atrás</button>
-      {error && <div style={{ color: '#ef4444', marginBottom: 12 }}>{error}</div>}
-      <div style={{ background: '#23272F', color: '#fff', borderRadius: 12, padding: 18, minWidth: 220, boxShadow: '0 2px 8px #0002', marginBottom: 16 }}>
-        <div style={{ fontWeight: 700, fontSize: 18, marginBottom: 8 }}>{disponibilidad.type?.toUpperCase()}</div>
-        <div style={{ fontSize: 15, marginBottom: 4 }}>Habitaciones disponibles: <b>{disponibilidad.disponibles}</b></div>
-        <div style={{ fontSize: 15, marginBottom: 4 }}>Plazas por habitación: <b>{disponibilidad.plazasPorHabitacion}</b></div>
-        <div style={{ fontSize: 15, marginBottom: 4 }}>Plazas totales: <b>{disponibilidad.plazasTotales}</b></div>
-        <div style={{ fontSize: 15, marginBottom: 8 }}>Precio por noche: <b>${disponibilidad.precio ?? '-'}</b></div>
-        <label style={{ fontSize: 15, marginRight: 8 }}>Cantidad a reservar:</label>
-        <input type="number" min={1} max={max} value={cantidad} onChange={e => setCantidad(Math.max(1, Math.min(max, Number(e.target.value))))} style={{ width: 60, padding: 4, borderRadius: 6, border: '1px solid #444', marginRight: 8 }} />
-        <button disabled={max === 0} onClick={() => onSelect({ cantidad, disponibilidad })} style={{ background: '#2563eb', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 12px', fontWeight: 600, marginLeft: 8 }}>Reservar</button>
-        {max === 0 && <div style={{ color: '#ef4444', marginTop: 8 }}>No hay disponibilidad para ese tipo y fechas.</div>}
-      </div>
-    </div>
-  );
-}
-
 // Paso 4: Formulario de reserva
 function BookingWizard() {
   const [step, setStep] = useState(1);
