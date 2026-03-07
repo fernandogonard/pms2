@@ -22,7 +22,6 @@ const AdminStats = () => {
           apiFetch(API_STATS, {
             headers: {
               'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
-              'Pragma': 'no-cache',
               'Expires': '0'
             }
           })
