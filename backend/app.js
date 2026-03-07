@@ -62,6 +62,26 @@ app.use(cors(corsOptions));
 // Habilitar preflight para todas las rutas
 app.options('*', cors(corsOptions));
 
+// Middleware adicional para garantizar que TODAS las respuestas incluyan
+// los headers CORS necesarios (útil contra cachés/edge que puedan omitirlos)
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  if (!origin) return next();
+  const originNorm = origin.replace(/\/$/, '');
+  const isAllowed = CORS_ALLOW_ALL || allowedOrigins.indexOf(originNorm) !== -1 ||
+    /^https:\/\/[a-z0-9-]+\.vercel\.app$/.test(originNorm) ||
+    (process.env.NODE_ENV !== 'production' && /^https?:\/\/localhost(:\d+)?\/?$/.test(origin));
+  if (isAllowed) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+    res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization,Accept,X-Requested-With,Cache-Control,expires,Pragma,If-None-Match,If-Modified-Since');
+    res.setHeader('Vary', 'Origin');
+  }
+  if (req.method === 'OPTIONS') return res.sendStatus(204);
+  next();
+});
+
 // 📝 Logging de requests (único middleware, Winston)
 app.use(newRequestLogger);
 app.use(rateLimiterMonitor.middleware());
