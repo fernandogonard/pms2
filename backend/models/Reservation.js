@@ -84,7 +84,7 @@ const reservationSchema = new mongoose.Schema({
     },
     method: {
       type: String,
-      enum: ['efectivo', 'tarjeta', 'transferencia', 'cheque'],
+      enum: ['efectivo', 'tarjeta', 'debito', 'transferencia', 'cheque'],
       default: 'efectivo'
     },
     amountPaid: {
@@ -99,7 +99,7 @@ const reservationSchema = new mongoose.Schema({
   // Historial completo de pagos (múltiples parciales)
   paymentHistory: [{
     amount: { type: Number, required: true },
-    method: { type: String, enum: ['efectivo', 'tarjeta', 'transferencia', 'cheque'], required: true },
+    method: { type: String, enum: ['efectivo', 'tarjeta', 'debito', 'transferencia', 'cheque'], required: true },
     date: { type: Date, default: Date.now },
     transactionId: String,
     notes: String

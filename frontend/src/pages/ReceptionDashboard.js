@@ -212,8 +212,9 @@ const ReceptionPayments = () => {
               <input type="number" min="1" step="0.01" value={paymentForm.amount} onChange={e => setPaymentForm({ ...paymentForm, amount: e.target.value })} required style={{ ...inp, width: 130 }} /></div>
             <div><div style={{ color: '#aaa', fontSize: 12, marginBottom: 3 }}>Método</div>
               <select value={paymentForm.method} onChange={e => setPaymentForm({ ...paymentForm, method: e.target.value })} style={inp}>
-                <option value="efectivo">Efectivo</option><option value="tarjeta">Tarjeta</option>
-                <option value="transferencia">Transferencia</option><option value="cheque">Cheque</option>
+                <option value="efectivo">💵 Efectivo</option><option value="tarjeta">💳 T. Crédito</option>
+                <option value="debito">💳 T. Débito</option>
+                <option value="transferencia">🏦 Transferencia</option><option value="cheque">📝 Cheque</option>
               </select></div>
             <div><div style={{ color: '#aaa', fontSize: 12, marginBottom: 3 }}>Notas</div>
               <input type="text" value={paymentForm.notes} onChange={e => setPaymentForm({ ...paymentForm, notes: e.target.value })} placeholder="Opcional" style={{ ...inp, width: 180 }} /></div>

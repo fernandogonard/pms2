@@ -368,10 +368,11 @@ const AdminBillingSection = () => {
                       <div style={{ color: '#aaa', fontSize: 12, marginBottom: 4 }}>Método</div>
                       <select value={paymentForm.method} onChange={e => setPaymentForm({ ...paymentForm, method: e.target.value })}
                         style={{ background: '#18191A', color: '#fff', border: '1px solid #444', borderRadius: 6, padding: '8px 12px' }}>
-                        <option value="efectivo">Efectivo</option>
-                        <option value="tarjeta">Tarjeta</option>
-                        <option value="transferencia">Transferencia</option>
-                        <option value="cheque">Cheque</option>
+                        <option value="efectivo">💵 Efectivo</option>
+                        <option value="tarjeta">💳 T. Crédito</option>
+                        <option value="debito">💳 T. Débito</option>
+                        <option value="transferencia">🏦 Transferencia</option>
+                        <option value="cheque">📝 Cheque</option>
                       </select>
                     </div>
                     <div>

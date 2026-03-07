@@ -51,6 +51,11 @@ const ReservationTable = () => {
   const [filterStatus, setFilterStatus] = useState('');
   const [filterSearch, setFilterSearch] = useState('');
 
+  // —— Modal de checkout con pagos ————————————————————————————————
+  // null | { id, reservationName, billing: null|data, payments: [{amount,method,notes}], loading, submitting, error }
+  const [checkoutModal, setCheckoutModal] = useState(null);
+  const [viewPaymentsModal, setViewPaymentsModal] = useState(null); // null | { nombre, paymentHistory, total, paid }
+
   // —— DNI autocomplete: buscar cliente existente al escribir el DNI ————————————————
   useEffect(() => {
     if (!form.dni || form.dni.length < 7 || editingId) { setClientLookup(null); return; }
@@ -188,19 +193,54 @@ const ReservationTable = () => {
     fetchData();
   };
 
-  // Check-out
-  const handleCheckout = async id => {
+  // Check-out — abre modal de caja para registrar pago antes de confirmar
+  const openCheckoutModal = async (id) => {
     const r = reservations.find(res => res._id === id);
-    const total  = r?.pricing?.total          || 0;
-    const paid   = r?.payment?.amountPaid     || 0;
-    const saldo  = Math.max(0, total - paid);
-    const saldoMsg = saldo > 0 ? `\n\n⚠️ Saldo pendiente: $${saldo.toLocaleString('es-AR')}` : '\n\n✅ Saldo saldado.';
-    if (!window.confirm(`¿Confirmar check-out?${saldoMsg}`)) return;
-    setError(''); setSuccess('');
+    const nombre = r?.client ? `${r.client.nombre || ''} ${r.client.apellido || ''}`.trim() : 'Huésped';
+    setCheckoutModal({ id, reservationName: nombre, billing: null, payments: [{ amount: '', method: 'efectivo', notes: '' }], loading: true, submitting: false, error: '' });
+    try {
+      const { apiFetch } = await import('../utils/api');
+      const res = await apiFetch(`/api/billing/reservations/${id}`);
+      const data = await res.json();
+      if (data.success) {
+        setCheckoutModal(prev => ({ ...prev, billing: data.data, loading: false }));
+      } else {
+        setCheckoutModal(prev => ({ ...prev, loading: false, error: data.message || 'Error cargando factura' }));
+      }
+    } catch {
+      setCheckoutModal(prev => ({ ...prev, loading: false, error: 'Error de red' }));
+    }
+  };
+
+  const handleCheckoutConfirm = async () => {
+    if (!checkoutModal) return;
+    const { id, payments, billing } = checkoutModal;
+    const total     = billing?.balance?.total   || billing?.pricing?.total || 0;
+    const alreadyPd = billing?.balance?.paid    || billing?.payment?.amountPaid || 0;
+    const saldo     = Math.max(0, total - alreadyPd);
+    const validPays = payments.filter(p => p.amount && parseFloat(p.amount) > 0);
+    if (saldo > 0.01 && validPays.length === 0) {
+      setCheckoutModal(prev => ({ ...prev, error: 'Hay saldo pendiente. Ingresá al menos un pago o marcá como "sin cobro".' }));
+      return;
+    }
+    setCheckoutModal(prev => ({ ...prev, submitting: true, error: '' }));
     const { apiFetch } = await import('../utils/api');
+    for (const p of validPays) {
+      try {
+        await apiFetch(`/api/billing/reservations/${id}/payment`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ amount: parseFloat(p.amount), method: p.method, notes: p.notes || '' })
+        });
+      } catch { /* si falla un pago individual no bloqueamos el checkout */ }
+    }
     const res = await apiFetch(`${API_RESERVATIONS}/${id}/checkout`, { method: 'POST' });
     const data = await res.json();
-    if (!res.ok) { setError(data.message || data.error || 'Error al hacer check-out'); return; }
+    if (!res.ok) {
+      setCheckoutModal(prev => ({ ...prev, submitting: false, error: data.message || data.error || 'Error al hacer check-out' }));
+      return;
+    }
+    setCheckoutModal(null);
     setSuccess('Check-out realizado correctamente');
     fetchData();
   };
@@ -463,7 +503,15 @@ const ReservationTable = () => {
                       <button onClick={() => handleCheckin(r._id)} style={{ background: '#22c55e', color: '#000', border: 'none', borderRadius: 6, padding: '6px 12px', fontWeight: 700 }}>✅ Check-in</button>
                     )}
                     {r.status === 'checkin' && (
-                      <button onClick={() => handleCheckout(r._id)} style={{ background: '#f59e0b', color: '#000', border: 'none', borderRadius: 6, padding: '6px 12px', fontWeight: 700 }}>🚪 Check-out</button>
+                      <button onClick={() => openCheckoutModal(r._id)} style={{ background: '#f59e0b', color: '#000', border: 'none', borderRadius: 6, padding: '6px 12px', fontWeight: 700 }}>🚪 Check-out</button>
+                    )}
+                    {r.status === 'checkout' && (
+                      <button onClick={() => {
+                        const nombre = r.client ? `${r.client.nombre||''} ${r.client.apellido||''}`.trim() : 'Huésped';
+                        setViewPaymentsModal({ nombre, paymentHistory: r.paymentHistory || [], total: r.pricing?.total || 0, paid: r.payment?.amountPaid || 0, extras: r.extras || [] });
+                      }} style={{ background: '#1e3a5f', color: '#60a5fa', border: '1px solid #1e4080', borderRadius: 6, padding: '6px 11px', fontWeight: 600, fontSize: 12 }}>
+                        🧾 Ver Pagos
+                      </button>
                     )}
                     {(() => { const waLink = buildWaLink(r); return waLink ? (
                       <a href={waLink} target="_blank" rel="noopener noreferrer"
@@ -483,6 +531,200 @@ const ReservationTable = () => {
         </>
         );
         })()}
+      {/* ═══════ MODAL CHECK-OUT CON CAJA DE PAGOS ═══════ */}
+      {checkoutModal && (() => {
+        const b     = checkoutModal.billing;
+        const total = b?.balance?.total ?? b?.pricing?.total ?? 0;
+        const paid  = b?.balance?.paid  ?? b?.payment?.amountPaid ?? 0;
+        const saldo = Math.max(0, total - paid);
+        const extras = b?.extras || [];
+        const history = b?.paymentHistory || [];
+        const paysSoFar = checkoutModal.payments.filter(p => p.amount && parseFloat(p.amount) > 0);
+        const enteringNow = paysSoFar.reduce((s, p) => s + parseFloat(p.amount || 0), 0);
+        const saldoTrasNuevos = Math.max(0, saldo - enteringNow);
+        const fmt = n => `$${Math.round(n || 0).toLocaleString('es-AR')}`;
+        const METHODS = [
+          { value: 'efectivo',     label: '💵 Efectivo' },
+          { value: 'tarjeta',      label: '💳 Tarjeta Crédito' },
+          { value: 'debito',       label: '💳 Tarjeta Débito' },
+          { value: 'transferencia',label: '🏦 Transferencia' },
+          { value: 'cheque',       label: '📝 Cheque' },
+        ];
+        return (
+          <div style={{ position: 'fixed', left:0, top:0, right:0, bottom:0, background:'rgba(0,0,0,0.75)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:2000 }}>
+            <div style={{ background:'#111827', color:'#fff', borderRadius:14, width:560, maxHeight:'90vh', overflow:'auto', boxShadow:'0 20px 60px rgba(0,0,0,0.8)', border:'1px solid #374151' }}>
+              {/* Header */}
+              <div style={{ background:'linear-gradient(135deg,#1e3a5f,#0f172a)', padding:'20px 24px', borderRadius:'14px 14px 0 0', borderBottom:'1px solid #374151' }}>
+                <h3 style={{ margin:0, color:'#60a5fa', fontSize:18, fontWeight:700 }}>🚪 Check-out — {checkoutModal.reservationName}</h3>
+                <p style={{ margin:'4px 0 0', color:'#9ca3af', fontSize:13 }}>Registrá el pago antes de confirmar la salida</p>
+              </div>
+
+              <div style={{ padding:'20px 24px' }}>
+                {/* Resumen de factura */}
+                {checkoutModal.loading ? (
+                  <div style={{ color:'#aaa', textAlign:'center', padding:24 }}>Cargando factura...</div>
+                ) : b ? (
+                  <>
+                    <div style={{ background:'#1f2937', borderRadius:10, padding:'14px 16px', marginBottom:16 }}>
+                      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'8px 16px', fontSize:13 }}>
+                        <span style={{ color:'#9ca3af' }}>Total alojamiento:</span><span style={{ color:'#fff', fontWeight:600 }}>{fmt(b.pricing?.subtotal || b.pricing?.total)}</span>
+                        {extras.length > 0 && <><span style={{ color:'#9ca3af' }}>Cargos extra:</span><span style={{ color:'#f59e0b', fontWeight:600 }}>{fmt(extras.reduce((s,e)=>s+(e.amount||0),0))}</span></>}
+                        <span style={{ color:'#9ca3af' }}>TOTAL FACTURADO:</span><span style={{ color:'#22c55e', fontWeight:700, fontSize:15 }}>{fmt(total)}</span>
+                        {paid > 0 && <><span style={{ color:'#9ca3af' }}>Ya cobrado:</span><span style={{ color:'#60a5fa', fontWeight:600 }}>- {fmt(paid)}</span></>}
+                        <span style={{ color: saldo > 0.01 ? '#fbbf24' : '#9ca3af', fontWeight:700 }}>SALDO A COBRAR:</span>
+                        <span style={{ color: saldo > 0.01 ? '#fbbf24' : '#22c55e', fontWeight:700, fontSize:15 }}>{saldo > 0.01 ? fmt(saldo) : '✅ Saldado'}</span>
+                      </div>
+                      {history.length > 0 && (
+                        <div style={{ marginTop:10, paddingTop:10, borderTop:'1px solid #374151' }}>
+                          <div style={{ color:'#9ca3af', fontSize:11, marginBottom:6 }}>PAGOS YA REGISTRADOS:</div>
+                          {history.map((h,i) => (
+                            <div key={i} style={{ display:'flex', justifyContent:'space-between', fontSize:12, color:'#d1d5db', marginBottom:3 }}>
+                              <span>{new Date(h.date).toLocaleDateString('es-AR')} — {h.method}</span>
+                              <span style={{ color:'#22c55e' }}>{fmt(h.amount)}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Formulario de pagos */}
+                    {saldo > 0.01 ? (
+                      <>
+                        <div style={{ color:'#e5e7eb', fontWeight:600, marginBottom:10, fontSize:14 }}>💳 Registrar pago{checkoutModal.payments.length > 1 ? 's' : ''}:</div>
+                        {checkoutModal.payments.map((p, i) => (
+                          <div key={i} style={{ display:'flex', gap:8, marginBottom:8, alignItems:'center' }}>
+                            <input
+                              type="number" min="0" step="0.01" placeholder={`Monto ${i+1}`}
+                              value={p.amount}
+                              onChange={e => setCheckoutModal(prev => {
+                                const pays = [...prev.payments];
+                                pays[i] = { ...pays[i], amount: e.target.value };
+                                return { ...prev, payments: pays };
+                              })}
+                              style={{ width:110, background:'#1f2937', color:'#fff', border:'1px solid #4b5563', borderRadius:6, padding:'7px 10px', fontSize:13 }}
+                            />
+                            <select
+                              value={p.method}
+                              onChange={e => setCheckoutModal(prev => {
+                                const pays = [...prev.payments];
+                                pays[i] = { ...pays[i], method: e.target.value };
+                                return { ...prev, payments: pays };
+                              })}
+                              style={{ flex:1, background:'#1f2937', color:'#fff', border:'1px solid #4b5563', borderRadius:6, padding:'7px 8px', fontSize:13 }}
+                            >
+                              {METHODS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
+                            </select>
+                            <input
+                              type="text" placeholder="Nota (opcional)"
+                              value={p.notes}
+                              onChange={e => setCheckoutModal(prev => {
+                                const pays = [...prev.payments];
+                                pays[i] = { ...pays[i], notes: e.target.value };
+                                return { ...prev, payments: pays };
+                              })}
+                              style={{ width:110, background:'#1f2937', color:'#fff', border:'1px solid #4b5563', borderRadius:6, padding:'7px 8px', fontSize:12 }}
+                            />
+                            {checkoutModal.payments.length > 1 && (
+                              <button onClick={() => setCheckoutModal(prev => ({ ...prev, payments: prev.payments.filter((_,j)=>j!==i) }))}
+                                style={{ background:'#7f1d1d', color:'#fca5a5', border:'none', borderRadius:6, padding:'6px 10px', cursor:'pointer', fontWeight:700 }}>✕</button>
+                            )}
+                          </div>
+                        ))}
+                        <button
+                          onClick={() => setCheckoutModal(prev => ({ ...prev, payments: [...prev.payments, { amount:'', method:'efectivo', notes:'' }] }))}
+                          style={{ background:'#1f2937', color:'#9ca3af', border:'1px dashed #4b5563', borderRadius:6, padding:'6px 14px', cursor:'pointer', fontSize:12, marginBottom:12 }}
+                        >+ Agregar otro método de pago</button>
+
+                        {/* Resumen de lo que se va a cobrar ahora */}
+                        <div style={{ background: saldoTrasNuevos < -0.5 ? '#7f1d1d22' : saldoTrasNuevos < 0.5 ? '#052e1622' : '#1c140022', border:`1px solid ${saldoTrasNuevos < -0.5 ? '#dc2626' : saldoTrasNuevos < 0.5 ? '#16a34a' : '#ca8a04'}`, borderRadius:8, padding:'10px 14px', marginBottom:14, fontSize:13 }}>
+                          <div style={{ display:'flex', justifyContent:'space-between' }}>
+                            <span style={{ color:'#9ca3af' }}>Ingresando ahora:</span>
+                            <span style={{ color:'#60a5fa', fontWeight:600 }}>{fmt(enteringNow)}</span>
+                          </div>
+                          <div style={{ display:'flex', justifyContent:'space-between', marginTop:4 }}>
+                            <span style={{ fontWeight:700, color: saldoTrasNuevos < -0.5 ? '#f87171' : saldoTrasNuevos < 0.5 ? '#22c55e' : '#fbbf24' }}>
+                              {saldoTrasNuevos < -0.5 ? '⚠️ Monto excede el saldo' : saldoTrasNuevos < 0.5 ? '✅ Saldo cubierto' : `Restante: ${fmt(saldoTrasNuevos)}`}
+                            </span>
+                          </div>
+                        </div>
+                      </>
+                    ) : (
+                      <div style={{ background:'#052e16', border:'1px solid #16a34a', borderRadius:8, padding:'12px 16px', marginBottom:14, color:'#22c55e', fontWeight:600, fontSize:14 }}>
+                        ✅ Esta reserva ya se encuentra totalmente saldada.
+                      </div>
+                    )}
+                  </>
+                ) : null}
+
+                {checkoutModal.error && <div style={{ color:'#f87171', fontWeight:600, marginBottom:10, fontSize:13 }}>{checkoutModal.error}</div>}
+
+                {/* Botones */}
+                <div style={{ display:'flex', gap:10, justifyContent:'flex-end', marginTop:16 }}>
+                  <button onClick={() => setCheckoutModal(null)} disabled={checkoutModal.submitting}
+                    style={{ background:'#374151', color:'#d1d5db', border:'none', borderRadius:8, padding:'10px 22px', cursor:'pointer', fontWeight:600 }}>
+                    Cancelar
+                  </button>
+                  <button onClick={handleCheckoutConfirm} disabled={checkoutModal.loading || checkoutModal.submitting}
+                    style={{ background: checkoutModal.submitting ? '#555' : '#f59e0b', color:'#000', border:'none', borderRadius:8, padding:'10px 22px', cursor:checkoutModal.loading||checkoutModal.submitting?'not-allowed':'pointer', fontWeight:700, opacity:checkoutModal.loading?0.5:1 }}>
+                    {checkoutModal.submitting ? 'Procesando...' : '🚪 Confirmar Check-out'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* ═══════ MODAL VER PAGOS (checkout completado) ═══════ */}
+      {viewPaymentsModal && (() => {
+        const { nombre, paymentHistory, total, paid, extras } = viewPaymentsModal;
+        const fmt = n => `$${Math.round(n||0).toLocaleString('es-AR')}`;
+        const MLABELS = { efectivo:'💵 Efectivo', tarjeta:'💳 T. Crédito', debito:'💳 T. Débito', transferencia:'🏦 Transferencia', cheque:'📝 Cheque' };
+        const extrasTotal = (extras||[]).reduce((s,e)=>s+(e.amount||0),0);
+        return (
+          <div style={{ position:'fixed', left:0, top:0, right:0, bottom:0, background:'rgba(0,0,0,0.7)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:2000 }}
+            onClick={() => setViewPaymentsModal(null)}>
+            <div style={{ background:'#111827', color:'#fff', borderRadius:14, width:460, maxHeight:'80vh', overflow:'auto', boxShadow:'0 20px 60px rgba(0,0,0,0.8)', border:'1px solid #374151' }}
+              onClick={e => e.stopPropagation()}>
+              <div style={{ background:'linear-gradient(135deg,#052e16,#0f172a)', padding:'18px 22px', borderRadius:'14px 14px 0 0', borderBottom:'1px solid #374151' }}>
+                <h3 style={{ margin:0, color:'#22c55e', fontSize:17, fontWeight:700 }}>🧾 Comprobante de Pago</h3>
+                <p style={{ margin:'3px 0 0', color:'#9ca3af', fontSize:13 }}>{nombre}</p>
+              </div>
+              <div style={{ padding:'18px 22px' }}>
+                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'7px 14px', fontSize:13, marginBottom:16 }}>
+                  {extrasTotal > 0 && <><span style={{ color:'#9ca3af' }}>Cargos extra:</span><span style={{ color:'#f59e0b', fontWeight:600 }}>{fmt(extrasTotal)}</span></>}
+                  <span style={{ color:'#9ca3af' }}>Total facturado:</span><span style={{ color:'#22c55e', fontWeight:700 }}>{fmt(total)}</span>
+                  <span style={{ color:'#9ca3af' }}>Total cobrado:</span><span style={{ color:'#60a5fa', fontWeight:700 }}>{fmt(paid)}</span>
+                </div>
+                {paymentHistory.length === 0 ? (
+                  <div style={{ color:'#6b7280', textAlign:'center', padding:20 }}>Sin pagos registrados</div>
+                ) : (
+                  <>
+                    <div style={{ color:'#9ca3af', fontSize:11, marginBottom:6, fontWeight:600 }}>HISTORIAL DE COBROS:</div>
+                    {paymentHistory.map((h,i) => (
+                      <div key={i} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', background:'#1f2937', borderRadius:8, padding:'10px 14px', marginBottom:7 }}>
+                        <div>
+                          <div style={{ color:'#e5e7eb', fontWeight:600, fontSize:13 }}>{MLABELS[h.method] || h.method}</div>
+                          <div style={{ color:'#6b7280', fontSize:11 }}>{new Date(h.date).toLocaleString('es-AR', { day:'2-digit', month:'2-digit', year:'2-digit', hour:'2-digit', minute:'2-digit' })}{h.notes ? ' — '+h.notes : ''}</div>
+                        </div>
+                        <div style={{ color:'#22c55e', fontWeight:700, fontSize:16 }}>{fmt(h.amount)}</div>
+                      </div>
+                    ))}
+                    <div style={{ display:'flex', justifyContent:'space-between', borderTop:'1px solid #374151', paddingTop:10, marginTop:6 }}>
+                      <span style={{ color:'#9ca3af', fontWeight:600 }}>TOTAL COBRADO</span>
+                      <span style={{ color:'#22c55e', fontWeight:700, fontSize:17 }}>{fmt(paymentHistory.reduce((s,h)=>s+(h.amount||0),0))}</span>
+                    </div>
+                  </>
+                )}
+                <div style={{ textAlign:'right', marginTop:18 }}>
+                  <button onClick={() => setViewPaymentsModal(null)} style={{ background:'#374151', color:'#d1d5db', border:'none', borderRadius:8, padding:'9px 22px', cursor:'pointer', fontWeight:600 }}>Cerrar</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
       {/* Modal simple para asignación */}
       {assignModal.open && (
         <div style={{ position: 'fixed', left: 0, top: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>

@@ -145,7 +145,7 @@ const processPayment = async (req, res) => {
     }
     
     // Validar método de pago
-    const validMethods = ['efectivo', 'tarjeta', 'transferencia', 'cheque'];
+    const validMethods = ['efectivo', 'tarjeta', 'debito', 'transferencia', 'cheque'];
     if (!validMethods.includes(method)) {
       return res.status(400).json({
         success: false,
