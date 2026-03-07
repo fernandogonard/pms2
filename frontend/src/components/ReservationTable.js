@@ -350,7 +350,7 @@ const ReservationTable = () => {
             ✕ Limpiar filtros
           </button>
         )}
-      </div> style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 16, background: '#222', padding: 16, borderRadius: 12, alignItems: 'center' }}>
+      {/* ...el cierre de div estaba mal ubicado, lo eliminamos... */}
         {/* Fila 1: datos de la reserva */}
         <select value={form.tipo} onChange={e => setForm({ ...form, tipo: e.target.value })} required style={{ background: '#18191A', color: '#fff', border: '1px solid #444', borderRadius: 6, padding: 8 }}>
           <option value="">Tipo</option>

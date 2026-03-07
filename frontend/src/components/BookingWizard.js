@@ -241,21 +241,7 @@ function BookingWizard() {
 
 export default BookingWizard;
 
-// Paso 1: Selección de tipo de habitación
-function RoomTypeSelector({ tipos, value, onChange, onNext }) {
-  return (
-    <div style={{ marginBottom: 24 }}>
-      <h2>1. Selecciona el tipo de habitación</h2>
-      <select value={value} onChange={e => onChange(e.target.value)} style={{ fontSize: 18, padding: 8, borderRadius: 8 }}>
-        <option value="">-- Selecciona --</option>
-        {tipos.map(tipo => (
-          <option key={tipo} value={tipo}>{tipo}</option>
-        ))}
-      </select>
-      <button disabled={!value} onClick={onNext} style={{ marginLeft: 16, padding: '8px 18px', borderRadius: 8, background: '#2563eb', color: '#fff', border: 'none', fontWeight: 600 }}>Siguiente</button>
-    </div>
-  );
-}
+// ...existing code...
 
 // Paso 2: Selección de fechas
 function DateRangeSelector({ checkIn, checkOut, setCheckIn, setCheckOut, onNext, onBack }) {
