@@ -34,9 +34,7 @@ export function createWS(urlParam, handlers = {}) {
         // Obtener la URL del WebSocket desde redirectorService
         const wsUrl = redirectorService.getWebSocketUrl();
         if (wsUrl) {
-          console.log(`[WS] Puerto descubierto mediante redirectorService: ${wsUrl}`);
           url = wsUrl; // Actualizar la URL con el endpoint correcto
-          
           // Si ya hay un intento de conexión en curso, cerrar y reconectar
           if (ws && ws.readyState !== WebSocket.CLOSED) {
             try { ws.close(); } catch (e) {}
@@ -44,7 +42,7 @@ export function createWS(urlParam, handlers = {}) {
           return;
         }
       } catch (redirErr) {
-        console.warn('[WS] Error con redirectorService, probando método alternativo');
+        // ...
       }
       
       // Si redirectorService falla, intentar con el método anterior
@@ -53,16 +51,13 @@ export function createWS(urlParam, handlers = {}) {
       
       const data = await response.json();
       if (data.success && data.wsEndpoint) {
-        console.log(`[WS] Puerto descubierto: ${data.port}, Endpoint: ${data.wsEndpoint}`);
         url = data.wsEndpoint; // Actualizar la URL con el endpoint correcto
-        
         // Si ya hay un intento de conexión en curso, cerrar y reconectar
         if (ws && ws.readyState !== WebSocket.CLOSED) {
           try { ws.close(); } catch (e) {}
         }
       }
     } catch (err) {
-      console.warn('[WS] Error al descubrir puerto:', err && err.message);
       // Seguir usando la URL original en caso de error
     } finally {
       isPortDiscoveryActive = false;
@@ -106,7 +101,6 @@ export function createWS(urlParam, handlers = {}) {
       const redirectedWsUrl = redirectorService.getWebSocketUrl();
       if (redirectedWsUrl) {
         url = redirectedWsUrl;
-        console.log(`[WS] Usando URL de redirectorService: ${url}`);
       } else {
         // Fallback al método anterior si redirectorService no devuelve una URL
         const savedPort = localStorage.getItem('backend-port');
@@ -115,11 +109,10 @@ export function createWS(urlParam, handlers = {}) {
           const wsBase = baseUrl.includes('://') ? baseUrl.split('://')[1] : baseUrl;
           const host = wsBase.split(':')[0] || 'localhost';
           url = `ws://${host}:${savedPort}/ws`;
-          console.log(`[WS] Usando puerto guardado en localStorage: ${savedPort}`);
         }
       }
     } catch (e) {
-      console.warn('[WS] Error al obtener URL optimizada:', e);
+      // ...
     }
     
     try {
@@ -169,9 +162,6 @@ export function createWS(urlParam, handlers = {}) {
     };
 
     ws.onerror = (ev) => {
-      if (process.env.NODE_ENV === 'development') {
-        try { console.log('[WS] evento error', ev && ev.message ? ev.message : ev); } catch (e) {}
-      }
       onerror && onerror(ev);
       // No cerrar manualmente, dejar que onclose maneje la reconexión
     };

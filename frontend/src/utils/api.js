@@ -25,7 +25,6 @@ export async function discoverBackendPort() {
     const result = await redirectorService.detectBackendPort();
     
     if (result && result.success && result.port) {
-      console.log(`🔍 Backend descubierto en puerto: ${result.port}`);
       API_BASE_URL = `http://localhost:${result.port}`;
       localStorage.setItem('backend-port', result.port.toString());
       return result.port;
@@ -46,7 +45,6 @@ export async function discoverBackendPort() {
         if (res.ok) {
           const data = await res.json();
           if (data.success && data.port) {
-            console.log(`🔍 Backend descubierto en puerto: ${data.port}`);
             API_BASE_URL = `http://localhost:${data.port}`;
             localStorage.setItem('backend-port', data.port.toString());
             return data.port;
@@ -149,7 +147,7 @@ export async function apiFetch(url, opts = {}) {
         };
         localStorage.setItem(`crm-cache-${cacheKey}`, JSON.stringify(cacheData));
       } catch (error) {
-        console.warn('Error caching response:', error);
+        // Ignorar errores de caché
       }
     }
 
@@ -164,8 +162,6 @@ export async function apiFetch(url, opts = {}) {
         try {
           const parsed = JSON.parse(cached);
           if (parsed.expiry > Date.now()) {
-            console.log('Serving from cache:', url);
-            
             // Incrementar contador de cache hits
             const hits = parseInt(localStorage.getItem('cache-hits') || '0') + 1;
             localStorage.setItem('cache-hits', hits.toString());
@@ -181,7 +177,7 @@ export async function apiFetch(url, opts = {}) {
             });
           }
         } catch (parseError) {
-          console.warn('Error parsing cached data:', parseError);
+          // Ignorar errores de parseo
         }
       }
     }

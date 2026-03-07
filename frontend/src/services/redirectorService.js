@@ -40,10 +40,9 @@ export async function detectBackendPort() {
         if (data.success && data.port) {
           // Guardar el puerto en localStorage para uso futuro (incluyendo WebSocket)
           localStorage.setItem('backend-port', data.port);
-          console.log(`🔌 [Redirector] Puerto del backend detectado: ${data.port}`);
           
           if (data.wsEndpoint) {
-            console.log(`🔌 [Redirector] Endpoint WebSocket detectado: ${data.wsEndpoint}`);
+            // ...
           }
           
           // Construir y guardar la URL de WebSocket
@@ -98,7 +97,7 @@ export async function detectBackendPort() {
       }
     }
     
-    console.warn('🔌 [Redirector] No se pudo obtener información del puerto del backend');
+    console.error('🔌 [Redirector] No se pudo obtener información del puerto del backend');
     return null;
   } catch (error) {
     console.error('🔌 [Redirector] Error detectando puerto:', error);
