@@ -243,18 +243,7 @@ export default BookingWizard;
 
 // ...existing code...
 
-// Paso 2: Selección de fechas
-function DateRangeSelector({ checkIn, checkOut, setCheckIn, setCheckOut, onNext, onBack }) {
-  return (
-    <div style={{ marginBottom: 24 }}>
-      <h2>2. Selecciona las fechas</h2>
-      <input type="date" value={checkIn} onChange={e => setCheckIn(e.target.value)} style={{ marginRight: 12, padding: 8, borderRadius: 8 }} />
-      <input type="date" value={checkOut} onChange={e => setCheckOut(e.target.value)} style={{ marginRight: 12, padding: 8, borderRadius: 8 }} />
-      <button onClick={onBack} style={{ marginRight: 12, padding: '8px 18px', borderRadius: 8 }}>Atrás</button>
-      <button disabled={!checkIn || !checkOut} onClick={onNext} style={{ padding: '8px 18px', borderRadius: 8, background: '#2563eb', color: '#fff', border: 'none', fontWeight: 600 }}>Siguiente</button>
-    </div>
-  );
-}
+// ...existing code...
 
 // Paso 3: Mostrar habitaciones disponibles
 function AvailableRoomsList({ disponibilidad, onSelect, onBack, error }) {
