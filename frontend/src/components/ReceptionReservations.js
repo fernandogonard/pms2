@@ -2,6 +2,7 @@
 // Panel de recepcionista optimizado con hooks centralizados
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import AdvancedReservationModal from './AdvancedReservationModal';
+import { apiFetch } from '../utils/api';
 
 const ReceptionReservations = () => {
   const [data, setData] = useState({ reservations: [], rooms: [], users: [] });
@@ -53,7 +54,7 @@ const ReceptionReservations = () => {
   // Cambiar estado de reserva
   const handleStatus = useCallback(async (id, status) => {
     try {
-      const res = await fetch(`${process.env.REACT_APP_API_URL}/reservations/${id}`, {
+      const res = await apiFetch(`/api/reservations/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status })

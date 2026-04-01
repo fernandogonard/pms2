@@ -3,29 +3,32 @@
 import React from 'react';
 import AppRouter from './AppRouter';
 import PWAStatus, { OfflineBanner, InstallPrompt } from './components/PWAStatus';
+import ErrorBoundary from './components/ErrorBoundary';
 import { useOffline } from './hooks/useOffline';
 
 function App() {
   const { isOnline } = useOffline();
 
   return (
-    <div className="app">
-      {/* Banner offline si no hay conexión */}
-      <OfflineBanner />
-      
-      {/* Router principal */}
-      <AppRouter />
-      
-      {/* Prompt de instalación */}
-      <InstallPrompt />
-      
-      {/* Estado PWA (solo mostrar en desarrollo o si el usuario lo solicita) */}
-      {process.env.NODE_ENV === 'development' && (
-        <div className="position-fixed bottom-0 start-0 m-2" style={{ zIndex: 1000 }}>
-          <PWAStatus />
-        </div>
-      )}
-    </div>
+    <ErrorBoundary>
+      <div className="app">
+        {/* Banner offline si no hay conexión */}
+        <OfflineBanner />
+        
+        {/* Router principal */}
+        <AppRouter />
+        
+        {/* Prompt de instalación */}
+        <InstallPrompt />
+        
+        {/* Estado PWA (solo mostrar en desarrollo o si el usuario lo solicita) */}
+        {process.env.NODE_ENV === 'development' && (
+          <div className="position-fixed bottom-0 start-0 m-2" style={{ zIndex: 1000 }}>
+            <PWAStatus />
+          </div>
+        )}
+      </div>
+    </ErrorBoundary>
   );
 }
 

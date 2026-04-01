@@ -117,15 +117,43 @@ export async function apiFetch(url, opts = {}) {
   try {
     const res = await fetch(resolvedUrl, final);
     
-    // Manejar respuesta 401 (sesión expirada)
+    // Manejar respuesta 401 (sesión expirada) - intentar refresh primero
     if (res.status === 401) {
-      // Solo disparar sessionExpired si había un token activo (sesión real expirada).
-      // Si no había token, es un login fallido → no redirigir para evitar loop.
       const hadToken = !!((() => { try { return localStorage.getItem('token'); } catch(e) { return null; } })());
+      const refreshToken = localStorage.getItem('refreshToken');
+
+      // Intentar refresh si tenemos refreshToken y no estamos ya en el endpoint de refresh
+      if (hadToken && refreshToken && !resolvedUrl.includes('/auth/refresh-token')) {
+        try {
+          const refreshRes = await fetch(
+            `${API_BASE.replace(/\/$/, '')}/api/auth/refresh-token`,
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ refreshToken })
+            }
+          );
+          if (refreshRes.ok) {
+            const refreshData = await refreshRes.json();
+            const newToken = refreshData.token || refreshData.accessToken;
+            const newRefresh = refreshData.refreshToken;
+            if (newToken) {
+              localStorage.setItem('token', newToken);
+              if (newRefresh) localStorage.setItem('refreshToken', newRefresh);
+              // Reintentar la petición original con el nuevo token
+              final.headers['Authorization'] = `Bearer ${newToken}`;
+              return await fetch(resolvedUrl, final);
+            }
+          }
+        } catch (refreshErr) {
+          // Refresh falló, continuar al logout
+        }
+      }
+
       try { localStorage.removeItem('token'); } catch (e) {}
+      try { localStorage.removeItem('refreshToken'); } catch (e) {}
       if (hadToken && typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
         const pathname = window.location.pathname;
-        // Nunca usar /login como ruta de retorno para evitar loops
         const safePath = pathname.startsWith('/login') ? '/' : pathname + window.location.search;
         window.dispatchEvent(new CustomEvent('sessionExpired', { detail: { next: encodeURIComponent(safePath) } }));
       }

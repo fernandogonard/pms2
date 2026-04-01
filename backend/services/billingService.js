@@ -5,6 +5,7 @@ const RoomType = require('../models/RoomType');
 const Reservation = require('../models/Reservation');
 const Room = require('../models/Room');
 const { logger } = require('./loggerService');
+const lockService = require('./lockService');
 
 class BillingService {
   
@@ -137,96 +138,88 @@ class BillingService {
   }
   
   /**
-   * Procesar pago de reserva
+   * Procesar pago de reserva (atómico con lock)
    */
   static async processPayment(reservationId, paymentData) {
-    try {
-      const { amount, method, transactionId, notes } = paymentData;
-      
+    const { amount, method, transactionId, notes } = paymentData;
+
+    if (!amount || amount <= 0) {
+      throw new Error('El monto debe ser mayor a 0');
+    }
+
+    const lockKey = `payment:${reservationId}`;
+
+    return await lockService.withLock(lockKey, 10000, async () => {
       const reservation = await Reservation.findById(reservationId);
       if (!reservation) {
         throw new Error('Reserva no encontrada');
       }
-      
-      // Validar monto
-      if (amount <= 0) {
-        throw new Error('El monto debe ser mayor a 0');
-      }
 
-      // Guard: si pricing.total es 0 o no está calculado, calcularlo ahora
+      // Guard: calcular pricing si no existe
       if (!reservation.pricing || !reservation.pricing.total) {
-        try {
-          const pricing = await this.calculateReservationPricing({
-            tipo: reservation.tipo,
-            cantidad: reservation.cantidad,
-            checkIn: reservation.checkIn,
-            checkOut: reservation.checkOut
-          });
-          reservation.pricing = pricing;
-          // Aplicar también extras ya cargados
-          if (reservation.extras && reservation.extras.length > 0) {
-            const extrasTotal = reservation.extras.reduce((s, e) => s + (e.amount || 0), 0);
-            reservation.pricing.total = pricing.total + extrasTotal;
-          }
-          await reservation.save();
-        } catch (pricingErr) {
-          throw new Error(`No se pudo calcular el precio de la reserva: ${pricingErr.message}`);
-        }
+        const pricing = await this.calculateReservationPricing({
+          tipo: reservation.tipo,
+          cantidad: reservation.cantidad,
+          checkIn: reservation.checkIn,
+          checkOut: reservation.checkOut
+        });
+        const extrasTotal = (reservation.extras || []).reduce((s, e) => s + (e.amount || 0), 0);
+        await Reservation.updateOne({ _id: reservationId }, {
+          $set: { pricing: { ...pricing, total: pricing.total + extrasTotal } }
+        });
+        reservation.pricing = { ...pricing, total: pricing.total + extrasTotal };
       }
 
-      const remainingAmount = reservation.pricing.total - reservation.payment.amountPaid;
+      const remainingAmount = reservation.pricing.total - (reservation.payment?.amountPaid || 0);
       if (amount > remainingAmount + 0.01) {
         throw new Error(`El monto excede el saldo pendiente de $${Math.round(remainingAmount)}`);
       }
-      
-      // Registrar en historial de pagos
-      if (!reservation.paymentHistory) reservation.paymentHistory = [];
-      reservation.paymentHistory.push({
-        amount,
-        method,
-        date: new Date(),
-        transactionId: transactionId || null,
-        notes: notes || ''
-      });
 
-      // Actualizar resumen de pago
-      reservation.payment.amountPaid += amount;
-      reservation.payment.method = method;
-      reservation.payment.paymentDate = new Date();
-      if (transactionId) reservation.payment.transactionId = transactionId;
-      if (notes) reservation.payment.notes = notes;
-      
-      // Actualizar estado de pago
-      if (reservation.payment.amountPaid >= reservation.pricing.total - 0.01) {
-        reservation.payment.status = 'pagado';
-        reservation.invoice.isPaid = true;
-      } else if (reservation.payment.amountPaid > 0) {
-        reservation.payment.status = 'parcial';
-      }
-      
-      // Generar factura si no existe (usar helper con reintentos ante duplicados)
-      if (!reservation.invoice.number) {
-        await this.assignUniqueInvoiceNumberAndSave(reservation);
-      } else {
-        await reservation.save();
-      }
-      
-      return {
-        success: true,
-        reservation,
-        payment: {
-          amountPaid: amount,
-          totalPaid: reservation.payment.amountPaid,
-          remaining: Math.max(0, reservation.pricing.total - reservation.payment.amountPaid),
-          status: reservation.payment.status,
-          history: reservation.paymentHistory
+      const newAmountPaid = (reservation.payment?.amountPaid || 0) + amount;
+      const isPaid = newAmountPaid >= reservation.pricing.total - 0.01;
+      const paymentStatus = isPaid ? 'pagado' : newAmountPaid > 0 ? 'parcial' : 'pendiente';
+
+      // Operación atómica: $push al historial + $set de totales
+      const updateOps = {
+        $push: {
+          paymentHistory: {
+            amount,
+            method,
+            date: new Date(),
+            transactionId: transactionId || null,
+            notes: notes || ''
+          }
+        },
+        $set: {
+          'payment.amountPaid': newAmountPaid,
+          'payment.method': method,
+          'payment.paymentDate': new Date(),
+          'payment.status': paymentStatus,
+          'invoice.isPaid': isPaid
         }
       };
-      
-    } catch (error) {
-      logger.error('Error procesando pago:', error);
-      throw error;
-    }
+      if (transactionId) updateOps.$set['payment.transactionId'] = transactionId;
+      if (notes) updateOps.$set['payment.notes'] = notes;
+
+      const updated = await Reservation.findByIdAndUpdate(reservationId, updateOps, { new: true });
+
+      // Generar factura si no existe
+      if (!updated.invoice?.number) {
+        await this.assignUniqueInvoiceNumberAndSave(updated);
+      }
+
+      return {
+        success: true,
+        reservation: updated,
+        payment: {
+          amountPaid: amount,
+          totalPaid: newAmountPaid,
+          remaining: Math.max(0, reservation.pricing.total - newAmountPaid),
+          status: paymentStatus,
+          history: updated.paymentHistory
+        }
+      };
+    });
   }
 
   /**

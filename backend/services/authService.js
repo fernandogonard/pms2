@@ -4,6 +4,7 @@
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const User = require('../models/User');
+const BlacklistedToken = require('../models/BlacklistedToken');
 const { logger } = require('../config/logger');
 
 class AuthService {
@@ -12,50 +13,38 @@ class AuthService {
     this.userCache = new Map();
     this.cacheTimeout = 5 * 60 * 1000; // 5 minutos
 
-    // Token blacklist in-memory (Map<token, expiresAt>)
-    this._tokenBlacklist = new Map();
-    // Limpieza periódica de tokens expirados cada 10 minutos
-    this._blacklistCleanupInterval = setInterval(() => this._cleanupBlacklist(), 10 * 60 * 1000);
-    // Evitar que el interval mantenga el proceso vivo
-    if (this._blacklistCleanupInterval.unref) this._blacklistCleanupInterval.unref();
+    // Token blacklist en memoria como cache rápido + MongoDB como persistencia
+    this._tokenBlacklistCache = new Set();
   }
 
   /**
-   * Añade un token a la blacklist hasta su expiración natural.
+   * Añade un token a la blacklist (MongoDB + cache en memoria).
    * @param {string} token - JWT a invalidar
    */
-  blacklistToken(token) {
+  async blacklistToken(token) {
     try {
       const decoded = jwt.decode(token);
-      // exp es epoch en segundos
-      const expiresAt = decoded && decoded.exp ? decoded.exp * 1000 : Date.now() + 24 * 60 * 60 * 1000;
-      this._tokenBlacklist.set(token, expiresAt);
+      const expiresAt = decoded && decoded.exp ? new Date(decoded.exp * 1000) : new Date(Date.now() + 24 * 60 * 60 * 1000);
+      await BlacklistedToken.create({ token, expiresAt }).catch(() => {});
+      this._tokenBlacklistCache.add(token);
     } catch {
-      // Si no se puede decodificar, guardar con TTL de 24h
-      this._tokenBlacklist.set(token, Date.now() + 24 * 60 * 60 * 1000);
+      this._tokenBlacklistCache.add(token);
     }
   }
 
   /**
    * Verifica si un token está en la blacklist.
    * @param {string} token
-   * @returns {boolean}
+   * @returns {Promise<boolean>}
    */
-  isTokenBlacklisted(token) {
-    if (!this._tokenBlacklist.has(token)) return false;
-    const expiresAt = this._tokenBlacklist.get(token);
-    if (Date.now() > expiresAt) {
-      this._tokenBlacklist.delete(token);
+  async isTokenBlacklisted(token) {
+    if (this._tokenBlacklistCache.has(token)) return true;
+    try {
+      const found = await BlacklistedToken.exists({ token });
+      if (found) this._tokenBlacklistCache.add(token);
+      return !!found;
+    } catch {
       return false;
-    }
-    return true;
-  }
-
-  /** Elimina tokens expirados de la blacklist */
-  _cleanupBlacklist() {
-    const now = Date.now();
-    for (const [token, expiresAt] of this._tokenBlacklist) {
-      if (now > expiresAt) this._tokenBlacklist.delete(token);
     }
   }
   
@@ -384,7 +373,7 @@ class AuthService {
   async logout(token) {
     try {
       if (token) {
-        this.blacklistToken(token);
+        await this.blacklistToken(token);
       }
       const decoded = this.verifyToken(token);
       if (decoded) {

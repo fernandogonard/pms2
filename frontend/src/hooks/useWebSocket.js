@@ -15,7 +15,17 @@ export const useWebSocket = ({ onMessage, onError, onClose }) => {
     const wsUrl = process.env.REACT_APP_WS_URL || `ws://${window.location.hostname}:5001`;
 
     const client = createWS(`${wsUrl}/ws`, {
-      onmessage: (ev) => { callbacksRef.current.onMessage?.(ev); },
+      onmessage: (ev) => {
+        try {
+          const raw = ev.data && ev.data.toString ? ev.data.toString() : ev.data;
+          const parsed = JSON.parse(raw);
+          if (parsed.type === 'ping' || parsed.type === 'pong') return;
+          callbacksRef.current.onMessage?.(parsed);
+        } catch (e) {
+          // Si no es JSON válido, pasar como string
+          callbacksRef.current.onMessage?.({ type: 'raw', data: ev.data });
+        }
+      },
       onerror: (err) => { callbacksRef.current.onError?.(err.message || 'WebSocket error'); },
       onclose: () => { callbacksRef.current.onClose?.(); },
     });
