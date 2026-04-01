@@ -275,7 +275,7 @@ const RoomTable = () => {
                           🧹 Limpieza
                         </button>
                       )}
-                      {room.status === 'limpieza' && (
+                      {room.status === 'limpieza' && !room.pendingHousekeeping && (
                         <button
                           onClick={() => handleSetStatus(room._id, 'disponible', room.number)}
                           style={{ background: '#14532d', color: '#86efac', border: 'none', borderRadius: 6, padding: '6px 10px', fontWeight: 600, fontSize: 12 }}

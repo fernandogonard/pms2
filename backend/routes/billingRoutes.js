@@ -9,6 +9,8 @@ const {
   updateRoomTypePrice,
   calculateReservationPrice,
   processPayment,
+  deletePayment,
+  editPayment,
   getReservationBilling,
   getFinancialSummary,
   getPendingInvoices,
@@ -43,6 +45,12 @@ router.post('/reservations/:id/payment', devProtect, authorize('admin', 'recepci
 
 // POST /api/billing/reservations/:id/charge - Agregar cargo extra (minibar, lavanderia, etc.)
 router.post('/reservations/:id/charge', protect, authorize('admin', 'recepcionista'), addCharge);
+
+// DELETE /api/billing/reservations/:id/payment/:paymentIndex - Eliminar un pago del historial
+router.delete('/reservations/:id/payment/:paymentIndex', devProtect, authorize('admin'), deletePayment);
+
+// PUT /api/billing/reservations/:id/payment/:paymentIndex - Editar monto de un pago
+router.put('/reservations/:id/payment/:paymentIndex', devProtect, authorize('admin'), editPayment);
 
 // GET /api/billing/reservations/:id - Obtener información de facturación de reserva
 router.get('/reservations/:id', devProtect, getReservationBilling);

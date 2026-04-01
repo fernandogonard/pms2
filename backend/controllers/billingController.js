@@ -311,6 +311,78 @@ const addCharge = async (req, res) => {
 };
 
 /**
+ * Eliminar un pago del historial
+ */
+const deletePayment = async (req, res) => {
+  try {
+    const { id, paymentIndex } = req.params;
+    const idx = parseInt(paymentIndex, 10);
+    if (isNaN(idx) || idx < 0) {
+      return res.status(400).json({ success: false, message: 'Índice de pago inválido' });
+    }
+    const result = await BillingService.deletePayment(id, idx);
+    const wss = req.app.get('wss');
+    if (wss) {
+      wss.clients.forEach(c => {
+        if (c.readyState === 1) c.send(JSON.stringify({ type: 'payment_deleted', reservationId: id }));
+      });
+    }
+    auditService.log({
+      action: 'PAGO_ELIMINADO',
+      entity: 'Reservation',
+      entityId: id,
+      userId: req.user?._id || req.user?.id,
+      userEmail: req.user?.email || 'sistema',
+      userRole: req.user?.role || 'sistema',
+      description: `Pago #${idx + 1} eliminado de reserva ${String(id).slice(-6).toUpperCase()}`,
+      details: { paymentIndex: idx },
+      ip: req.ip
+    });
+    res.json({ success: true, message: 'Pago eliminado', data: result.reservation });
+  } catch (error) {
+    res.status(400).json({ success: false, message: error.message || 'Error eliminando pago' });
+  }
+};
+
+/**
+ * Editar el monto de un pago existente
+ */
+const editPayment = async (req, res) => {
+  try {
+    const { id, paymentIndex } = req.params;
+    const { amount } = req.body;
+    const idx = parseInt(paymentIndex, 10);
+    if (isNaN(idx) || idx < 0) {
+      return res.status(400).json({ success: false, message: 'Índice de pago inválido' });
+    }
+    if (!amount || parseFloat(amount) <= 0) {
+      return res.status(400).json({ success: false, message: 'Monto inválido' });
+    }
+    const result = await BillingService.editPayment(id, idx, parseFloat(amount));
+    const wss = req.app.get('wss');
+    if (wss) {
+      wss.clients.forEach(c => {
+        if (c.readyState === 1) c.send(JSON.stringify({ type: 'payment_edited', reservationId: id }));
+      });
+    }
+    auditService.log({
+      action: 'PAGO_EDITADO',
+      entity: 'Reservation',
+      entityId: id,
+      userId: req.user?._id || req.user?.id,
+      userEmail: req.user?.email || 'sistema',
+      userRole: req.user?.role || 'sistema',
+      description: `Pago #${idx + 1} editado a $${parseFloat(amount)} en reserva ${String(id).slice(-6).toUpperCase()}`,
+      details: { paymentIndex: idx, newAmount: parseFloat(amount) },
+      ip: req.ip
+    });
+    res.json({ success: true, message: 'Pago actualizado', data: result.reservation });
+  } catch (error) {
+    res.status(400).json({ success: false, message: error.message || 'Error editando pago' });
+  }
+};
+
+/**
  * Obtener resumen financiero
  */
 const getFinancialSummary = async (req, res) => {
@@ -588,6 +660,8 @@ module.exports = {
   updateRoomTypePrice,
   calculateReservationPrice,
   processPayment,
+  deletePayment,
+  editPayment,
   getReservationBilling,
   getFinancialSummary,
   getPendingInvoices,

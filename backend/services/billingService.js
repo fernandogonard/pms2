@@ -230,6 +230,86 @@ class BillingService {
   }
 
   /**
+   * Eliminar un pago del historial y recalcular saldos
+   */
+  static async deletePayment(reservationId, paymentIndex) {
+    try {
+      const reservation = await Reservation.findById(reservationId)
+        .populate('client', 'nombre apellido');
+      if (!reservation) throw new Error('Reserva no encontrada');
+      if (!reservation.paymentHistory || paymentIndex < 0 || paymentIndex >= reservation.paymentHistory.length) {
+        throw new Error('Pago no encontrado en el historial');
+      }
+
+      // Eliminar el pago
+      reservation.paymentHistory.splice(paymentIndex, 1);
+
+      // Recalcular amountPaid desde el historial
+      reservation.payment.amountPaid = reservation.paymentHistory.reduce((s, h) => s + (h.amount || 0), 0);
+
+      // Recalcular estado
+      const total = reservation.pricing?.total || 0;
+      if (reservation.payment.amountPaid >= total - 0.01 && total > 0) {
+        reservation.payment.status = 'pagado';
+        reservation.invoice.isPaid = true;
+      } else if (reservation.payment.amountPaid > 0) {
+        reservation.payment.status = 'parcial';
+        reservation.invoice.isPaid = false;
+      } else {
+        reservation.payment.status = 'pendiente';
+        reservation.invoice.isPaid = false;
+      }
+
+      await reservation.save();
+      return { success: true, reservation };
+    } catch (error) {
+      logger.error('Error eliminando pago:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Editar el monto de un pago existente en el historial
+   */
+  static async editPayment(reservationId, paymentIndex, newAmount) {
+    try {
+      if (!newAmount || newAmount <= 0) throw new Error('El monto debe ser mayor a 0');
+
+      const reservation = await Reservation.findById(reservationId)
+        .populate('client', 'nombre apellido');
+      if (!reservation) throw new Error('Reserva no encontrada');
+      if (!reservation.paymentHistory || paymentIndex < 0 || paymentIndex >= reservation.paymentHistory.length) {
+        throw new Error('Pago no encontrado en el historial');
+      }
+
+      // Actualizar el monto del pago
+      reservation.paymentHistory[paymentIndex].amount = newAmount;
+
+      // Recalcular amountPaid desde el historial
+      reservation.payment.amountPaid = reservation.paymentHistory.reduce((s, h) => s + (h.amount || 0), 0);
+
+      // Recalcular estado
+      const total = reservation.pricing?.total || 0;
+      if (reservation.payment.amountPaid >= total - 0.01 && total > 0) {
+        reservation.payment.status = 'pagado';
+        reservation.invoice.isPaid = true;
+      } else if (reservation.payment.amountPaid > 0) {
+        reservation.payment.status = 'parcial';
+        reservation.invoice.isPaid = false;
+      } else {
+        reservation.payment.status = 'pendiente';
+        reservation.invoice.isPaid = false;
+      }
+
+      await reservation.save();
+      return { success: true, reservation };
+    } catch (error) {
+      logger.error('Error editando pago:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Agregar cargo extra a una reserva en curso
    */
   static async addCharge(reservationId, chargeData) {

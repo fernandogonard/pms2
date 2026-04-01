@@ -509,7 +509,7 @@ const ReservationTable = () => {
                     {r.status === 'checkout' && (
                       <button onClick={() => {
                         const nombre = r.client ? `${r.client.nombre||''} ${r.client.apellido||''}`.trim() : 'Huésped';
-                        setViewPaymentsModal({ nombre, paymentHistory: r.paymentHistory || [], total: r.pricing?.total || 0, paid: r.payment?.amountPaid || 0, extras: r.extras || [] });
+                        setViewPaymentsModal({ _id: r._id, nombre, paymentHistory: r.paymentHistory || [], total: r.pricing?.total || 0, paid: r.payment?.amountPaid || 0, extras: r.extras || [], editingIndex: null, editAmount: '' });
                       }} style={{ background: '#1e3a5f', color: '#60a5fa', border: '1px solid #1e4080', borderRadius: 6, padding: '6px 11px', fontWeight: 600, fontSize: 12 }}>
                         🧾 Ver Pagos
                       </button>
@@ -678,10 +678,47 @@ const ReservationTable = () => {
 
       {/* ═══════ MODAL VER PAGOS (checkout completado) ═══════ */}
       {viewPaymentsModal && (() => {
-        const { nombre, paymentHistory, total, paid, extras } = viewPaymentsModal;
+        const { _id, nombre, paymentHistory, total, paid, extras, editingIndex, editAmount } = viewPaymentsModal;
         const fmt = n => `$${Math.round(n||0).toLocaleString('es-AR')}`;
         const MLABELS = { efectivo:'💵 Efectivo', tarjeta:'💳 T. Crédito', debito:'💳 T. Débito', transferencia:'🏦 Transferencia', cheque:'📝 Cheque' };
         const extrasTotal = (extras||[]).reduce((s,e)=>s+(e.amount||0),0);
+        const balance = total - paid;
+
+        const handleDeletePayment = async (idx) => {
+          if (!window.confirm(`¿Eliminar este pago de ${fmt(paymentHistory[idx]?.amount)}?`)) return;
+          try {
+            const res = await apiFetch(`/api/billing/reservations/${_id}/payment/${idx}`, { method: 'DELETE' });
+            const data = await res.json();
+            if (data.success) {
+              const r = data.data;
+              setViewPaymentsModal(prev => ({ ...prev, paymentHistory: r.paymentHistory || [], paid: r.payment?.amountPaid || 0, editingIndex: null }));
+              fetchData();
+            } else {
+              alert(data.message || 'Error al eliminar pago');
+            }
+          } catch (err) { alert('Error de red al eliminar pago'); }
+        };
+
+        const handleSaveEdit = async (idx) => {
+          const newAmt = parseFloat(editAmount);
+          if (!newAmt || newAmt <= 0) { alert('Ingresá un monto válido'); return; }
+          try {
+            const res = await apiFetch(`/api/billing/reservations/${_id}/payment/${idx}`, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ amount: newAmt })
+            });
+            const data = await res.json();
+            if (data.success) {
+              const r = data.data;
+              setViewPaymentsModal(prev => ({ ...prev, paymentHistory: r.paymentHistory || [], paid: r.payment?.amountPaid || 0, editingIndex: null, editAmount: '' }));
+              fetchData();
+            } else {
+              alert(data.message || 'Error al editar pago');
+            }
+          } catch (err) { alert('Error de red al editar pago'); }
+        };
+
         return (
           <div style={{ position:'fixed', left:0, top:0, right:0, bottom:0, background:'rgba(0,0,0,0.7)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:2000 }}
             onClick={() => setViewPaymentsModal(null)}>
@@ -695,7 +732,11 @@ const ReservationTable = () => {
                 <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'7px 14px', fontSize:13, marginBottom:16 }}>
                   {extrasTotal > 0 && <><span style={{ color:'#9ca3af' }}>Cargos extra:</span><span style={{ color:'#f59e0b', fontWeight:600 }}>{fmt(extrasTotal)}</span></>}
                   <span style={{ color:'#9ca3af' }}>Total facturado:</span><span style={{ color:'#22c55e', fontWeight:700 }}>{fmt(total)}</span>
-                  <span style={{ color:'#9ca3af' }}>Total cobrado:</span><span style={{ color:'#60a5fa', fontWeight:700 }}>{fmt(paid)}</span>
+                  <span style={{ color:'#9ca3af' }}>Total cobrado:</span><span style={{ color: Math.abs(balance) < 0.5 ? '#60a5fa' : balance > 0 ? '#fbbf24' : '#f87171', fontWeight:700 }}>{fmt(paid)}</span>
+                  {Math.abs(balance) >= 0.5 && (
+                    <><span style={{ color:'#9ca3af' }}>{balance > 0 ? 'Saldo pendiente:' : 'Cobrado de más:'}</span>
+                    <span style={{ color: balance > 0 ? '#fbbf24' : '#f87171', fontWeight:700 }}>{fmt(Math.abs(balance))}</span></>
+                  )}
                 </div>
                 {paymentHistory.length === 0 ? (
                   <div style={{ color:'#6b7280', textAlign:'center', padding:20 }}>Sin pagos registrados</div>
@@ -704,11 +745,32 @@ const ReservationTable = () => {
                     <div style={{ color:'#9ca3af', fontSize:11, marginBottom:6, fontWeight:600 }}>HISTORIAL DE COBROS:</div>
                     {paymentHistory.map((h,i) => (
                       <div key={i} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', background:'#1f2937', borderRadius:8, padding:'10px 14px', marginBottom:7 }}>
-                        <div>
+                        <div style={{ flex:1 }}>
                           <div style={{ color:'#e5e7eb', fontWeight:600, fontSize:13 }}>{MLABELS[h.method] || h.method}</div>
                           <div style={{ color:'#6b7280', fontSize:11 }}>{new Date(h.date).toLocaleString('es-AR', { day:'2-digit', month:'2-digit', year:'2-digit', hour:'2-digit', minute:'2-digit' })}{h.notes ? ' — '+h.notes : ''}</div>
                         </div>
-                        <div style={{ color:'#22c55e', fontWeight:700, fontSize:16 }}>{fmt(h.amount)}</div>
+                        {editingIndex === i ? (
+                          <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+                            <input type="number" step="0.01" min="0.01" value={editAmount}
+                              onChange={e => setViewPaymentsModal(prev => ({ ...prev, editAmount: e.target.value }))}
+                              style={{ width:90, background:'#111827', color:'#fff', border:'1px solid #4b5563', borderRadius:6, padding:'5px 8px', fontSize:13 }}
+                              autoFocus />
+                            <button onClick={() => handleSaveEdit(i)}
+                              style={{ background:'#16a34a', color:'#fff', border:'none', borderRadius:6, padding:'5px 10px', cursor:'pointer', fontSize:12, fontWeight:700 }}>✓</button>
+                            <button onClick={() => setViewPaymentsModal(prev => ({ ...prev, editingIndex: null, editAmount: '' }))}
+                              style={{ background:'#4b5563', color:'#d1d5db', border:'none', borderRadius:6, padding:'5px 10px', cursor:'pointer', fontSize:12 }}>✕</button>
+                          </div>
+                        ) : (
+                          <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                            <span style={{ color:'#22c55e', fontWeight:700, fontSize:16 }}>{fmt(h.amount)}</span>
+                            <button onClick={() => setViewPaymentsModal(prev => ({ ...prev, editingIndex: i, editAmount: String(h.amount) }))}
+                              title="Editar monto"
+                              style={{ background:'#1e3a5f', color:'#60a5fa', border:'none', borderRadius:5, padding:'4px 7px', cursor:'pointer', fontSize:12 }}>✏️</button>
+                            <button onClick={() => handleDeletePayment(i)}
+                              title="Eliminar pago"
+                              style={{ background:'#7f1d1d', color:'#fca5a5', border:'none', borderRadius:5, padding:'4px 7px', cursor:'pointer', fontSize:12 }}>🗑️</button>
+                          </div>
+                        )}
                       </div>
                     ))}
                     <div style={{ display:'flex', justifyContent:'space-between', borderTop:'1px solid #374151', paddingTop:10, marginTop:6 }}>
