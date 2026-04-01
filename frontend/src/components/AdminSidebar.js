@@ -2,6 +2,8 @@
 // Sidebar con navegación por secciones para el panel de administración
 
 import React, { useState } from 'react';
+import { useAuth } from '../contexts/AuthContext';
+import { useNavigate } from 'react-router-dom';
 
 const AdminSidebar = ({ activeSection, onSectionChange }) => {
   const [collapsed, setCollapsed] = useState(false);
@@ -12,9 +14,12 @@ const AdminSidebar = ({ activeSection, onSectionChange }) => {
     { id: 'pending-checkouts', label: 'Checkouts Pendientes', icon: '🚪' },
     { id: 'reservas', label: 'Reservas', icon: '📅' },
     { id: 'habitaciones', label: 'Habitaciones', icon: '🛏️' },
+    { id: 'housekeeping', label: 'Housekeeping', icon: '🧹' },
+    { id: 'mantenimiento', label: 'Mantenimiento', icon: '🔧' },
     { id: 'clientes', label: 'Clientes', icon: '👥' },
     { id: 'facturacion', label: 'Facturación', icon: '💰' },
     { id: 'reportes', label: 'Reportes', icon: '📋' },
+    { id: 'auditoria', label: 'Auditoría', icon: '📜' },
     { id: 'usuarios', label: 'Usuarios', icon: '⚙️' }
   ];
 
@@ -76,9 +81,26 @@ const AdminSidebar = ({ activeSection, onSectionChange }) => {
             <div style={footerTitleStyle}>MiHotel CRM</div>
             <div style={footerVersionStyle}>v1.0.0</div>
           </div>
+          <LogoutButton />
         </div>
       )}
     </div>
+  );
+};
+
+const LogoutButton = () => {
+  const { logout } = useAuth();
+  const navigate = useNavigate();
+
+  const handleLogout = async () => {
+    await logout();
+    navigate('/login');
+  };
+
+  return (
+    <button onClick={handleLogout} style={logoutBtnStyle} title="Cerrar sesión">
+      🚪 Cerrar sesión
+    </button>
   );
 };
 
@@ -185,6 +207,19 @@ const footerTitleStyle = {
 const footerVersionStyle = {
   color: 'rgba(255, 255, 255, 0.6)',
   fontSize: '10px'
+};
+
+const logoutBtnStyle = {
+  marginTop: 12,
+  width: '100%',
+  padding: '8px 12px',
+  background: '#ef4444',
+  color: '#fff',
+  border: 'none',
+  borderRadius: 8,
+  cursor: 'pointer',
+  fontWeight: 700,
+  fontSize: 14
 };
 
 export default AdminSidebar;

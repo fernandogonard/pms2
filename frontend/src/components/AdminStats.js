@@ -1,9 +1,8 @@
 // components/AdminStats.js
 // Estadísticas clave para el dashboard admin
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 
 import { apiFetch } from '../utils/api';
-import useSessionGuard from '../hooks/useSessionGuard';
 const API_ROOMS = '/api/rooms';
 const API_RESERVATIONS = '/api/reservations';
 const API_STATS = '/api/stats/rooms';
@@ -13,53 +12,33 @@ const AdminStats = () => {
   const [reservations, setReservations] = useState([]);
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
-  const { canFetch, sessionExpired, authLoading } = useSessionGuard();
-  const sessionCopy = useCallback(
-    (action = 'ver estadísticas administrativas') => (
-      sessionExpired
-        ? `Tu sesión expiró. Inicia sesión nuevamente para ${action}.`
-        : `Debes iniciar sesión para ${action}.`
-    ),
-    [sessionExpired]
-  );
-
-  const load = useCallback(async () => {
-    if (!canFetch) {
-      if (!authLoading) {
-        setRooms([]);
-        setReservations([]);
-        setStats(null);
-        setLoading(false);
-      }
-      return;
-    }
-    try {
-      const [roomsRes, reservationsRes, statsRes] = await Promise.all([
-        apiFetch(API_ROOMS),
-        apiFetch(API_RESERVATIONS),
-        apiFetch(API_STATS, {
-          headers: {
-            'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
-            'Pragma': 'no-cache',
-            'Expires': '0'
-          }
-        })
-      ]);
-      const roomsData = await roomsRes.json();
-      const reservationsData = await reservationsRes.json();
-      const statsData = await statsRes.json();
-      
-      setRooms(Array.isArray(roomsData) ? roomsData : []);
-      setReservations(Array.isArray(reservationsData) ? reservationsData : []);
-      setStats(statsData);
-    } catch (e) {
-      console.error('Error cargando estadísticas:', e);
-    } finally {
-      setLoading(false);
-    }
-  }, [canFetch, authLoading]);
 
   useEffect(() => {
+    const load = async () => {
+      try {
+        const [roomsRes, reservationsRes, statsRes] = await Promise.all([
+          apiFetch(API_ROOMS),
+          apiFetch(API_RESERVATIONS),
+          apiFetch(API_STATS, {
+            headers: {
+              'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+              'Expires': '0'
+            }
+          })
+        ]);
+        const roomsData = await roomsRes.json();
+        const reservationsData = await reservationsRes.json();
+        const statsData = await statsRes.json();
+        
+        setRooms(Array.isArray(roomsData) ? roomsData : []);
+        setReservations(Array.isArray(reservationsData) ? reservationsData : []);
+        setStats(statsData);
+      } catch (e) {
+        console.error('Error cargando estadísticas:', e);
+      } finally {
+        setLoading(false);
+      }
+    };
     load();
     
     // Actualizar cada 30 segundos para mantener datos frescos
@@ -68,7 +47,7 @@ const AdminStats = () => {
     }, 30000);
     
     return () => clearInterval(interval);
-  }, [load]);
+  }, []);
 
   // Estadísticas
   const today = new Date().toISOString().slice(0, 10);
@@ -114,14 +93,6 @@ const AdminStats = () => {
     return sum + avgPrice;
   }, 0);
 
-  if (!canFetch && !authLoading) {
-    return (
-      <div style={{ textAlign: 'center', margin: '24px 0', color: '#fbbf24' }}>
-        {sessionCopy()}
-      </div>
-    );
-  }
-
   if (loading) return (
     <div style={{ textAlign: 'center', margin: '24px 0' }}>
       <div style={{ display: 'inline-block', width: 40, height: 40, border: '5px solid #222', borderTop: '5px solid #2563eb', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
@@ -140,7 +111,7 @@ const AdminStats = () => {
         </div>
         {stats && (
           <div style={{ marginTop: 8, fontSize: '0.8rem', color: '#888' }}>
-            Disponibles: {stats.stats.disponibles} | Limpieza: {stats.stats.limpieza} | Mantenimiento: {stats.stats.mantenimiento}
+            Disponibles: {stats?.stats?.disponibles ?? 0} | Limpieza: {stats?.stats?.limpieza ?? 0} | Mantenimiento: {stats?.stats?.mantenimiento ?? 0}
           </div>
         )}
       </div>

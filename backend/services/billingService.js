@@ -3,6 +3,7 @@
 
 const RoomType = require('../models/RoomType');
 const Reservation = require('../models/Reservation');
+const Room = require('../models/Room');
 const { logger } = require('./loggerService');
 
 class BillingService {
@@ -15,9 +16,22 @@ class BillingService {
       const { tipo, cantidad, checkIn, checkOut } = reservationData;
       
       // Obtener precio base por tipo de habitación
-      const roomType = await RoomType.findOne({ name: tipo, isActive: true });
+      let roomType = await RoomType.findOne({ name: tipo, isActive: true });
+      
+      // Fallback: si no hay RoomType seedeado, usar el precio de la colección Room
       if (!roomType) {
-        throw new Error(`Tipo de habitación '${tipo}' no encontrado o inactivo`);
+        const roomSample = await Room.findOne({ type: tipo });
+        if (!roomSample) {
+          throw new Error(`Tipo de habitación '${tipo}' no encontrado en el sistema`);
+        }
+        const CAPACITY_MAP = { doble: 2, triple: 3, cuadruple: 4, suite: 2 };
+        roomType = {
+          basePrice: roomSample.price,
+          currency: 'ARS',
+          capacity: CAPACITY_MAP[tipo] || 2,
+          name: tipo,
+          description: ''
+        };
       }
       
       // Calcular noches
@@ -94,6 +108,33 @@ class BillingService {
     
     return `INV-${year}${month}${day}${hour}${minute}-${random}`;
   }
+
+  /**
+   * Asignar un número de factura único y guardar la reserva con reintentos
+   */
+  static async assignUniqueInvoiceNumberAndSave(reservation, maxAttempts = 5) {
+    let attempt = 0;
+    while (attempt < maxAttempts) {
+      attempt += 1;
+      reservation.invoice = reservation.invoice || {};
+      reservation.invoice.number = this.generateInvoiceNumber();
+      reservation.invoice.issueDate = reservation.invoice.issueDate || new Date();
+      reservation.invoice.dueDate = reservation.invoice.dueDate || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+      try {
+        await reservation.save();
+        return reservation;
+      } catch (err) {
+        // Si es un duplicate key error en invoice.number, intentar de nuevo
+        if (err && err.code === 11000 && err.message && err.message.includes('invoice.number')) {
+          // esperar un poco antes de reintentar para reducir colisiones
+          await new Promise(r => setTimeout(r, 50 * attempt));
+          continue;
+        }
+        throw err;
+      }
+    }
+    throw new Error('No se pudo generar un número de factura único después de varios intentos');
+  }
   
   /**
    * Procesar pago de reserva
@@ -111,35 +152,64 @@ class BillingService {
       if (amount <= 0) {
         throw new Error('El monto debe ser mayor a 0');
       }
-      
+
+      // Guard: si pricing.total es 0 o no está calculado, calcularlo ahora
+      if (!reservation.pricing || !reservation.pricing.total) {
+        try {
+          const pricing = await this.calculateReservationPricing({
+            tipo: reservation.tipo,
+            cantidad: reservation.cantidad,
+            checkIn: reservation.checkIn,
+            checkOut: reservation.checkOut
+          });
+          reservation.pricing = pricing;
+          // Aplicar también extras ya cargados
+          if (reservation.extras && reservation.extras.length > 0) {
+            const extrasTotal = reservation.extras.reduce((s, e) => s + (e.amount || 0), 0);
+            reservation.pricing.total = pricing.total + extrasTotal;
+          }
+          await reservation.save();
+        } catch (pricingErr) {
+          throw new Error(`No se pudo calcular el precio de la reserva: ${pricingErr.message}`);
+        }
+      }
+
       const remainingAmount = reservation.pricing.total - reservation.payment.amountPaid;
-      if (amount > remainingAmount) {
-        throw new Error(`El monto excede el saldo pendiente de $${remainingAmount}`);
+      if (amount > remainingAmount + 0.01) {
+        throw new Error(`El monto excede el saldo pendiente de $${Math.round(remainingAmount)}`);
       }
       
-      // Procesar pago
+      // Registrar en historial de pagos
+      if (!reservation.paymentHistory) reservation.paymentHistory = [];
+      reservation.paymentHistory.push({
+        amount,
+        method,
+        date: new Date(),
+        transactionId: transactionId || null,
+        notes: notes || ''
+      });
+
+      // Actualizar resumen de pago
       reservation.payment.amountPaid += amount;
       reservation.payment.method = method;
       reservation.payment.paymentDate = new Date();
-      reservation.payment.transactionId = transactionId;
-      reservation.payment.notes = notes;
+      if (transactionId) reservation.payment.transactionId = transactionId;
+      if (notes) reservation.payment.notes = notes;
       
       // Actualizar estado de pago
-      if (reservation.payment.amountPaid >= reservation.pricing.total) {
+      if (reservation.payment.amountPaid >= reservation.pricing.total - 0.01) {
         reservation.payment.status = 'pagado';
         reservation.invoice.isPaid = true;
       } else if (reservation.payment.amountPaid > 0) {
         reservation.payment.status = 'parcial';
       }
       
-      // Generar factura si no existe
+      // Generar factura si no existe (usar helper con reintentos ante duplicados)
       if (!reservation.invoice.number) {
-        reservation.invoice.number = this.generateInvoiceNumber();
-        reservation.invoice.issueDate = new Date();
-        reservation.invoice.dueDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 días
+        await this.assignUniqueInvoiceNumberAndSave(reservation);
+      } else {
+        await reservation.save();
       }
-      
-      await reservation.save();
       
       return {
         success: true,
@@ -147,13 +217,70 @@ class BillingService {
         payment: {
           amountPaid: amount,
           totalPaid: reservation.payment.amountPaid,
-          remaining: reservation.pricing.total - reservation.payment.amountPaid,
-          status: reservation.payment.status
+          remaining: Math.max(0, reservation.pricing.total - reservation.payment.amountPaid),
+          status: reservation.payment.status,
+          history: reservation.paymentHistory
         }
       };
       
     } catch (error) {
       logger.error('Error procesando pago:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Agregar cargo extra a una reserva en curso
+   */
+  static async addCharge(reservationId, chargeData) {
+    try {
+      const { description, amount, category } = chargeData;
+
+      const reservation = await Reservation.findById(reservationId)
+        .populate('client', 'nombre apellido');
+      if (!reservation) throw new Error('Reserva no encontrada');
+      if (!['reservada', 'checkin'].includes(reservation.status)) {
+        throw new Error('Solo se pueden agregar cargos a reservas activas o en check-in');
+      }
+      if (!amount || amount <= 0) throw new Error('El monto debe ser mayor a 0');
+
+      if (!reservation.extras) reservation.extras = [];
+      reservation.extras.push({
+        description,
+        amount,
+        category: category || 'otro',
+        date: new Date()
+      });
+
+      // Recalcular total sumando extras
+      const extrasTotal = reservation.extras.reduce((sum, e) => sum + e.amount, 0);
+      if (reservation.pricing) {
+        const subtotal = reservation.pricing.subtotal || 0;
+        const taxes = reservation.pricing.taxes || 0;
+        reservation.pricing.extrasTotal = extrasTotal;
+        reservation.pricing.total = subtotal + taxes + extrasTotal;
+      }
+
+      // Actualizar estado de pago si el nuevo total cambia el saldo
+      const totalPaid = reservation.payment.amountPaid || 0;
+      const newTotal = reservation.pricing.total;
+      if (totalPaid >= newTotal) {
+        reservation.payment.status = 'pagado';
+      } else if (totalPaid > 0) {
+        reservation.payment.status = 'parcial';
+      } else {
+        reservation.payment.status = 'pendiente';
+      }
+
+      await reservation.save();
+      return {
+        success: true,
+        extras: reservation.extras,
+        pricing: reservation.pricing,
+        paymentStatus: reservation.payment.status
+      };
+    } catch (error) {
+      console.error('Error agregando cargo:', error);
       throw error;
     }
   }

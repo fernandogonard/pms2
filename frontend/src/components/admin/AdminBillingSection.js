@@ -1,61 +1,186 @@
 // components/admin/AdminBillingSection.js
 // Sección de gestión de facturación para administradores
 
-import React, { useEffect, useState } from 'react';
-import useBackendReady from '../../hooks/useBackendReady';
+import React from 'react';
+import { apiFetch } from '../../utils/api';
 import PricingManager from '../PricingManager';
 import FinancialDashboard from '../FinancialDashboard';
-import { apiFetch } from '../../utils/api';
-import useSessionGuard from '../../hooks/useSessionGuard';
-
-const DEFAULT_BILLING_STATS = { revenue: 0, growth: null, invoices: 0, pending: 0 };
 
 const AdminBillingSection = () => {
   const [activeTab, setActiveTab] = React.useState('dashboard');
-  const [quickStats, setQuickStats] = useState(DEFAULT_BILLING_STATS);
-  const [error, setError] = useState('');
-  const { canFetch, sessionExpired, authLoading } = useSessionGuard();
-  const { backendReady, backendLoading, backendError } = useBackendReady();
+  const [summary, setSummary] = React.useState(null);
+  const [pendingCount, setPendingCount] = React.useState(0);
 
-  useEffect(() => {
-    let cancelled = false;
-    const loadQuickStats = async () => {
-      try {
-        const startDate = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0];
-        const endDate = new Date().toISOString().split('T')[0];
-        const [summaryRes, invoicesRes] = await Promise.all([
-          apiFetch(`/api/billing/summary?startDate=${startDate}&endDate=${endDate}`),
-          apiFetch('/api/billing/invoices/pending')
-        ]);
-        const summaryData = await summaryRes.json();
-        const invoicesData = await invoicesRes.json();
-        const revenue = summaryRes.ok && summaryData?.data?.summary?.totalRevenue ? summaryData.data.summary.totalRevenue : 0;
-        const invoices = Array.isArray(invoicesData?.data) ? invoicesData.data.length : 0;
-        const pending = Array.isArray(invoicesData?.data) ? invoicesData.data.filter(inv => inv.pending > 0).length : 0;
-        if (cancelled) return;
-        setQuickStats({ revenue, growth: null, invoices, pending });
-        setError('');
-      } catch (err) {
-        if (cancelled) return;
-        setQuickStats(DEFAULT_BILLING_STATS);
-        if (!sessionExpired) {
-          setError('No se pudieron cargar los datos de facturación.');
-        }
+  // ——— Facturas ———————————————————————————————————
+  const [invoices, setInvoices] = React.useState([]);
+  const [invoicesLoading, setInvoicesLoading] = React.useState(false);
+  const [invoicesError, setInvoicesError] = React.useState('');
+  const [invoiceSuccess, setInvoiceSuccess] = React.useState('');
+  const [genInvoiceId, setGenInvoiceId] = React.useState('');
+
+  // ——— Pagos ———————————————————————————————————————
+  const [activeReservations, setActiveReservations] = React.useState([]);
+  const [paymentsLoading, setPaymentsLoading] = React.useState(false);
+  const [paymentsError, setPaymentsError] = React.useState('');
+  const [paymentsSuccess, setPaymentsSuccess] = React.useState('');
+  const [paymentTarget, setPaymentTarget] = React.useState(null);
+  const [paymentForm, setPaymentForm] = React.useState({ amount: '', method: 'efectivo', notes: '' });
+
+  // ——— Cargos extra ———————————————————————————————
+  const [chargeTarget, setChargeTarget] = React.useState(null);
+  const [chargeForm, setChargeForm] = React.useState({ description: '', amount: '', category: 'otro' });
+  const [chargeError, setChargeError] = React.useState('');
+  const [chargeSuccess, setChargeSuccess] = React.useState('');
+
+  // ——— Detalle / historial ————————————————————————
+  const [expandedRow, setExpandedRow] = React.useState(null);
+  const [billingDetail, setBillingDetail] = React.useState({});
+
+  React.useEffect(() => {
+    apiFetch('/api/billing/summary')
+      .then(r => r.json())
+      .then(data => { if (data.success) setSummary(data.data.summary); })
+      .catch(() => {});
+
+    apiFetch('/api/billing/invoices/pending')
+      .then(r => r.json())
+      .then(data => {
+        if (data.success && Array.isArray(data.invoices)) setPendingCount(data.invoices.length);
+        else if (data.success && Array.isArray(data.data)) setPendingCount(data.data.length);
+      })
+      .catch(() => {});
+  }, []);
+
+  const loadInvoices = React.useCallback(async () => {
+    setInvoicesLoading(true); setInvoicesError('');
+    try {
+      const r = await apiFetch('/api/billing/invoices/pending');
+      const data = await r.json();
+      if (data.success) setInvoices(Array.isArray(data.data) ? data.data : []);
+      else setInvoicesError(data.message || 'Error cargando facturas');
+    } catch { setInvoicesError('Error de red'); }
+    finally { setInvoicesLoading(false); }
+  }, []);
+
+  const loadActiveReservations = React.useCallback(async () => {
+    setPaymentsLoading(true); setPaymentsError('');
+    try {
+      const r = await apiFetch('/api/reservations?status=checkin&limit=50');
+      const data = await r.json();
+      const list = Array.isArray(data) ? data
+        : Array.isArray(data.reservations) ? data.reservations
+        : Array.isArray(data.data) ? data.data : [];
+      setActiveReservations(list);
+    } catch { setPaymentsError('Error de red'); }
+    finally { setPaymentsLoading(false); }
+  }, []);
+
+  React.useEffect(() => {
+    if (activeTab === 'invoices') loadInvoices();
+    if (activeTab === 'payments') loadActiveReservations();
+  }, [activeTab, loadInvoices, loadActiveReservations]);
+
+  const handleGenerateInvoice = async (reservationId) => {
+    if (!reservationId) return;
+    setInvoicesError(''); setInvoiceSuccess('');
+    try {
+      const r = await apiFetch(`/api/billing/reservations/${reservationId}/invoice`, { method: 'POST' });
+      const data = await r.json();
+      if (data.success) {
+        setInvoiceSuccess(`Factura ${data.data?.invoiceNumber || 'generada'} creada correctamente`);
+        setGenInvoiceId('');
+        loadInvoices();
+        apiFetch('/api/billing/invoices/pending').then(r => r.json())
+          .then(d => { if (d.success) setPendingCount(Array.isArray(d.data) ? d.data.length : 0); }).catch(() => {});
+      } else {
+        setInvoicesError(data.message || 'Error generando factura');
       }
-    };
-    if (!canFetch || !backendReady) {
-      if (!authLoading && !backendLoading) {
-        setQuickStats(DEFAULT_BILLING_STATS);
-        setError(sessionExpired ? 'Tu sesión expiró. Inicia sesión nuevamente para ver la facturación.' : 'Esperando una sesión válida o backend...');
+    } catch { setInvoicesError('Error de red'); }
+  };
+
+  const handleDownloadPDF = async (reservationId) => {
+    if (!reservationId) return;
+    setInvoicesError('');
+    try {
+      const r = await apiFetch(`/api/billing/reservations/${reservationId}/invoice/pdf`);
+      if (!r.ok) { const d = await r.json().catch(() => ({})); setInvoicesError(d.message || 'Error generando PDF'); return; }
+      const blob = await r.blob();
+      const url  = window.URL.createObjectURL(blob);
+      const a    = document.createElement('a');
+      a.href     = url;
+      a.download = `factura_${reservationId.slice(-8).toUpperCase()}.pdf`;
+      document.body.appendChild(a); a.click(); a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch { setInvoicesError('Error de red al generar PDF'); }
+  };
+
+  const handleProcessPayment = async (e) => {
+    e.preventDefault();
+    if (!paymentTarget) return;
+    setPaymentsError(''); setPaymentsSuccess('');
+    try {
+      const r = await apiFetch(`/api/billing/reservations/${paymentTarget}/payment`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ amount: parseFloat(paymentForm.amount), method: paymentForm.method, notes: paymentForm.notes })
+      });
+      const data = await r.json();
+      if (data.success) {
+        setPaymentsSuccess('Pago registrado correctamente');
+        setPaymentTarget(null);
+        setPaymentForm({ amount: '', method: 'efectivo', notes: '' });
+        loadActiveReservations();
+      } else {
+        setPaymentsError(data.message || 'Error procesando pago');
       }
-      return;
-    }
-    setError('');
-    loadQuickStats();
-    return () => {
-      cancelled = true;
-    };
-  }, [canFetch, sessionExpired, authLoading, backendReady, backendLoading]);
+    } catch { setPaymentsError('Error de red'); }
+  };
+
+  const handleLoadDetail = async (reservationId) => {
+    if (expandedRow === reservationId) { setExpandedRow(null); return; }
+    setExpandedRow(reservationId);
+    if (billingDetail[reservationId]) return; // ya cargado
+    try {
+      const r = await apiFetch(`/api/billing/reservations/${reservationId}`);
+      const data = await r.json();
+      if (data.success) {
+        setBillingDetail(prev => ({
+          ...prev,
+          [reservationId]: {
+            paymentHistory: data.data?.paymentHistory || [],
+            extras: data.data?.extras || []
+          }
+        }));
+      }
+    } catch { /* silencioso */ }
+  };
+
+  const handleAddCharge = async (e) => {
+    e.preventDefault();
+    if (!chargeTarget) return;
+    setChargeError(''); setChargeSuccess('');
+    try {
+      const r = await apiFetch(`/api/billing/reservations/${chargeTarget}/charge`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ description: chargeForm.description, amount: parseFloat(chargeForm.amount), category: chargeForm.category })
+      });
+      const data = await r.json();
+      if (data.success) {
+        setChargeSuccess('Cargo registrado correctamente');
+        setChargeTarget(null);
+        setChargeForm({ description: '', amount: '', category: 'otro' });
+        // Invalidar detalle cacheado para que se recargue
+        setBillingDetail(prev => { const n = { ...prev }; delete n[chargeTarget]; return n; });
+        loadActiveReservations();
+      } else {
+        setChargeError(data.message || 'Error registrando cargo');
+      }
+    } catch { setChargeError('Error de red'); }
+  };
+
+  // Formatea número como moneda
+  const fmt = (n) => n >= 1000 ? `$${Math.round(n).toLocaleString('es-AR')}` : `$${Math.round(n || 0)}`;
 
   const tabs = [
     { id: 'dashboard', label: 'Dashboard Financiero', icon: '📊' },
@@ -63,15 +188,7 @@ const AdminBillingSection = () => {
     { id: 'invoices', label: 'Facturas', icon: '🧾' },
     { id: 'payments', label: 'Pagos', icon: '💳' }
   ];
-  // Cerrar correctamente el array tabs
-  // (Se añadió el punto y coma al final del array)
-  
-  if (backendLoading) {
-    return <div style={{textAlign:'center',marginTop:40}}><b>Conectando con backend...</b></div>;
-  }
-  if (backendError) {
-    return <div style={{textAlign:'center',marginTop:40,color:'#ef4444'}}><b>{backendError}</b></div>;
-  }
+
   return (
     <div style={containerStyle}>
       <div style={headerStyle}>
@@ -80,39 +197,35 @@ const AdminBillingSection = () => {
           <p style={subtitleStyle}>Gestión completa de precios, pagos y facturación</p>
         </div>
       </div>
-    );
-  };
-
-      <div style={statsRowStyle}>
 
       {/* Estadísticas financieras rápidas */}
-      {/* (Eliminado div extra que causaba error de sintaxis) */}
+      <div style={statsRowStyle}>
         <div style={statCardStyle}>
           <div style={statIconStyle}>💵</div>
           <div>
-            <div style={statValueStyle}>${quickStats.revenue?.toLocaleString() || 0}</div>
+            <div style={statValueStyle}>{summary ? fmt(summary.totalRevenue) : '—'}</div>
             <div style={statLabelStyle}>Ingresos del Mes</div>
           </div>
         </div>
         <div style={statCardStyle}>
-          <div style={statIconStyle}>📈</div>
+          <div style={statIconStyle}>✅</div>
           <div>
-            <div style={statValueStyle}>{quickStats.growth !== null ? `${quickStats.growth}%` : '--'}</div>
-            <div style={statLabelStyle}>Crecimiento</div>
+            <div style={statValueStyle}>{summary ? fmt(summary.totalPaid) : '—'}</div>
+            <div style={statLabelStyle}>Total Cobrado</div>
           </div>
         </div>
         <div style={statCardStyle}>
           <div style={statIconStyle}>🧾</div>
           <div>
-            <div style={statValueStyle}>{quickStats.invoices}</div>
-            <div style={statLabelStyle}>Facturas Emitidas</div>
+            <div style={statValueStyle}>{summary ? summary.totalReservations : '—'}</div>
+            <div style={statLabelStyle}>Reservas Facturadas</div>
           </div>
         </div>
         <div style={statCardStyle}>
           <div style={statIconStyle}>⚠️</div>
           <div>
-            <div style={statValueStyle}>{quickStats.pending}</div>
-            <div style={statLabelStyle}>Pendientes de Pago</div>
+            <div style={statValueStyle}>{pendingCount}</div>
+            <div style={statLabelStyle}>Facturas Pendientes</div>
           </div>
         </div>
       </div>
@@ -150,35 +263,320 @@ const AdminBillingSection = () => {
         
         {activeTab === 'invoices' && (
           <div style={tabContentStyle}>
-            <div style={comingSoonStyle}>
-              <span style={comingSoonIconStyle}>🧾</span>
-              <h3 style={comingSoonTitleStyle}>Gestión de Facturas</h3>
-              <p style={comingSoonTextStyle}>
-                Sistema completo de facturación con generación PDF, 
-                seguimiento de pagos y recordatorios automáticos.
-              </p>
-              <div style={comingSoonBadgeStyle}>Próximamente</div>
+            <div style={{ padding: 24 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 12 }}>
+                <h3 style={{ color: 'white', margin: 0 }}>🧾 Facturas Pendientes de Pago</h3>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <input
+                    type="text"
+                    placeholder="ID de reserva"
+                    value={genInvoiceId}
+                    onChange={e => setGenInvoiceId(e.target.value)}
+                    style={{ background: '#18191A', color: '#fff', border: '1px solid #444', borderRadius: 6, padding: '8px 12px', width: 220, fontSize: 14 }}
+                  />
+                  <button
+                    onClick={() => handleGenerateInvoice(genInvoiceId)}
+                    disabled={!genInvoiceId}
+                    style={{ background: '#0099ff', color: '#fff', border: 'none', borderRadius: 6, padding: '8px 16px', cursor: genInvoiceId ? 'pointer' : 'not-allowed', fontWeight: 600, opacity: genInvoiceId ? 1 : 0.5 }}
+                  >+ Generar Factura</button>
+                  <button onClick={loadInvoices} style={{ background: '#374151', color: '#d1d5db', border: 'none', borderRadius: 6, padding: '8px 12px', cursor: 'pointer' }}>↺</button>
+                </div>
+              </div>
+              {invoiceSuccess && <div style={{ color: '#22c55e', marginBottom: 12, fontWeight: 600 }}>{invoiceSuccess}</div>}
+              {invoicesError && <div style={{ color: '#ef4444', marginBottom: 12, fontWeight: 600 }}>{invoicesError}</div>}
+              {invoicesLoading ? (
+                <div style={{ color: '#aaa', textAlign: 'center', padding: 40 }}>Cargando facturas...</div>
+              ) : invoices.length === 0 ? (
+                <div style={{ color: '#6b7280', textAlign: 'center', padding: 40 }}>
+                  <div style={{ fontSize: 40, marginBottom: 12 }}>🧾</div>
+                  No hay facturas pendientes de pago
+                </div>
+              ) : (
+                <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: 14 }}>
+                  <thead>
+                    <tr style={{ background: 'rgba(255,255,255,0.05)', color: '#aaa', textAlign: 'left' }}>
+                      <th style={{ padding: '10px 12px' }}># Factura</th>
+                      <th style={{ padding: '10px 12px' }}>Cliente</th>
+                      <th style={{ padding: '10px 12px' }}>Total</th>
+                      <th style={{ padding: '10px 12px' }}>Pagado</th>
+                      <th style={{ padding: '10px 12px' }}>Saldo</th>
+                      <th style={{ padding: '10px 12px' }}>Vence</th>
+                      <th style={{ padding: '10px 12px' }}>Estado</th>
+                      <th style={{ padding: '10px 12px' }}>PDF</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {invoices.map(inv => (
+                      <tr key={inv.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)', color: '#fff' }}>
+                        <td style={{ padding: '10px 12px', color: '#00ccff', fontWeight: 600 }}>{inv.invoiceNumber}</td>
+                        <td style={{ padding: '10px 12px' }}>{inv.client?.name || '-'}<br /><span style={{ fontSize: 11, color: '#6b7280' }}>{inv.client?.email || ''}</span></td>
+                        <td style={{ padding: '10px 12px', color: '#22c55e', fontWeight: 600 }}>{fmt(inv.amount)}</td>
+                        <td style={{ padding: '10px 12px' }}>{fmt(inv.amountPaid)}</td>
+                        <td style={{ padding: '10px 12px', color: inv.pending > 0 ? '#f59e0b' : '#22c55e', fontWeight: 600 }}>{fmt(inv.pending)}</td>
+                        <td style={{ padding: '10px 12px', color: inv.overdue ? '#ef4444' : '#aaa' }}>
+                          {inv.dueDate ? new Date(inv.dueDate).toLocaleDateString('es-AR') : '-'}
+                          {inv.overdue && <span style={{ marginLeft: 6, fontSize: 10, background: '#ef4444', color: '#fff', borderRadius: 4, padding: '1px 5px', fontWeight: 700 }}>VENCIDA</span>}
+                        </td>
+                        <td style={{ padding: '10px 12px' }}>
+                          <span style={{
+                            padding: '3px 8px', borderRadius: 10, fontSize: 11, fontWeight: 600,
+                            background: inv.paymentStatus === 'completado' ? '#052e16' : inv.paymentStatus === 'parcial' ? '#1c1400' : '#1a0606',
+                            color: inv.paymentStatus === 'completado' ? '#22c55e' : inv.paymentStatus === 'parcial' ? '#f59e0b' : '#f87171',
+                          }}>{inv.paymentStatus || 'pendiente'}</span>
+                        </td>
+                        <td style={{ padding: '10px 12px' }}>
+                          <button
+                            onClick={() => handleDownloadPDF(inv.id)}
+                            title="Descargar factura en PDF"
+                            style={{ background: '#1e3a5f', color: '#60a5fa', border: '1px solid #1e4080', borderRadius: 6, padding: '5px 10px', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
+                            🖨️ PDF
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
             </div>
           </div>
         )}
         
         {activeTab === 'payments' && (
           <div style={tabContentStyle}>
-            <div style={comingSoonStyle}>
-              <span style={comingSoonIconStyle}>💳</span>
-              <h3 style={comingSoonTitleStyle}>Procesamiento de Pagos</h3>
-              <p style={comingSoonTextStyle}>
-                Integración con pasarelas de pago, procesamiento automático 
-                y conciliación bancaria.
-              </p>
-              <div style={comingSoonBadgeStyle}>Próximamente</div>
+            <div style={{ padding: 24 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                <h3 style={{ color: 'white', margin: 0 }}>💳 Registrar Pagos — Huéspedes con Check-in</h3>
+                <button onClick={loadActiveReservations} style={{ background: '#374151', color: '#d1d5db', border: 'none', borderRadius: 6, padding: '8px 12px', cursor: 'pointer' }}>↺ Actualizar</button>
+              </div>
+              {paymentsSuccess && <div style={{ color: '#22c55e', marginBottom: 12, fontWeight: 600 }}>{paymentsSuccess}</div>}
+              {paymentsError && <div style={{ color: '#ef4444', marginBottom: 12, fontWeight: 600 }}>{paymentsError}</div>}
+              {chargeSuccess && <div style={{ color: '#a78bfa', marginBottom: 12, fontWeight: 600 }}>{chargeSuccess}</div>}
+              {chargeError && <div style={{ color: '#ef4444', marginBottom: 12, fontWeight: 600 }}>{chargeError}</div>}
+
+              {/* ——— Formulario de pago ——————————————————————————————— */}
+              {paymentTarget && (
+                <div style={{ background: 'rgba(0,153,255,0.08)', border: '1px solid rgba(0,153,255,0.3)', borderRadius: 12, padding: 20, marginBottom: 16 }}>
+                  <h4 style={{ color: '#00ccff', margin: '0 0 14px 0' }}>💳 Registrar Pago — Reserva {paymentTarget.slice(-6).toUpperCase()}</h4>
+                  <form onSubmit={handleProcessPayment} style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+                    <div>
+                      <div style={{ color: '#aaa', fontSize: 12, marginBottom: 4 }}>Monto ($)</div>
+                      <input type="number" min="1" step="0.01" value={paymentForm.amount}
+                        onChange={e => setPaymentForm({ ...paymentForm, amount: e.target.value })} required
+                        style={{ background: '#18191A', color: '#fff', border: '1px solid #444', borderRadius: 6, padding: '8px 12px', width: 140 }} />
+                    </div>
+                    <div>
+                      <div style={{ color: '#aaa', fontSize: 12, marginBottom: 4 }}>Método</div>
+                      <select value={paymentForm.method} onChange={e => setPaymentForm({ ...paymentForm, method: e.target.value })}
+                        style={{ background: '#18191A', color: '#fff', border: '1px solid #444', borderRadius: 6, padding: '8px 12px' }}>
+                        <option value="efectivo">💵 Efectivo</option>
+                        <option value="tarjeta">💳 T. Crédito</option>
+                        <option value="debito">💳 T. Débito</option>
+                        <option value="transferencia">🏦 Transferencia</option>
+                        <option value="cheque">📝 Cheque</option>
+                      </select>
+                    </div>
+                    <div>
+                      <div style={{ color: '#aaa', fontSize: 12, marginBottom: 4 }}>Notas (opcional)</div>
+                      <input type="text" value={paymentForm.notes} onChange={e => setPaymentForm({ ...paymentForm, notes: e.target.value })}
+                        placeholder="Ej: Pago parcial, saldo pendiente"
+                        style={{ background: '#18191A', color: '#fff', border: '1px solid #444', borderRadius: 6, padding: '8px 12px', width: 240 }} />
+                    </div>
+                    <button type="submit" style={{ background: '#22c55e', color: '#fff', border: 'none', borderRadius: 6, padding: '8px 20px', fontWeight: 600, cursor: 'pointer' }}>✓ Registrar</button>
+                    <button type="button" onClick={() => { setPaymentTarget(null); setPaymentForm({ amount: '', method: 'efectivo', notes: '' }); }}
+                      style={{ background: '#374151', color: '#d1d5db', border: 'none', borderRadius: 6, padding: '8px 16px', cursor: 'pointer' }}>Cancelar</button>
+                  </form>
+                </div>
+              )}
+
+              {/* ——— Formulario de cargo extra ——————————————————————— */}
+              {chargeTarget && (
+                <div style={{ background: 'rgba(167,139,250,0.08)', border: '1px solid rgba(167,139,250,0.3)', borderRadius: 12, padding: 20, marginBottom: 16 }}>
+                  <h4 style={{ color: '#a78bfa', margin: '0 0 14px 0' }}>➕ Cargo Extra — Reserva {chargeTarget.slice(-6).toUpperCase()}</h4>
+                  <form onSubmit={handleAddCharge} style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+                    <div>
+                      <div style={{ color: '#aaa', fontSize: 12, marginBottom: 4 }}>Descripción</div>
+                      <input type="text" value={chargeForm.description}
+                        onChange={e => setChargeForm({ ...chargeForm, description: e.target.value })} required
+                        placeholder="Ej: Minibar, cena, etc."
+                        style={{ background: '#18191A', color: '#fff', border: '1px solid #444', borderRadius: 6, padding: '8px 12px', width: 220 }} />
+                    </div>
+                    <div>
+                      <div style={{ color: '#aaa', fontSize: 12, marginBottom: 4 }}>Monto ($)</div>
+                      <input type="number" min="1" step="0.01" value={chargeForm.amount}
+                        onChange={e => setChargeForm({ ...chargeForm, amount: e.target.value })} required
+                        style={{ background: '#18191A', color: '#fff', border: '1px solid #444', borderRadius: 6, padding: '8px 12px', width: 120 }} />
+                    </div>
+                    <div>
+                      <div style={{ color: '#aaa', fontSize: 12, marginBottom: 4 }}>Categoría</div>
+                      <select value={chargeForm.category} onChange={e => setChargeForm({ ...chargeForm, category: e.target.value })}
+                        style={{ background: '#18191A', color: '#fff', border: '1px solid #444', borderRadius: 6, padding: '8px 12px' }}>
+                        <option value="minibar">🍾 Minibar</option>
+                        <option value="lavanderia">👔 Lavandería</option>
+                        <option value="room_service">🍽️ Room Service</option>
+                        <option value="telefono">📞 Teléfono</option>
+                        <option value="spa">💆 Spa</option>
+                        <option value="parking">🚗 Parking</option>
+                        <option value="otro">📦 Otro</option>
+                      </select>
+                    </div>
+                    <button type="submit" style={{ background: '#a78bfa', color: '#fff', border: 'none', borderRadius: 6, padding: '8px 20px', fontWeight: 600, cursor: 'pointer' }}>✓ Agregar</button>
+                    <button type="button" onClick={() => { setChargeTarget(null); setChargeForm({ description: '', amount: '', category: 'otro' }); setChargeError(''); }}
+                      style={{ background: '#374151', color: '#d1d5db', border: 'none', borderRadius: 6, padding: '8px 16px', cursor: 'pointer' }}>Cancelar</button>
+                  </form>
+                </div>
+              )}
+
+              {paymentsLoading ? (
+                <div style={{ color: '#aaa', textAlign: 'center', padding: 40 }}>Cargando reservas activas...</div>
+              ) : activeReservations.length === 0 ? (
+                <div style={{ color: '#6b7280', textAlign: 'center', padding: 40 }}>
+                  <div style={{ fontSize: 40, marginBottom: 12 }}>🛏️</div>
+                  No hay huéspedes con check-in activo en este momento
+                </div>
+              ) : (
+                <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: 14 }}>
+                  <thead>
+                    <tr style={{ background: 'rgba(255,255,255,0.05)', color: '#aaa', textAlign: 'left' }}>
+                      <th style={{ padding: '10px 12px' }}>Huésped</th>
+                      <th style={{ padding: '10px 12px' }}>Habitación</th>
+                      <th style={{ padding: '10px 12px' }}>Check-in</th>
+                      <th style={{ padding: '10px 12px' }}>Check-out</th>
+                      <th style={{ padding: '10px 12px' }}>Total</th>
+                      <th style={{ padding: '10px 12px' }}>Pagado</th>
+                      <th style={{ padding: '10px 12px' }}>Saldo</th>
+                      <th style={{ padding: '10px 12px' }}>Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {activeReservations.map(r => {
+                      const total = r.pricing?.total || 0;
+                      const paid = r.payment?.amountPaid || 0;
+                      const balance = total - paid;
+                      const detail = billingDetail[r._id];
+                      const isExpanded = expandedRow === r._id;
+                      return (
+                        <React.Fragment key={r._id}>
+                          <tr style={{ borderBottom: isExpanded ? 'none' : '1px solid rgba(255,255,255,0.05)', color: '#fff' }}>
+                            <td style={{ padding: '10px 12px' }}>
+                              {r.client ? `${r.client.nombre} ${r.client.apellido}` : (r.nombre ? `${r.nombre} ${r.apellido}` : '-')}
+                            </td>
+                            <td style={{ padding: '10px 12px' }}>
+                              {Array.isArray(r.room) && r.room.length > 0 ? r.room.map(rm => rm.number || rm).join(', ') : '-'}
+                            </td>
+                            <td style={{ padding: '10px 12px', color: '#aaa' }}>{r.checkIn ? r.checkIn.slice(0, 10) : '-'}</td>
+                            <td style={{ padding: '10px 12px', color: '#aaa' }}>{r.checkOut ? r.checkOut.slice(0, 10) : '-'}</td>
+                            <td style={{ padding: '10px 12px', color: '#22c55e', fontWeight: 600 }}>{total ? fmt(total) : '-'}</td>
+                            <td style={{ padding: '10px 12px' }}>{fmt(paid)}</td>
+                            <td style={{ padding: '10px 12px', color: balance > 0 ? '#f59e0b' : '#22c55e', fontWeight: 600 }}>{fmt(balance)}</td>
+                            <td style={{ padding: '10px 12px' }}>
+                              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                                <button
+                                  onClick={() => { setPaymentTarget(r._id); setChargeTarget(null); setPaymentForm({ amount: balance > 0 ? balance.toString() : '', method: 'efectivo', notes: '' }); setPaymentsSuccess(''); setPaymentsError(''); }}
+                                  style={{ background: '#0099ff', color: '#fff', border: 'none', borderRadius: 6, padding: '5px 10px', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}
+                                >💳 Pagar</button>
+                                <button
+                                  onClick={() => { setChargeTarget(r._id); setPaymentTarget(null); setChargeForm({ description: '', amount: '', category: 'otro' }); setChargeError(''); setChargeSuccess(''); }}
+                                  style={{ background: '#7c3aed', color: '#fff', border: 'none', borderRadius: 6, padding: '5px 10px', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}
+                                >➕ Cargo</button>
+                                <button
+                                  onClick={() => handleLoadDetail(r._id)}
+                                  style={{ background: isExpanded ? '#374151' : '#1f2937', color: '#d1d5db', border: '1px solid #4b5563', borderRadius: 6, padding: '5px 10px', fontSize: 12, cursor: 'pointer' }}
+                                >{isExpanded ? '▲ Ocultar' : '📋 Historial'}</button>
+                              </div>
+                            </td>
+                          </tr>
+                          {/* ——— Fila expandible con historial ——————————— */}
+                          {isExpanded && (
+                            <tr style={{ background: 'rgba(255,255,255,0.02)', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                              <td colSpan={8} style={{ padding: '0 12px 16px 12px' }}>
+                                {!detail ? (
+                                  <div style={{ color: '#aaa', padding: '12px 0', fontSize: 13 }}>Cargando historial...</div>
+                                ) : (
+                                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, paddingTop: 16 }}>
+                                    {/* Historial de pagos */}
+                                    <div>
+                                      <div style={{ color: '#00ccff', fontWeight: 600, marginBottom: 8, fontSize: 13 }}>💳 Historial de Pagos</div>
+                                      {detail.paymentHistory.length === 0 ? (
+                                        <div style={{ color: '#6b7280', fontSize: 12 }}>Sin pagos registrados</div>
+                                      ) : (
+                                        <table style={{ width: '100%', fontSize: 12, borderCollapse: 'collapse' }}>
+                                          <thead>
+                                            <tr style={{ color: '#6b7280' }}>
+                                              <th style={{ textAlign: 'left', paddingBottom: 4 }}>Fecha</th>
+                                              <th style={{ textAlign: 'left', paddingBottom: 4 }}>Monto</th>
+                                              <th style={{ textAlign: 'left', paddingBottom: 4 }}>Método</th>
+                                              <th style={{ textAlign: 'left', paddingBottom: 4 }}>Notas</th>
+                                            </tr>
+                                          </thead>
+                                          <tbody>
+                                            {detail.paymentHistory.map((p, i) => (
+                                              <tr key={i} style={{ borderTop: '1px solid rgba(255,255,255,0.04)' }}>
+                                                <td style={{ padding: '4px 0', color: '#aaa' }}>{p.date ? new Date(p.date).toLocaleDateString('es-AR') : '-'}</td>
+                                                <td style={{ padding: '4px 0', color: '#22c55e', fontWeight: 600 }}>{fmt(p.amount)}</td>
+                                                <td style={{ padding: '4px 0', color: '#fff', textTransform: 'capitalize' }}>{p.method || '-'}</td>
+                                                <td style={{ padding: '4px 0', color: '#9ca3af' }}>{p.notes || '-'}</td>
+                                              </tr>
+                                            ))}
+                                          </tbody>
+                                        </table>
+                                      )}
+                                    </div>
+                                    {/* Cargos extra */}
+                                    <div>
+                                      <div style={{ color: '#a78bfa', fontWeight: 600, marginBottom: 8, fontSize: 13 }}>➕ Cargos Extra</div>
+                                      {detail.extras.length === 0 ? (
+                                        <div style={{ color: '#6b7280', fontSize: 12 }}>Sin cargos extra registrados</div>
+                                      ) : (
+                                        <table style={{ width: '100%', fontSize: 12, borderCollapse: 'collapse' }}>
+                                          <thead>
+                                            <tr style={{ color: '#6b7280' }}>
+                                              <th style={{ textAlign: 'left', paddingBottom: 4 }}>Fecha</th>
+                                              <th style={{ textAlign: 'left', paddingBottom: 4 }}>Descripción</th>
+                                              <th style={{ textAlign: 'left', paddingBottom: 4 }}>Categoría</th>
+                                              <th style={{ textAlign: 'left', paddingBottom: 4 }}>Monto</th>
+                                            </tr>
+                                          </thead>
+                                          <tbody>
+                                            {detail.extras.map((x, i) => (
+                                              <tr key={i} style={{ borderTop: '1px solid rgba(255,255,255,0.04)' }}>
+                                                <td style={{ padding: '4px 0', color: '#aaa' }}>{x.date ? new Date(x.date).toLocaleDateString('es-AR') : '-'}</td>
+                                                <td style={{ padding: '4px 0', color: '#fff' }}>{x.description}</td>
+                                                <td style={{ padding: '4px 0', color: '#a78bfa', textTransform: 'capitalize' }}>{x.category || 'otro'}</td>
+                                                <td style={{ padding: '4px 0', color: '#f59e0b', fontWeight: 600 }}>{fmt(x.amount)}</td>
+                                              </tr>
+                                            ))}
+                                          </tbody>
+                                          <tfoot>
+                                            <tr>
+                                              <td colSpan={3} style={{ paddingTop: 6, color: '#9ca3af', fontSize: 11 }}>Total extras:</td>
+                                              <td style={{ paddingTop: 6, color: '#f59e0b', fontWeight: 700 }}>
+                                                {fmt(detail.extras.reduce((s, x) => s + (x.amount || 0), 0))}
+                                              </td>
+                                            </tr>
+                                          </tfoot>
+                                        </table>
+                                      )}
+                                    </div>
+                                  </div>
+                                )}
+                              </td>
+                            </tr>
+                          )}
+                        </React.Fragment>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              )}
             </div>
           </div>
         )}
       </div>
     </div>
   );
-}
+};
+
+// Estilos
 const containerStyle = {
   padding: '24px',
   maxWidth: '1400px'
@@ -321,15 +719,6 @@ const comingSoonBadgeStyle = {
   fontWeight: '600',
   textTransform: 'uppercase',
   letterSpacing: '0.5px'
-};
-
-const errorBannerStyle = {
-  background: '#dc2626',
-  color: '#fff',
-  padding: '12px 16px',
-  borderRadius: '10px',
-  marginBottom: '16px',
-  fontWeight: 600
 };
 
 export default AdminBillingSection;

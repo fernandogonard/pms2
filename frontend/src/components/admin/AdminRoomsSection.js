@@ -1,97 +1,63 @@
 // components/admin/AdminRoomsSection.js
 // Sección de gestión de habitaciones para administradores
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import RoomTable from '../RoomTable';
-import { useWebSocket } from '../../hooks/useWebSocket';
-import { apiFetch } from '../../utils/api';
-import useSessionGuard from '../../hooks/useSessionGuard';
-import { RoomCalendar } from '../RoomCalendar';
+import RoomCalendar from '../RoomCalendar';
 import CleaningManager from '../CleaningManager';
 import MaintenanceManager from '../MaintenanceManager';
-
-const INITIAL_ROOM_STATS = {
-  disponibles: 0,
-  ocupadas: 0,
-  limpieza: 0,
-  mantenimiento: 0,
-  porIngresar: 0,
-  loading: true,
-  timestamp: null
-};
-
-const ROOM_WS_EVENTS = new Set([
-  'room_state_changed',
-  'room_cleaned',
-  'room_maintenance_started',
-  'room_maintenance_completed',
-  'guest_relocated'
-]);
+import { apiFetch } from '../../utils/api';
 
 const AdminRoomsSection = () => {
   const [activeTab, setActiveTab] = useState('table');
-  const [roomStats, setRoomStats] = useState(INITIAL_ROOM_STATS);
-  const [error, setError] = useState('');
-  const { canFetch, sessionExpired, authLoading } = useSessionGuard();
-
-  const fetchRoomStats = useCallback(async () => {
-    if (!canFetch) return;
-    setRoomStats(prev => ({ ...prev, loading: true }));
-    try {
-      const res = await apiFetch('/api/stats/rooms', { cache: 'no-store' });
-      const data = await res.json();
-
-      if (!res.ok || !data?.success || !data.stats) {
-        throw new Error(data?.message || 'No se pudieron cargar las estadísticas de habitaciones.');
-      }
-
-      setRoomStats({
-        disponibles: data.stats.disponibles || 0,
-        ocupadas: data.stats.ocupadas || 0,
-        limpieza: data.stats.limpieza || 0,
-        mantenimiento: data.stats.mantenimiento || 0,
-        porIngresar: data.stats.porIngresar || 0,
-        loading: false,
-        timestamp: data.timestamp || Date.now()
-      });
-      setError('');
-    } catch (fetchError) {
-      setRoomStats(prev => ({ ...prev, loading: false }));
-      if (!sessionExpired) {
-        setError(fetchError.message || 'No se pudieron cargar las estadísticas de habitaciones.');
-      }
-    }
-  }, [canFetch, sessionExpired]);
-
-  useEffect(() => {
-    if (!canFetch) {
-      if (!authLoading) {
-        setRoomStats({ ...INITIAL_ROOM_STATS, loading: false });
-        setError(sessionExpired ? 'Tu sesión expiró. Refresca para ver el estado de las habitaciones.' : 'Esperando una sesión válida...');
-      }
-      return;
-    }
-
-    setError('');
-    fetchRoomStats();
-  }, [canFetch, sessionExpired, authLoading, fetchRoomStats]);
-
-  useEffect(() => {
-    if (!canFetch) return undefined;
-    const interval = setInterval(fetchRoomStats, 60000);
-    return () => clearInterval(interval);
-  }, [canFetch, fetchRoomStats]);
-
-  useWebSocket({
-    enabled: canFetch,
-    onMessage: (payload) => {
-      if (!payload?.type || !ROOM_WS_EVENTS.has(payload.type)) {
-        return false;
-      }
-      fetchRoomStats();
-      return true;
-    }
+  const [roomStats, setRoomStats] = useState({
+    disponibles: 0,
+    ocupadas: 0,
+    limpieza: 0,
+    mantenimiento: 0,
+    porIngresar: 0,
+    loading: true
   });
+
+  // Cargar estadísticas de habitaciones y configurar WebSocket
+  useEffect(() => {
+    const fetchRoomStats = async () => {
+      try {
+        const res = await apiFetch('/api/stats/rooms');
+        const data = await res.json();
+        
+        if (data.success && data.stats) {
+          setRoomStats({
+            disponibles: data.stats.disponibles || 0,
+            ocupadas: data.stats.ocupadas || 0,
+            limpieza: data.stats.limpieza || 0,
+            mantenimiento: data.stats.mantenimiento || 0,
+            porIngresar: data.stats.porIngresar || 0,
+            loading: false,
+            timestamp: data.timestamp
+          });
+        }
+      } catch (error) {
+        console.error("Error al obtener estadísticas de habitaciones:", error);
+        setRoomStats(prev => ({
+          ...prev,
+          loading: false,
+          error: "No se pudieron cargar los datos"
+        }));
+      }
+    };
+
+    // Cargar datos inmediatamente
+    fetchRoomStats();
+    
+    // Configurar actualización periódica como respaldo
+    const interval = setInterval(fetchRoomStats, 60000);
+    
+    // Limpiar conexiones al desmontar
+    return () => {
+      clearInterval(interval);
+    };
+  }, []);
 
   const tabs = [
     { id: 'table', label: 'Lista de Habitaciones', icon: '📋' },
@@ -115,10 +81,6 @@ const AdminRoomsSection = () => {
           </p>
         </div>
       </div>
-
-      {error && (
-        <div style={errorBannerStyle}>{error}</div>
-      )}
 
       {/* Estadísticas rápidas */}
       <div style={statsRowStyle}>
@@ -324,15 +286,6 @@ const updateTimeStyle = {
   color: '#8a8a8a',
   marginLeft: '10px',
   fontStyle: 'italic'
-};
-
-const errorBannerStyle = {
-  background: '#dc2626',
-  color: '#fff',
-  padding: '12px 16px',
-  borderRadius: '10px',
-  marginBottom: '16px',
-  fontWeight: 600
 };
 
 export default AdminRoomsSection;

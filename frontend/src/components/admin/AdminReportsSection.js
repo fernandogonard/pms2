@@ -1,27 +1,50 @@
 // components/admin/AdminReportsSection.js
 // Sección de reportes y analytics para administradores
 
-import React, { useEffect, useState } from 'react';
-import ReportDownload from '../ReportDownload';
+import React from 'react';
 import { apiFetch } from '../../utils/api';
+import ReportDownload from '../ReportDownload';
 
 const AdminReportsSection = () => {
   const [selectedPeriod, setSelectedPeriod] = React.useState('month');
-  const [revenueData, setRevenueData] = useState(null);
+  const [kpis, setKpis] = React.useState(null);
 
-  useEffect(() => {
-    const fetchRevenueData = async () => {
-      try {
-        const response = await apiFetch(`/api/reports/revenue?startDate=2025-12-01&endDate=2025-12-31`);
-        const data = await response.json();
-        setRevenueData(data);
-      } catch (error) {
-        console.error('Error fetching revenue data:', error);
-      }
-    };
+  // Reporte financiero
+  const today = new Date().toISOString().slice(0, 10);
+  const firstOfMonth = today.slice(0, 8) + '01';
+  const [finStart, setFinStart] = React.useState(firstOfMonth);
+  const [finEnd,   setFinEnd]   = React.useState(today);
+  const [finLoading, setFinLoading] = React.useState(false);
+  const [finError,   setFinError]   = React.useState('');
 
-    fetchRevenueData();
-  }, []);
+  const handleDownloadFinancial = async () => {
+    setFinError(''); setFinLoading(true);
+    try {
+      const r = await apiFetch(`/api/reports/financial?start=${finStart}&end=${finEnd}`);
+      if (!r.ok) { const d = await r.json(); setFinError(d.message || 'Error'); setFinLoading(false); return; }
+      const blob = await r.blob();
+      const url  = window.URL.createObjectURL(blob);
+      const a    = document.createElement('a');
+      a.href     = url;
+      a.download = `reporte_financiero_${finStart}_${finEnd}.xlsx`;
+      document.body.appendChild(a); a.click(); a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch { setFinError('Error de red'); }
+    finally { setFinLoading(false); }
+  };
+
+  React.useEffect(() => {
+    const rangeMap = { week: '7d', month: '30d', quarter: '90d', year: '90d', custom: '30d' };
+    const range = rangeMap[selectedPeriod] || '30d';
+    apiFetch(`/api/analytics/kpis?range=${range}`)
+      .then(r => r.json())
+      .then(data => { if (data && typeof data.avgOccupancy !== 'undefined') setKpis(data); })
+      .catch(() => {});
+  }, [selectedPeriod]);
+
+  const fmt = (val, decimals = 1) =>
+    val !== null && val !== undefined ? Number(val).toFixed(decimals) : '—';
+  const fmtPct = (val) => val >= 0 ? `+${fmt(val)}%` : `${fmt(val)}%`;
 
   const reportTypes = [
     {
@@ -81,10 +104,35 @@ const AdminReportsSection = () => {
       {/* KPIs principales */}
       <div style={kpiRowStyle}>
         <div style={kpiCardStyle}>
+          <div style={kpiIconStyle}>📈</div>
+          <div>
+            <div style={kpiValueStyle}>{kpis ? `${fmt(kpis.avgOccupancy)}%` : '—'}</div>
+            <div style={kpiLabelStyle}>Tasa de Ocupación</div>
+            <div style={kpiChangeStyle}>{kpis ? fmtPct(kpis.occupancyChange) + ' vs período anterior' : '...'}</div>
+          </div>
+        </div>
+        <div style={kpiCardStyle}>
           <div style={kpiIconStyle}>💵</div>
           <div>
-            <div style={kpiValueStyle}>{revenueData ? `$${revenueData.totalRevenue}` : 'Cargando...'}</div>
+            <div style={kpiValueStyle}>{kpis ? `$${fmt(kpis.adr, 0)}` : '—'}</div>
+            <div style={kpiLabelStyle}>ADR Promedio</div>
+            <div style={kpiChangeStyle}>{kpis ? fmtPct(kpis.adrChange) + ' vs período anterior' : '...'}</div>
+          </div>
+        </div>
+        <div style={kpiCardStyle}>
+          <div style={kpiIconStyle}>📊</div>
+          <div>
+            <div style={kpiValueStyle}>{kpis ? `$${fmt(kpis.revpar, 0)}` : '—'}</div>
+            <div style={kpiLabelStyle}>RevPAR</div>
+            <div style={kpiChangeStyle}>{kpis ? fmtPct(kpis.revparChange) + ' vs período anterior' : '...'}</div>
+          </div>
+        </div>
+        <div style={kpiCardStyle}>
+          <div style={kpiIconStyle}>💰</div>
+          <div>
+            <div style={kpiValueStyle}>{kpis ? `$${Math.round(kpis.totalRevenue || 0).toLocaleString('es-AR')}` : '—'}</div>
             <div style={kpiLabelStyle}>Ingresos Totales</div>
+            <div style={kpiChangeStyle}>{kpis ? fmtPct(kpis.revenueChange) + ' vs período anterior' : '...'}</div>
           </div>
         </div>
       </div>
@@ -104,9 +152,53 @@ const AdminReportsSection = () => {
             <div style={reportContentStyle}>
               <h3 style={reportTitleStyle}>{report.title}</h3>
               <p style={reportDescStyle}>{report.description}</p>
+              {/* Card especial para reporte financiero */}
+              {report.id === 'financial' ? (
+                <div>
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
+                    <div>
+                      <div style={{ color: '#aaa', fontSize: 11, marginBottom: 2 }}>Desde</div>
+                      <input type="date" value={finStart} onChange={e => setFinStart(e.target.value)}
+                        style={{ background: '#18191A', color: '#fff', border: '1px solid #444', borderRadius: 6, padding: '5px 8px', fontSize: 13 }} />
+                    </div>
+                    <div>
+                      <div style={{ color: '#aaa', fontSize: 11, marginBottom: 2 }}>Hasta</div>
+                      <input type="date" value={finEnd} onChange={e => setFinEnd(e.target.value)}
+                        style={{ background: '#18191A', color: '#fff', border: '1px solid #444', borderRadius: 6, padding: '5px 8px', fontSize: 13 }} />
+                    </div>
+                  </div>
+                  {finError && <div style={{ color: '#ef4444', fontSize: 12, marginBottom: 6 }}>{finError}</div>}
+                  <button onClick={handleDownloadFinancial} disabled={finLoading}
+                    style={{ ...reportButtonStyle, background: `linear-gradient(135deg, ${report.color}, ${report.color}dd)`, opacity: finLoading ? 0.6 : 1 }}>
+                    {finLoading ? '⏳ Generando...' : '📊 Descargar Excel'}
+                  </button>
+                </div>
+              ) : (
+                <div style={reportActionsStyle}>
+                  <button 
+                    style={{
+                      ...reportButtonStyle,
+                      background: `linear-gradient(135deg, ${report.color}, ${report.color}dd)`
+                    }}
+                  >
+                    📄 Generar PDF
+                  </button>
+                  <button style={reportButtonSecondaryStyle}>
+                    📊 Ver Online
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         ))}
+      </div>
+
+      {/* Componente de descarga de reportes existente */}
+      <div style={legacyReportStyle}>
+        <h3 style={sectionTitleStyle}>🔧 Herramientas de Reporte Legacy</h3>
+        <div style={legacyContainerStyle}>
+          <ReportDownload />
+        </div>
       </div>
     </div>
   );

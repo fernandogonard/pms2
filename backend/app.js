@@ -5,13 +5,12 @@ const express = require('express');
 const cors = require('cors');
 const morgan = require('morgan');
 const helmet = require('helmet');
-const { requestLogger } = require('./config/logger');
-const { advancedRequestLogger, setupGlobalErrorHandlers, startPeriodicMetricsLogging } = require('./config/productionLogger');
+const { setupGlobalErrorHandlers, startPeriodicMetricsLogging } = require('./config/productionLogger');
 const { rateLimiterMonitor, startRateLimitMetricsLogging } = require('./config/rateLimiterMonitor');
 
-// 🔒 Nuevo sistema de seguridad avanzado
+// 🔒 Seguridad avanzada
 const advancedSecurity = require('./middlewares/advancedSecurity');
-// 📝 Nuevo sistema de logging profesional
+// 📝 Logging profesional Winston (único sistema activo)
 const { logger, requestLogger: newRequestLogger, errorLogger } = require('./services/loggerService');
 
 const app = express();
@@ -30,29 +29,44 @@ app.use(advancedSecurity.sanitizeInput);
 
 // Middlewares globales
 app.use(express.json());
+// Middleware rápido para forzar cabeceras CORS en respuestas preflight
+app.use((req, res, next) => {
+  if (req.method === 'OPTIONS') {
+    const origin = req.headers.origin || '*';
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+    res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization,Accept,X-Requested-With,Cache-Control,expires,Pragma,If-None-Match,If-Modified-Since');
+    res.setHeader('Vary', 'Origin');
+    return res.sendStatus(204);
+  }
+  next();
+});
 // Configurar CORS para permitir credentials y origen controlado
-const allowedOrigins = (process.env.CORS_ORIGIN || 'http://localhost:3000,https://localhost:3000').split(',').map(s => s.trim());
+const CORS_ORIGIN_RAW = process.env.CORS_ORIGIN || 'http://localhost:3000,https://localhost:3000';
+const CORS_ALLOW_ALL = CORS_ORIGIN_RAW.trim() === '*';
+const allowedOrigins = CORS_ALLOW_ALL ? [] : CORS_ORIGIN_RAW.split(',').map(s => s.trim());
 const corsOptions = {
   origin: function(origin, callback) {
-    // permitir solicitudes desde herramientas como curl/postman sin origin
-    if (!origin) {
-      logger.debug('[CORS] Sin origin (herramienta) - permitiendo');
-      return callback(null, true);
-    }
+    // Permitir solicitudes sin origin (curl, Postman, etc.)
+    if (!origin) return callback(null, true);
+    // Si CORS_ORIGIN=* aceptar cualquier origen
+    if (CORS_ALLOW_ALL) return callback(null, true);
     // Normalizar origin: quitar barra final si existe
     const originNorm = origin.replace(/\/$/, '');
     const allowed = allowedOrigins.indexOf(originNorm) !== -1;
-    logger.debug(`[CORS] Origin=${origin} normalized=${originNorm} allowed=${allowed}`);
     if (allowed) return callback(null, true);
-    // En desarrollo aceptar cualquier localhost explícito (incluye puerto y slash opcional)
+    // Siempre permitir dominios de Vercel (deploy del frontend)
+    if (/^https:\/\/[a-z0-9-]+\.vercel\.app$/.test(originNorm)) return callback(null, true);
+    // En desarrollo aceptar cualquier localhost
     if (process.env.NODE_ENV !== 'production' && /^https?:\/\/localhost(:\d+)?\/?$/.test(origin)) {
-      logger.debug(`[CORS] DEV: permitiendo origin localhost dinámico: ${origin}`);
       return callback(null, true);
     }
     return callback(new Error('CORS origin not allowed'));
   },
   credentials: true,
-  allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'X-Requested-With', 'Cache-Control', 'expires', 'pragma'],
+  // Aceptar también encabezados que usan los navegadores/proxies (Pragma, If-None-Match, etc.)
+  allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'X-Requested-With', 'Cache-Control', 'expires', 'Pragma', 'If-None-Match', 'If-Modified-Since'],
   methods: ['GET','POST','PUT','DELETE','OPTIONS'],
   preflightContinue: false,
   optionsSuccessStatus: 204
@@ -61,34 +75,46 @@ app.use(cors(corsOptions));
 // Habilitar preflight para todas las rutas
 app.options('*', cors(corsOptions));
 
-// Logging avanzado de requests (antes de las rutas)
-app.use(requestLogger);
-app.use(advancedRequestLogger);
-app.use(newRequestLogger); // 📝 Nuevo sistema de logging
-app.use(rateLimiterMonitor.middleware());
-// Middleware adicional para garantizar cabeceras CORS necesarias (por seguridad explicita)
+// Middleware adicional para garantizar que TODAS las respuestas incluyan
+// los headers CORS necesarios (útil contra cachés/edge que puedan omitirlos)
 app.use((req, res, next) => {
   const origin = req.headers.origin;
   if (!origin) return next();
-  const allowed = allowedOrigins.indexOf(origin) !== -1 || (process.env.NODE_ENV !== 'production' && /^https?:\/\/localhost(:\d+)?$/.test(origin));
-  if (allowed) {
-    res.header('Access-Control-Allow-Origin', origin);
-    res.header('Access-Control-Allow-Credentials', 'true');
-    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, Accept, X-Requested-With, Cache-Control, expires, pragma');
-    res.header('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS');
-    logger.debug(`[CORS] Añadidas cabeceras CORS para origin=${origin}`);
+  const originNorm = origin.replace(/\/$/, '');
+  const isAllowed = CORS_ALLOW_ALL || allowedOrigins.indexOf(originNorm) !== -1 ||
+    /^https:\/\/[a-z0-9-]+\.vercel\.app$/.test(originNorm) ||
+    (process.env.NODE_ENV !== 'production' && /^https?:\/\/localhost(:\d+)?\/?$/.test(origin));
+  if (isAllowed) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+    res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization,Accept,X-Requested-With,Cache-Control,expires,Pragma,If-None-Match,If-Modified-Since');
+    res.setHeader('Vary', 'Origin');
   }
+  if (req.method === 'OPTIONS') return res.sendStatus(204);
   next();
 });
-app.use(morgan('dev'));
+
+// 📝 Logging de requests (único middleware, Winston)
+app.use(newRequestLogger);
+app.use(rateLimiterMonitor.middleware());
+app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
 app.use(helmet());
 
 // 🔒 Sistema de rate limiting avanzado
-const { getRateLimiterConfig } = require('./config/rateLimiter');
-const rateLimiters = getRateLimiterConfig();
-app.use(rateLimiters.general);
+const { generalLimiter } = require('./config/rateLimiter');
+app.use(generalLimiter);
 app.use(advancedSecurity.rateLimitByUser);
 app.use(advancedSecurity.anomalyDetection);
+
+// 📊 Documentación Swagger/OpenAPI
+const swaggerUi = require('swagger-ui-express');
+const swaggerSpec = require('./config/swagger');
+app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
+  customSiteTitle: 'CRM Hotelero — API Docs',
+  customCss: '.swagger-ui .topbar { background-color: #1a202c; }',
+  swaggerOptions: { persistAuthorization: true }
+}));
 
 // Rutas de autenticación
 const authRoutes = require('./routes/authRoutes');
@@ -131,9 +157,8 @@ const billingRoutes = require('./routes/billingRoutes');
 app.use('/api/billing', billingRoutes);
 
 // 🆕 Rutas de información del sistema y datos reales
-const { systemPortLimiter } = require('./config/rateLimiter');
 const systemRoutes = require('./routes/systemRoutes');
-app.use('/api/system', systemPortLimiter, systemRoutes);
+app.use('/api/system', systemRoutes);
 
 // 🆕 Rutas de gestión de limpieza
 const cleaningRoutes = require('./routes/cleaningRoutes');
@@ -143,9 +168,20 @@ app.use('/api/cleaning', cleaningRoutes);
 const analyticsRoutes = require('./routes/analyticsRoutes');
 app.use('/api/analytics', analyticsRoutes);
 
-// Ruta de prueba
+// 📜 Rutas de auditoría (solo admin)
+const auditRoutes = require('./routes/auditRoutes');
+app.use('/api/audit', auditRoutes);
+
+// Ruta de health check pública
 app.get('/', (req, res) => {
-  res.send('CRM Hotelero API funcionando');
+  res.json({
+    status: 'online',
+    system: 'CRM Hotelero API',
+    version: '1.0.0',
+    environment: process.env.NODE_ENV || 'development',
+    docs: '/api/docs',
+    timestamp: new Date().toISOString()
+  });
 });
 
 // Middlewares de manejo de errores (deben ir al final)

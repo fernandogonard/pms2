@@ -36,7 +36,7 @@ exports.createClient = async (req, res) => {
     const client = await Client.create({ nombre, apellido, dni, email, whatsapp });
     
     const duration = Date.now() - startTime;
-    logger.performance.operation(`Cliente creado exitosamente`, {
+    logger.info('Cliente creado exitosamente', {
       service: 'crm-hotelero',
       operation: 'CREATE_CLIENT',
       duration,
@@ -118,5 +118,21 @@ exports.deleteClient = async (req, res) => {
     res.json({ message: 'Cliente eliminado' });
   } catch (err) {
     res.status(500).json({ message: 'Error eliminando cliente', error: err.message });
+  }
+};
+
+// Lookup rápido por DNI o email — accesible para admin y recepcionista
+exports.lookupClient = async (req, res) => {
+  try {
+    const { dni, email } = req.query;
+    if (!dni && !email) return res.status(400).json({ message: 'Proporcionar dni o email' });
+    const filter = {};
+    if (dni)   filter.$or = [{ dni }];
+    if (email) { filter.$or = filter.$or || []; filter.$or.push({ email }); }
+    const client = await Client.findOne(filter);
+    if (!client) return res.status(404).json({ found: false });
+    res.json({ found: true, client });
+  } catch (err) {
+    res.status(500).json({ message: 'Error en lookup de cliente', error: err.message });
   }
 };

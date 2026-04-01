@@ -10,17 +10,62 @@ const { loginLimiter, registerLimiter } = require('../config/rateLimiter');
 // 🆕 Importar validaciones Joi
 const { createValidationMiddleware } = require('../services/validationService');
 
-// 🆕 Registro de usuario con validación Joi
+/**
+ * @swagger
+ * /api/auth/register:
+ *   post:
+ *     tags: [Auth]
+ *     summary: Registrar nuevo usuario
+ *     security: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [name, email, password]
+ *             properties:
+ *               name: { type: string, example: 'Juan Pérez' }
+ *               email: { type: string, format: email, example: 'juan@hotel.com' }
+ *               password: { type: string, example: 'miPassword123' }
+ *               role: { type: string, enum: [admin, recepcionista, cliente], default: cliente }
+ *     responses:
+ *       201: { description: Usuario creado exitosamente }
+ *       400: { description: Datos inválidos o email ya registrado }
+ *       429: { description: Límite de registros alcanzado }
+ */
 router.post('/register', 
   registerLimiter, 
-  createValidationMiddleware('user'), // 🔄 Nueva validación Joi
+  createValidationMiddleware('user'),
   authController.register
 );
 
-// 🆕 Login de usuario con validación Joi  
+/**
+ * @swagger
+ * /api/auth/login:
+ *   post:
+ *     tags: [Auth]
+ *     summary: Iniciar sesión
+ *     security: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/LoginRequest'
+ *     responses:
+ *       200:
+ *         description: Login exitoso — retorna JWT
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/LoginResponse'
+ *       401: { description: Credenciales inválidas }
+ *       429: { description: Límite de intentos alcanzado }
+ */
 router.post('/login', 
   loginLimiter, 
-  createValidationMiddleware('login'), // 🔄 Nueva validación Joi
+  createValidationMiddleware('login'),
   authController.login
 );
 

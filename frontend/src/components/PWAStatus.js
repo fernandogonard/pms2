@@ -301,52 +301,89 @@ export const OfflineBanner = () => {
 // Componente para el botón de instalación flotante
 export const InstallPrompt = () => {
   const { isInstallable, promptInstall } = usePWAInstall();
-  const [dismissed, setDismissed] = useState(
-    localStorage.getItem('install-prompt-dismissed') === 'true'
-  );
 
+  // Detectar iOS (Safari no soporta beforeinstallprompt)
+  const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+  const isInStandaloneMode = window.matchMedia('(display-mode: standalone)').matches
+    || window.navigator.standalone;
+
+  // Dismissed con expiracín de 3 días
+  const getDismissed = () => {    // Limpiar flag viejo (sin expiración) si existe
+    localStorage.removeItem('install-prompt-dismissed');    const ts = localStorage.getItem('install-prompt-ts');
+    if (!ts) return false;
+    const THREE_DAYS = 3 * 24 * 60 * 60 * 1000;
+    return Date.now() - parseInt(ts, 10) < THREE_DAYS;
+  };
+  const [dismissed, setDismissed] = React.useState(getDismissed);
+
+  // Si ya está instalada como PWA, no mostrar nada
+  if (isInStandaloneMode) return null;
+
+  // iOS: mostrar instrucciones manuales si no fue descartado
+  if (isIOS && !dismissed) {
+    return (
+      <div style={{
+        position: 'fixed', bottom: 16, left: 16, right: 16, zIndex: 9999,
+        background: 'linear-gradient(135deg, #1a2744 0%, #0d1b2a 100%)',
+        border: '1px solid #2563eb', borderRadius: 16, padding: 16,
+        boxShadow: '0 8px 32px rgba(0,0,0,0.5)'
+      }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+          <span style={{ fontSize: 32, flexShrink: 0 }}>📲</span>
+          <div style={{ flex: 1 }}>
+            <div style={{ color: '#fff', fontWeight: 700, fontSize: 15, marginBottom: 4 }}>Instalar en iPhone / iPad</div>
+            <div style={{ color: '#94a3b8', fontSize: 13, lineHeight: 1.5, marginBottom: 10 }}>
+              Toca <strong style={{ color: '#fff' }}>Compartir</strong> <span style={{ fontSize: 14 }}>⬆️</span> en Safari
+              {' '}y luego <strong style={{ color: '#fff' }}>&ldquo;Añadir a inicio&rdquo;</strong>
+            </div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <div style={{ flex: 1, background: 'rgba(255,255,255,0.07)', borderRadius: 8, padding: '6px 10px', textAlign: 'center', fontSize: 12, color: '#94a3b8' }}>
+                1️⃣ Safari → <strong style={{ color: '#fff' }}>&#x2B06; Compartir</strong>
+              </div>
+              <div style={{ flex: 1, background: 'rgba(255,255,255,0.07)', borderRadius: 8, padding: '6px 10px', textAlign: 'center', fontSize: 12, color: '#94a3b8' }}>
+                2️⃣ <strong style={{ color: '#fff' }}>Añadir a inicio</strong>
+              </div>
+            </div>
+          </div>
+          <button onClick={() => { localStorage.setItem('install-prompt-ts', Date.now().toString()); setDismissed(true); }}
+            style={{ background: 'none', border: 'none', color: '#6b7280', fontSize: 18, cursor: 'pointer', padding: 4, flexShrink: 0 }}>✕</button>
+        </div>
+      </div>
+    );
+  }
+
+  // Android/Chrome: usar beforeinstallprompt
   if (!isInstallable || dismissed) return null;
 
   const handleInstall = async () => {
     const installed = await promptInstall();
     if (!installed) {
-      // Si el usuario rechaza, no volver a mostrar por un tiempo
-      localStorage.setItem('install-prompt-dismissed', 'true');
+      localStorage.setItem('install-prompt-ts', Date.now().toString());
       setDismissed(true);
     }
   };
 
-  const handleDismiss = () => {
-    localStorage.setItem('install-prompt-dismissed', 'true');
-    setDismissed(true);
-  };
-
   return (
-    <div className="position-fixed bottom-0 end-0 m-3" style={{ zIndex: 9999 }}>
-      <div className="card shadow-lg border-primary" style={{ maxWidth: '300px' }}>
-        <div className="card-body p-3">
-          <div className="d-flex align-items-start">
-            <span className="me-2 fs-4">📱</span>
-            <div className="flex-grow-1">
-              <h6 className="card-title mb-1">Instalar CRM Hotelero</h6>
-              <p className="card-text small text-muted mb-2">
-                Accede más rápido con la aplicación instalada
-              </p>
-              <div className="d-flex gap-2">
-                <button 
-                  className="btn btn-primary btn-sm"
-                  onClick={handleInstall}
-                >
-                  Instalar
-                </button>
-                <button 
-                  className="btn btn-outline-secondary btn-sm"
-                  onClick={handleDismiss}
-                >
-                  Después
-                </button>
-              </div>
-            </div>
+    <div style={{
+      position: 'fixed', bottom: 16, right: 16, zIndex: 9999,
+      background: 'linear-gradient(135deg, #1a2744 0%, #0d1b2a 100%)',
+      border: '1px solid #2563eb', borderRadius: 16, padding: 16,
+      boxShadow: '0 8px 32px rgba(0,0,0,0.5)', maxWidth: 300
+    }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+        <span style={{ fontSize: 28, flexShrink: 0 }}>📲</span>
+        <div style={{ flex: 1 }}>
+          <div style={{ color: '#fff', fontWeight: 700, fontSize: 14, marginBottom: 4 }}>Instalar Hotel DIVA</div>
+          <div style={{ color: '#94a3b8', fontSize: 12, marginBottom: 12 }}>Acceso rápido desde la pantalla de inicio</div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button onClick={handleInstall}
+              style={{ flex: 1, background: '#2563eb', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 0', fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>
+              Instalar
+            </button>
+            <button onClick={() => { localStorage.setItem('install-prompt-ts', Date.now().toString()); setDismissed(true); }}
+              style={{ background: 'rgba(255,255,255,0.08)', color: '#94a3b8', border: 'none', borderRadius: 8, padding: '8px 12px', fontSize: 12, cursor: 'pointer' }}>
+              Después
+            </button>
           </div>
         </div>
       </div>

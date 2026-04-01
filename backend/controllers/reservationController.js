@@ -11,10 +11,12 @@ const BillingService = require('../services/billingService');
 const ReservationService = require('../services/ReservationService');
 const AvailabilityEngine = require('../services/availabilityEngine');
 const wsManager = require('../utils/wsManager');
+const notificationService = require('../services/notificationService');
 
 // 🆕 Importar nuevo sistema de logging Winston
 const { logger } = require('../services/loggerService');
 const lockService = require('../services/lockService');
+const auditService = require('../services/auditService');
 
 /**
  * Obtiene las reservas con checkout pendiente (que deberían haber terminado pero siguen activas)
@@ -46,9 +48,10 @@ const getPendingCheckouts = async (req, res) => {
       status: 'checkin',
       checkOut: { $lt: today } // Checkout anterior a hoy
     })
-    .populate('client')
-    .populate('room')
-    .sort({ checkOut: 1 }); // Ordenar por fecha de checkout más antigua primero
+    .populate('client', 'nombre apellido email dni')
+    .populate('room', 'number type floor')
+    .sort({ checkOut: 1 })
+    .lean();
 
     // Calcular días de retraso para cada reserva
     const reservationsWithDelay = pendingReservations.map(reservation => {
@@ -57,7 +60,7 @@ const getPendingCheckouts = async (req, res) => {
       const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
       
       return {
-        ...reservation.toObject(),
+        ...reservation,
         daysOverdue: diffDays,
         expectedCheckout: checkoutDate.toISOString().slice(0, 10)
       };
@@ -69,7 +72,7 @@ const getPendingCheckouts = async (req, res) => {
       req.originalUrl,
       duration,
       200,
-      req.user?.id
+      req.user?.userId
     );
 
     res.json({
@@ -683,6 +686,16 @@ const checkinReservation = async (req, res) => {
       });
     }
     
+    auditService.log({
+      action: 'CHECKIN_REALIZADO',
+      entity: 'Reservation',
+      entityId: id,
+      userId: req.user?._id || req.user?.id,
+      userEmail: req.user?.email || 'sistema',
+      userRole: req.user?.role || 'sistema',
+      description: `Check-in realizado en reserva ${String(id).slice(-6).toUpperCase()}`,
+      ip: req.ip
+    });
     res.json({
       message: 'Check-in procesado exitosamente',
       reservation
@@ -711,6 +724,16 @@ const checkoutReservation = async (req, res) => {
       });
     }
     
+    auditService.log({
+      action: 'CHECKOUT_REALIZADO',
+      entity: 'Reservation',
+      entityId: id,
+      userId: req.user?._id || req.user?.id,
+      userEmail: req.user?.email || 'sistema',
+      userRole: req.user?.role || 'sistema',
+      description: `Check-out realizado en reserva ${String(id).slice(-6).toUpperCase()}`,
+      ip: req.ip
+    });
     res.json({
       message: 'Check-out procesado exitosamente',
       reservation

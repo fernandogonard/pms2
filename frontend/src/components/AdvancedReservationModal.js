@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState } from 'react';
 import Modal from 'react-modal';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
@@ -7,92 +7,48 @@ Modal.setAppElement('#root');
 
 
 import { apiFetch } from '../utils/api';
-import useSessionGuard from '../hooks/useSessionGuard';
 const API_RESERVATIONS = '/api/reservations';
 
-const AdvancedReservationModal = ({ isOpen, onRequestClose, onReservationSuccess, afterReservation }) => {
+const AdvancedReservationModal = ({ isOpen, onRequestClose, onClose, onReservationSuccess, afterReservation }) => {
+  const closeModal = onRequestClose || onClose;
   const [form, setForm] = useState({
-    room: '',
+    tipo: 'doble',
+    cantidad: 1,
     checkIn: '',
     checkOut: '',
-    guests: 1,
-    extras: '',
-    name: '',
-    email: ''
+    nombre: '',
+    apellido: '',
+    dni: '',
+    email: '',
+    whatsapp: '',
+    notas: ''
   });
   const [loading, setLoading] = useState(false);
-  const [validationError, setValidationError] = useState('');
-  const abortControllerRef = useRef(null);
-  const { canFetch, sessionExpired } = useSessionGuard();
 
   const handleChange = e => {
     setForm({ ...form, [e.target.name]: e.target.value });
-    setValidationError(''); // Limpiar error al editar
-  };
-
-  const validateDates = () => {
-    if (!form.checkIn || !form.checkOut) {
-      return 'Debe seleccionar fechas de check-in y check-out';
-    }
-    
-    const checkIn = new Date(form.checkIn);
-    const checkOut = new Date(form.checkOut);
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    if (checkIn < today) {
-      return 'La fecha de check-in no puede ser anterior a hoy';
-    }
-
-    if (checkOut <= checkIn) {
-      return 'La fecha de check-out debe ser posterior a check-in';
-    }
-
-    return null;
   };
 
   const handleSubmit = async e => {
     e.preventDefault();
-    
-    // Validar fechas
-    const dateError = validateDates();
-    if (dateError) {
-      setValidationError(dateError);
-      toast.error(dateError);
-      return;
-    }
-
-    // Cancelar request anterior si existe
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-    }
-
-    if (!canFetch) {
-      const message = sessionExpired
-        ? 'Tu sesión expiró. Inicia sesión nuevamente para crear reservas.'
-        : 'Debes iniciar sesión para crear reservas.';
-      setValidationError(message);
-      toast.error(message);
-      return;
-    }
-
-    abortControllerRef.current = new AbortController();
     setLoading(true);
-    setValidationError('');
-
     try {
       // Enviar reserva a la API real
       const res = await apiFetch(API_RESERVATIONS, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          room: form.room,
-          name: form.name,
-          email: form.email,
+          tipo: form.tipo,
+          cantidad: Number(form.cantidad),
           checkIn: form.checkIn,
-          checkOut: form.checkOut
-        }),
-        signal: abortControllerRef.current.signal
+          checkOut: form.checkOut,
+          nombre: form.nombre,
+          apellido: form.apellido,
+          dni: form.dni,
+          email: form.email,
+          whatsapp: form.whatsapp,
+          notas: form.notas
+        })
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || 'Error al crear la reserva');
@@ -100,67 +56,50 @@ const AdvancedReservationModal = ({ isOpen, onRequestClose, onReservationSuccess
       toast.success('Reserva creada con éxito');
       onReservationSuccess && onReservationSuccess();
       afterReservation && afterReservation();
-      onRequestClose();
-      setForm({ room: '', checkIn: '', checkOut: '', guests: 1, extras: '', name: '', email: '' });
+      closeModal();
+      setForm({ tipo: 'doble', cantidad: 1, checkIn: '', checkOut: '', nombre: '', apellido: '', dni: '', email: '', whatsapp: '', notas: '' });
     } catch (err) {
-      if (err.name === 'AbortError') {
-        // Request cancelado, no mostrar error
-        return;
-      }
       setLoading(false);
       toast.error(err.message || 'Error al crear la reserva');
     }
   };
 
-  const handleClose = () => {
-    // Cancelar request al cerrar modal
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-    }
-    setValidationError('');
-    onRequestClose();
-  };
-
   return (
     <Modal
       isOpen={isOpen}
-      onRequestClose={handleClose}
-      contentLabel="Reserva avanzada"
-      style={{ content: { maxWidth: 500, margin: 'auto', borderRadius: 12, padding: 24 } }}
+      onRequestClose={closeModal}
+      contentLabel="Nueva Reserva"
+      style={{ content: { maxWidth: 520, margin: 'auto', borderRadius: 12, padding: 28, background: '#1a1a2e', color: '#fff' } }}
     >
-      <h2>Reserva avanzada</h2>
-      {validationError && (
-        <div style={{ 
-          color: '#ff4444', 
-          backgroundColor: '#fff3f3', 
-          padding: '8px 12px', 
-          borderRadius: 6, 
-          marginBottom: 12,
-          border: '1px solid #ffcccc'
-        }}>
-          {validationError}
-        </div>
-      )}
+      <h2 style={{ marginTop: 0, marginBottom: 20, color: '#fff' }}>Nueva Reserva</h2>
       <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-        <input name="name" placeholder="Nombre" value={form.name} onChange={handleChange} required disabled={loading} />
-        <input name="email" placeholder="Email" value={form.email} onChange={handleChange} required type="email" disabled={loading} />
-        <input name="room" placeholder="Habitación" value={form.room} onChange={handleChange} required disabled={loading} />
-        <input name="checkIn" type="date" value={form.checkIn} onChange={handleChange} required disabled={loading} />
-        <input name="checkOut" type="date" value={form.checkOut} onChange={handleChange} required disabled={loading} />
-        <input name="guests" type="number" min={1} value={form.guests} onChange={handleChange} required disabled={loading} />
-        <input name="extras" placeholder="Extras (opcional)" value={form.extras} onChange={handleChange} disabled={loading} />
-        <button 
-          type="submit" 
-          disabled={loading || !canFetch}
-          style={{
-            opacity: loading ? 0.6 : 1,
-            cursor: loading ? 'not-allowed' : 'pointer'
-          }}
-        >
-          {loading ? 'Guardando...' : 'Confirmar reserva'}
-        </button>
+        <div style={{ display: 'flex', gap: 10 }}>
+          <select name="tipo" value={form.tipo} onChange={handleChange} required style={{ flex: 1, background: '#2a2a3e', color: '#fff', border: '1px solid #444', borderRadius: 6, padding: '8px 10px' }}>
+            <option value="doble">Doble</option>
+            <option value="triple">Triple</option>
+            <option value="cuadruple">Cuádruple</option>
+          </select>
+          <input name="cantidad" type="number" min={1} value={form.cantidad} onChange={handleChange} required style={{ width: 70, background: '#2a2a3e', color: '#fff', border: '1px solid #444', borderRadius: 6, padding: '8px 10px' }} placeholder="Cant." />
+        </div>
+        <div style={{ display: 'flex', gap: 10 }}>
+          <input name="checkIn" type="date" value={form.checkIn} onChange={handleChange} required style={{ flex: 1, background: '#2a2a3e', color: '#fff', border: '1px solid #444', borderRadius: 6, padding: '8px 10px' }} />
+          <input name="checkOut" type="date" value={form.checkOut} onChange={handleChange} required style={{ flex: 1, background: '#2a2a3e', color: '#fff', border: '1px solid #444', borderRadius: 6, padding: '8px 10px' }} />
+        </div>
+        <div style={{ display: 'flex', gap: 10 }}>
+          <input name="nombre" placeholder="Nombre *" value={form.nombre} onChange={handleChange} required style={{ flex: 1, background: '#2a2a3e', color: '#fff', border: '1px solid #444', borderRadius: 6, padding: '8px 10px' }} />
+          <input name="apellido" placeholder="Apellido *" value={form.apellido} onChange={handleChange} required style={{ flex: 1, background: '#2a2a3e', color: '#fff', border: '1px solid #444', borderRadius: 6, padding: '8px 10px' }} />
+        </div>
+        <input name="dni" placeholder="DNI *" value={form.dni} onChange={handleChange} required style={{ background: '#2a2a3e', color: '#fff', border: '1px solid #444', borderRadius: 6, padding: '8px 10px' }} />
+        <input name="email" type="email" placeholder="Email *" value={form.email} onChange={handleChange} required style={{ background: '#2a2a3e', color: '#fff', border: '1px solid #444', borderRadius: 6, padding: '8px 10px' }} />
+        <input name="whatsapp" placeholder="WhatsApp (opcional)" value={form.whatsapp} onChange={handleChange} style={{ background: '#2a2a3e', color: '#fff', border: '1px solid #444', borderRadius: 6, padding: '8px 10px' }} />
+        <textarea name="notas" placeholder="Notas (opcional)" value={form.notas} onChange={handleChange} rows={3} style={{ background: '#2a2a3e', color: '#fff', border: '1px solid #444', borderRadius: 6, padding: '8px 10px', resize: 'vertical' }} />
+        <div style={{ display: 'flex', gap: 10, marginTop: 8 }}>
+          <button type="submit" disabled={loading} style={{ flex: 1, padding: '10px', background: 'linear-gradient(135deg, #0099ff, #004c99)', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 700, fontSize: 15, cursor: 'pointer' }}>
+            {loading ? 'Guardando...' : 'Confirmar reserva'}
+          </button>
+          <button type="button" onClick={closeModal} style={{ padding: '10px 20px', background: '#444', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer' }}>Cerrar</button>
+        </div>
       </form>
-      <button onClick={handleClose} style={{ marginTop: 16 }} disabled={loading}>Cerrar</button>
     </Modal>
   );
 };

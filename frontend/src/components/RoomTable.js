@@ -1,9 +1,7 @@
 // components/RoomTable.js
 // Tabla de gestión visual de habitaciones (CRUD)
-import React, { useCallback, useEffect, useState } from 'react';
-import useBackendReady from '../hooks/useBackendReady';
+import React, { useEffect, useState } from 'react';
 import { apiFetch } from '../utils/api';
-import useSessionGuard from '../hooks/useSessionGuard';
 
 const API_ROOMS = '/api/rooms';
 const API_RESERVATIONS = '/api/reservations';
@@ -16,106 +14,47 @@ const RoomTable = () => {
   const [form, setForm] = useState({ number: '', floor: '', type: 'doble', price: '', status: 'disponible' });
   const [editingId, setEditingId] = useState(null);
   const [success, setSuccess] = useState('');
-  const { canFetch, sessionExpired, authLoading } = useSessionGuard();
-  const sessionCopy = useCallback(
-    (action = 'gestionar habitaciones') => (
-      sessionExpired
-        ? `Tu sesión expiró. Inicia sesión nuevamente para ${action}.`
-        : `Debes iniciar sesión para ${action}.`
-    ),
-    [sessionExpired]
-  );
 
-  const { backendReady, backendLoading, backendError } = useBackendReady();
   // Cargar habitaciones y reservas activas
-  const fetchRoomsAndReservations = useCallback(async () => {
-    if (!canFetch || !backendReady) {
-      if (!authLoading && !backendLoading) {
-        setRooms([]);
-        setReservations([]);
-        setLoading(false);
-        setError(sessionCopy());
-      }
-      return;
-    }
+  const fetchRoomsAndReservations = async () => {
     try {
       setLoading(true);
-      setError('');
       const [roomsRes, reservationsRes] = await Promise.all([
         apiFetch(API_ROOMS, {
           headers: {
             'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
-            'Pragma': 'no-cache',
             'Expires': '0'
           }
         }),
         apiFetch(API_RESERVATIONS)
       ]);
+      
       const roomsData = await roomsRes.json();
       const reservationsData = await reservationsRes.json();
+      
       setRooms(Array.isArray(roomsData) ? roomsData : []);
+      // Filtrar solo reservas con check-in
       const activeCheckins = Array.isArray(reservationsData) 
         ? reservationsData.filter(r => r.status === 'checkin') 
         : [];
       setReservations(activeCheckins);
     } catch (e) {
-      if (!sessionExpired) {
-        setError('No se pudieron cargar las habitaciones.');
-      }
+      setError('No se pudieron cargar las habitaciones.');
     } finally {
       setLoading(false);
     }
-  }, [canFetch, authLoading, sessionExpired, sessionCopy, backendReady, backendLoading]);
+  };
 
   useEffect(() => {
-    if (!canFetch || !backendReady) {
-      if (!authLoading && !backendLoading) {
-        setLoading(false);
-        setRooms([]);
-        setReservations([]);
-        setError(sessionCopy());
-      }
-      return undefined;
-    }
-    let ws;
-    let cancelled = false;
-    const init = async () => {
-      await fetchRoomsAndReservations();
-      if (cancelled) return;
-      // URL fija desde variables de entorno
-      const wsUrl = process.env.REACT_APP_WS_URL;
-      ws = new WebSocket(wsUrl);
-      ws.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data);
-          if (data.type && 
-             (data.type.startsWith('room_') || 
-              data.type.startsWith('reservation_'))) {
-            fetchRoomsAndReservations();
-          }
-        } catch (e) {}
-      };
-    };
-    init();
-    return () => {
-      cancelled = true;
-      if (ws) ws.close();
-    };
-  }, [canFetch, authLoading, fetchRoomsAndReservations, sessionCopy, backendReady, backendLoading]);
-  if (backendLoading) {
-    return <div style={{textAlign:'center',marginTop:40}}><b>Conectando con backend...</b></div>;
-  }
-  if (backendError) {
-    return <div style={{textAlign:'center',marginTop:40,color:'#ef4444'}}><b>{backendError}</b></div>;
-  }
+    fetchRoomsAndReservations();
+    // Actualizar cada 60s como respaldo (WebSocket gestionado desde wsClient global)
+    const interval = setInterval(fetchRoomsAndReservations, 60000);
+    return () => clearInterval(interval);
+  }, []);
 
   // Crear o editar habitación
   const handleSubmit = async e => {
     e.preventDefault();
-    if (!canFetch) {
-      setError(sessionCopy('crear o actualizar habitaciones'));
-      return;
-    }
     setError('');
     setSuccess('');
     setLoading(true);
@@ -145,11 +84,7 @@ const RoomTable = () => {
 
   // Eliminar habitación
   const handleDelete = async id => {
-    if (!window.confirm('¿Eliminar esta habitación?')) return;
-    if (!canFetch) {
-      setError(sessionCopy('eliminar habitaciones'));
-      return;
-    }
+    if (!window.confirm('\u00bfEliminar esta habitación?')) return;
     const res = await apiFetch(`${API_ROOMS}/${id}`, { method: 'DELETE' });
     if (!res.ok) {
       const data = await res.json();
@@ -169,6 +104,38 @@ const RoomTable = () => {
       status: room.status
     });
     setEditingId(room._id);
+  };
+
+  // Cambio rápido de estado (limpieza / disponible / mantenimiento)
+  const handleSetStatus = async (roomId, newStatus, roomNumber) => {
+    const labels = { limpieza: 'enviar a limpieza', disponible: 'marcar como disponible', mantenimiento: 'enviar a mantenimiento' };
+    if (!window.confirm(`¿Confirmar: ${labels[newStatus] || newStatus} la Hab. ${roomNumber}?`)) return;
+    setError(''); setSuccess('');
+    try {
+      const res = await apiFetch(`${API_ROOMS}/${roomId}/set-status`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus })
+      });
+      const data = await res.json();
+      if (!res.ok) { setError(data.message || 'Error'); return; }
+      setSuccess(data.message);
+      fetchRoomsAndReservations();
+    } catch { setError('Error de red'); }
+  };
+
+  // Completar tarea de housekeeping (repaso / limpieza profunda / limpieza checkout)
+  const handleCompleteTask = async (roomId, task) => {
+    const labels = { repaso: 'repaso', limpieza_profunda: 'limpieza profunda', limpieza_checkout: 'limpieza post-checkout' };
+    if (!window.confirm(`¿Confirmar ${labels[task] || 'tarea'} completado?`)) return;
+    setError(''); setSuccess('');
+    try {
+      const res = await apiFetch(`${API_ROOMS}/${roomId}/complete-task`, { method: 'PUT' });
+      const data = await res.json();
+      if (!res.ok) { setError(data.message || 'Error al completar tarea'); return; }
+      setSuccess(data.message || 'Tarea completada');
+      fetchRoomsAndReservations();
+    } catch { setError('Error de red'); }
   };
 
   const tableStyle = {
@@ -265,14 +232,68 @@ const RoomTable = () => {
                   <td style={{ padding: 10 }}>{room.type}</td>
                   <td style={{ padding: 10 }}>${room.price}</td>
                   <td style={{ padding: 10 }}>
-                    <span style={statusStyle}>
-                      {room.status}
-                      {room.status !== realStatus && ' (físico)'}
-                    </span>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      <span style={statusStyle}>
+                        {room.status === 'disponible' ? '✅ Disponible' :
+                         room.status === 'ocupada' ? '🔴 Ocupada' :
+                         room.status === 'limpieza' ? '🧹 Limpieza' :
+                         '🔧 Mantenimiento'}
+                      </span>
+                      {room.pendingHousekeeping && (
+                        <span style={{
+                          fontSize: 11, fontWeight: 700, padding: '2px 6px', borderRadius: 4,
+                          background: room.pendingHousekeeping === 'repaso' ? '#1e3a5f' :
+                                      room.pendingHousekeeping === 'limpieza_profunda' ? '#3b1e5f' : '#5f1e1e',
+                          color: room.pendingHousekeeping === 'repaso' ? '#60a5fa' :
+                                 room.pendingHousekeeping === 'limpieza_profunda' ? '#c084fc' : '#fca5a5'
+                        }}>
+                          {room.pendingHousekeeping === 'repaso' ? '🧹 Repaso pendiente' :
+                           room.pendingHousekeeping === 'limpieza_profunda' ? '🧼 Limpieza profunda' :
+                           '🚪 Limpiar post-checkout'}
+                        </span>
+                      )}
+                    </div>
                   </td>
                   <td style={{ padding: 10 }}>
-                    <button onClick={() => handleEdit(room)} style={{ marginRight: 8, ...buttonStyle }}>Editar</button>
-                    <button onClick={() => handleDelete(room._id)} style={{ ...buttonStyle, background: '#ef4444' }}>Eliminar</button>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                      {room.pendingHousekeeping && (
+                        <button
+                          onClick={() => handleCompleteTask(room._id, room.pendingHousekeeping)}
+                          style={{ background: '#22c55e', color: '#000', border: 'none', borderRadius: 6, padding: '6px 12px', fontWeight: 700 }}
+                        >
+                          {room.pendingHousekeeping === 'repaso' ? '✅ Repaso hecho' :
+                           room.pendingHousekeeping === 'limpieza_profunda' ? '✅ Limpieza hecha' :
+                           '✅ Disponible'}
+                        </button>
+                      )}
+                      {/* Botones de cambio rápido de estado */}
+                      {(room.status === 'ocupada' || room.status === 'disponible') && (
+                        <button
+                          onClick={() => handleSetStatus(room._id, 'limpieza', room.number)}
+                          style={{ background: '#92400e', color: '#fde68a', border: 'none', borderRadius: 6, padding: '6px 10px', fontWeight: 600, fontSize: 12 }}
+                          title="Enviar a limpieza manualmente">
+                          🧹 Limpieza
+                        </button>
+                      )}
+                      {room.status === 'limpieza' && (
+                        <button
+                          onClick={() => handleSetStatus(room._id, 'disponible', room.number)}
+                          style={{ background: '#14532d', color: '#86efac', border: 'none', borderRadius: 6, padding: '6px 10px', fontWeight: 600, fontSize: 12 }}
+                          title="Marcar como disponible">
+                          ✅ Disponible
+                        </button>
+                      )}
+                      {(room.status === 'disponible' || room.status === 'limpieza') && (
+                        <button
+                          onClick={() => handleSetStatus(room._id, 'mantenimiento', room.number)}
+                          style={{ background: '#1e3a5f', color: '#93c5fd', border: 'none', borderRadius: 6, padding: '6px 10px', fontWeight: 600, fontSize: 12 }}
+                          title="Enviar a mantenimiento">
+                          🔧 Mant.
+                        </button>
+                      )}
+                      <button onClick={() => handleEdit(room)} style={{ ...buttonStyle }}>Editar</button>
+                      <button onClick={() => handleDelete(room._id)} style={{ ...buttonStyle, background: '#ef4444' }}>Eliminar</button>
+                    </div>
                   </td>
                 </tr>
               );

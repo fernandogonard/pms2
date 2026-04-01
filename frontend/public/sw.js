@@ -1,14 +1,12 @@
 // Service Worker para CRM Hotelero PWA
-// Versión 2.0.1 - Correcciones aplicadas para hot-update y cache
+// Versión 2.0.3 - Bump para limpiar caché de bundle anterior
 
-const CACHE_NAME = 'crm-hotelero-v2.0.1';
-const STATIC_CACHE = 'crm-hotelero-static-v2.0.1';
-const API_CACHE = 'crm-hotelero-api-v2.0.1';
+const CACHE_NAME = 'crm-hotelero-v2.0.3';
+const STATIC_CACHE = 'crm-hotelero-static-v2.0.3';
+const API_CACHE = 'crm-hotelero-api-v2.0.3';
 
-// Recursos críticos que siempre deben estar en cache
+// Solo recursos que NO cambian de nombre entre deploys
 const CRITICAL_RESOURCES = [
-  '/',
-  '/static/css/main.css',
   '/manifest.json',
   '/icons/icon-16x16.png',
   '/icons/icon-72x72.png',
@@ -50,39 +48,27 @@ const CACHE_CONFIG = {
 
 // Instalación del Service Worker
 self.addEventListener('install', event => {
-  console.log('[SW] Instalando Service Worker v2.0.0');
-  
+  console.log('[SW] Instalando Service Worker v2.0.3');
+  // skipWaiting SIEMPRE, independiente de si el cache de recursos falla
   self.skipWaiting();
-  
+
   event.waitUntil(
     caches.open(STATIC_CACHE)
       .then(cache => {
         console.log('[SW] Cache abierto, guardando recursos críticos');
-        return cache.addAll(CRITICAL_RESOURCES);
+        // addAll individual para no bloquear si uno falla
+        return Promise.allSettled(
+          CRITICAL_RESOURCES.map(url => cache.add(url).catch(err => console.warn('[SW] No se pudo cachear:', url, err)))
+        );
       })
-      .then(() => {
-        console.log('[SW] Recursos críticos cacheados exitosamente');
-        return self.skipWaiting(); // Forzar activación inmediata
-      })
-      .catch(error => {
-        console.error('[SW] Error al cachear recursos críticos:', error);
-      })
+      .then(() => console.log('[SW] Instalación completa v2.0.3'))
+      .catch(error => console.error('[SW] Error en install:', error))
   );
 });
 
 // Activación del Service Worker
 self.addEventListener('activate', event => {
-  console.log('[SW] Activando Service Worker v2.0.0');
-  
-  event.waitUntil(
-    caches.keys().then(function(cacheNames) {
-      return Promise.all(
-        cacheNames.map(function(cacheName) {
-          return caches.delete(cacheName);
-        })
-      );
-    })
-  );
+  console.log('[SW] Activando Service Worker v2.0.3');
   
   event.waitUntil(
     caches.keys()
@@ -117,29 +103,46 @@ self.addEventListener('fetch', event => {
     return;
   }
   
+  // NO interceptar requests a dominios externos (Railway, CDN con credenciales, etc.)
+  // Dejarlos pasar directamente para preservar headers Authorization
+  if (url.origin !== location.origin) {
+    return;
+  }
+  
   // IMPORTANTE: No cachear peticiones POST
   if (request.method === 'POST') {
     return;
   }
   
-  // Estrategia para API calls (solo GET)
+  // Estrategia para API calls same-origin (solo GET) — pasa por Vercel proxy a Railway
   if (url.pathname.startsWith('/api/') && request.method === 'GET') {
     event.respondWith(handleApiRequest(request));
     return;
   }
   
-  // Estrategia para recursos estáticos
-  if (request.destination === 'script' || 
-      request.destination === 'style' || 
-      request.destination === 'image' ||
+  // Los bundles JS/CSS generados por React (con hash) NUNCA se cachean — siempre red
+  if (url.pathname.match(/\/static\/(js|css)\/main\.[a-f0-9]+\.(js|css)(\.map)?$/)) {
+    return; // pasar directamente sin interceptar
+  }
+
+  // Estrategia para recursos estáticos (imágenes, iconos, libs externas)
+  if (request.destination === 'image' ||
       url.hostname !== location.hostname) {
     event.respondWith(handleStaticResource(request));
     return;
   }
+
+  // Scripts/styles que NO son bundles de la app (bootstrap, etc.) → cache normal
+  if (request.destination === 'script' || request.destination === 'style') {
+    event.respondWith(handleStaticResource(request));
+    return;
+  }
   
-  // Estrategia para páginas HTML
+  // Estrategia para páginas HTML — network first para obtener index.html actualizado
   if (request.mode === 'navigate') {
-    event.respondWith(handlePageRequest(request));
+    event.respondWith(
+      fetch(request).catch(() => caches.match(request))
+    );
     return;
   }
   

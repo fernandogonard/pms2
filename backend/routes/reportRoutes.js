@@ -1,11 +1,11 @@
 // routes/reportRoutes.js
 const express = require('express');
-const reportController = require('../controllers/reportController');
 const router = express.Router();
+const reportController = require('../controllers/reportController');
+const { protect, authorize } = require('../middlewares/authMiddleware');
 
-// Rutas de reportes
-router.get('/occupancy', reportController.getOccupancyReport);
-// Ruta para reporte de ingresos
-router.get('/revenue', reportController.revenueReport);
+// Solo admin puede descargar reportes
+router.get('/occupancy',  protect, authorize('admin'), reportController.occupancyReport);
+router.get('/financial',  protect, authorize('admin'), reportController.financialReport);
 
 module.exports = router;

@@ -1,93 +1,202 @@
 // utils/wsClient.js
 // Pequeño cliente WebSocket con reconexión exponencial y API simple
+import redirectorService from '../services/redirectorService';
 
-/**
- * WebSocket Client
- * - URL FIJA desde env
- * - Reconexión exponencial
- * - Heartbeat
- * - Sin duplicación
- */
+export function createWS(urlParam, handlers = {}) {
+  let ws = null;
+  let attempts = 0;
+  let closedByUser = false;
+  const maxDelay = 30000;
+  let heartbeatTimer = null;
+  let lastPong = Date.now();
+  let url = urlParam;
+  let isPortDiscoveryActive = false;
+  
+  // Al principio, intentar descubrir el puerto actual del servidor
+  discoverServerPort();
 
-class WSClient {
-  constructor(url) {
-    this.url = url;
-    this.ws = null;
-    this.reconnectAttempts = 0;
-    this.maxReconnectAttempts = 5;
-    this.reconnectDelay = 1000;
-    this.listeners = new Set();
-    this.heartbeatInterval = null;
-  }
-
-  connect(token) {
-    if (this.ws && this.ws.readyState === WebSocket.OPEN) return;
-
-    this.ws = new WebSocket(`${this.url}?token=${token}`);
-
-    this.ws.onopen = () => {
-      this.reconnectAttempts = 0;
-      this.startHeartbeat();
-    };
-
-    this.ws.onmessage = (event) => {
+  const { onopen, onmessage, onclose, onerror } = handlers;
+  
+  // Función para descubrir el puerto actual del backend
+  async function discoverServerPort() {
+    if (isPortDiscoveryActive) return; // Evitar múltiples solicitudes paralelas
+    
+    // En producción la URL ya viene de redirectorService — no intentar localhost
+    const IS_PRODUCTION = typeof window !== 'undefined' &&
+      window.location.hostname !== 'localhost' &&
+      window.location.hostname !== '127.0.0.1';
+    if (IS_PRODUCTION) return;
+    
+    isPortDiscoveryActive = true;
+    try {
+      // Primero intentar con redirectorService
       try {
-        const data = JSON.parse(event.data);
-        this.listeners.forEach(listener => listener(data));
-      } catch (error) {
-        console.error('WS Message parse error:', error);
+        // Obtener la URL del WebSocket desde redirectorService
+        const wsUrl = redirectorService.getWebSocketUrl();
+        if (wsUrl) {
+          url = wsUrl; // Actualizar la URL con el endpoint correcto
+          // Si ya hay un intento de conexión en curso, cerrar y reconectar
+          if (ws && ws.readyState !== WebSocket.CLOSED) {
+            try { ws.close(); } catch (e) {}
+          }
+          return;
+        }
+      } catch (redirErr) {
+        // ...
       }
-    };
-
-    this.ws.onclose = () => {
-      this.stopHeartbeat();
-      if (this.reconnectAttempts < this.maxReconnectAttempts) {
-        setTimeout(() => {
-          this.reconnectAttempts++;
-          this.connect(token);
-        }, this.reconnectDelay * this.reconnectAttempts);
+      
+      // Si redirectorService falla, intentar con el método anterior
+      const response = await fetch('/api/system/port');
+      if (!response.ok) throw new Error('Error al obtener información del puerto');
+      
+      const data = await response.json();
+      if (data.success && data.wsEndpoint) {
+        url = data.wsEndpoint; // Actualizar la URL con el endpoint correcto
+        // Si ya hay un intento de conexión en curso, cerrar y reconectar
+        if (ws && ws.readyState !== WebSocket.CLOSED) {
+          try { ws.close(); } catch (e) {}
+        }
       }
-    };
-
-    this.ws.onerror = (error) => {
-      console.error('WS Error:', error);
-    };
-  }
-
-  startHeartbeat() {
-    this.heartbeatInterval = setInterval(() => {
-      if (this.ws.readyState === WebSocket.OPEN) {
-        this.ws.send(JSON.stringify({ type: 'ping' }));
-      }
-    }, 30000);
-  }
-
-  stopHeartbeat() {
-    if (this.heartbeatInterval) {
-      clearInterval(this.heartbeatInterval);
-      this.heartbeatInterval = null;
+    } catch (err) {
+      // Seguir usando la URL original en caso de error
+    } finally {
+      isPortDiscoveryActive = false;
     }
   }
 
-  addListener(callback) {
-    this.listeners.add(callback);
+  function getUrlWithToken() {
+    try {
+      const token = localStorage.getItem('token');
+      // Log ligero: token presente o no (no imprimir token en claro)
+      const hasToken = !!token;
+      try { console.log(`[WS] construir URL. base=${url} tokenPresent=${hasToken}`); } catch (e) {}
+      if (!token) return url;
+      const sep = url.includes('?') ? '&' : '?';
+      return `${url}${sep}token=${encodeURIComponent(token)}`;
+    } catch (e) { return url; }
   }
 
-  removeListener(callback) {
-    this.listeners.delete(callback);
-  }
-
-  disconnect() {
-    if (this.ws) {
+  function startHeartbeat() {
+    stopHeartbeat();
+    heartbeatTimer = setInterval(() => {
       try {
-        this.ws.close();
-      } catch (error) {
-        this.ws = null;
+        // enviar ping de aplicación; el servidor responderá con {type:'pong'}
+        if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'ping' }));
+      } catch (e) {}
+      // si no hemos recibido pong en 60s, forzamos cierre para reintentar
+      if (Date.now() - lastPong > 60000) {
+        try { ws && ws.close(); } catch (e) {}
+      }
+    }, 20000);
+  }
+  function stopHeartbeat() {
+    if (heartbeatTimer) { clearInterval(heartbeatTimer); heartbeatTimer = null; }
+  }
+
+  function connect() {
+    if (closedByUser) return; // No reconectar si fue cerrado por el usuario
+    
+    // Intentar obtener la URL WebSocket optimizada desde el redirectorService
+    try {
+      const redirectedWsUrl = redirectorService.getWebSocketUrl();
+      if (redirectedWsUrl) {
+        url = redirectedWsUrl;
+      } else {
+        // Fallback al método anterior si redirectorService no devuelve una URL
+        const savedPort = localStorage.getItem('backend-port');
+        if (savedPort && !url.includes(`:${savedPort}/`)) {
+          const baseUrl = url.split('/ws')[0]; // Obtener base URL sin el path ws
+          const wsBase = baseUrl.includes('://') ? baseUrl.split('://')[1] : baseUrl;
+          const host = wsBase.split(':')[0] || 'localhost';
+          url = `ws://${host}:${savedPort}/ws`;
+        }
+      }
+    } catch (e) {
+      // ...
+    }
+    
+    try {
+      const resolved = getUrlWithToken();
+      // Solo log en desarrollo
+      if (process.env.NODE_ENV === 'development') {
+        try { console.log(`[WS] conectando a: ${resolved}`); } catch (e) {}
+      }
+      ws = new window.WebSocket(resolved);
+    } catch (err) {
+      if (process.env.NODE_ENV === 'development') {
+        try { console.log('[WS] error al crear WebSocket:', err && err.message); } catch (e) {}
+      }
+      onerror && onerror(err);
+      scheduleReconnect();
+      return;
+    }
+
+    ws.onopen = (ev) => {
+      attempts = 0;
+      lastPong = Date.now();
+      startHeartbeat();
+      onopen && onopen(ev);
+    };
+
+    ws.onmessage = (ev) => {
+      try {
+        const data = ev.data && ev.data.toString ? ev.data.toString() : ev.data;
+        // responder a pings y actualizar lastPong si viene pong
+        try {
+          const j = JSON.parse(data);
+          if (j && j.type === 'pong') {
+            lastPong = Date.now();
+          } else if (j && j.type === 'ping') {
+            // responder pong de aplicación
+            try { ws.send(JSON.stringify({ type: 'pong' })); } catch (e) {}
+          }
+        } catch (e) {}
+      } catch (e) {}
+      onmessage && onmessage(ev);
+    };
+
+    ws.onclose = (ev) => {
+      stopHeartbeat();
+      onclose && onclose(ev);
+      if (!closedByUser) scheduleReconnect();
+    };
+
+    ws.onerror = (ev) => {
+      onerror && onerror(ev);
+      // No cerrar manualmente, dejar que onclose maneje la reconexión
+    };
+  }
+
+  function scheduleReconnect() {
+    attempts++;
+    // Si llevamos 3 o más intentos, intentar redescubrir el puerto
+    if (attempts >= 3 && attempts % 3 === 0) {
+      discoverServerPort();
+    }
+    
+    const delay = Math.min(maxDelay, 1000 * Math.pow(2, Math.min(attempts, 5)));
+    setTimeout(() => {
+      if (!closedByUser) connect();
+    }, delay);
+  }
+
+  // iniciar conexión después de un breve retraso para dar tiempo a la detección de puerto
+  setTimeout(() => {
+    if (!closedByUser) connect();
+  }, 300);
+
+  return {
+    close() {
+      closedByUser = true;
+      stopHeartbeat();
+      try { ws && ws.close(); } catch (e) {}
+    },
+    send(data) {
+      try {
+        if (ws && ws.readyState === WebSocket.OPEN) ws.send(data);
+      } catch (e) {
+        // ignore send errors
       }
     }
-    this.stopHeartbeat();
-  }
+  };
 }
-
-export default WSClient;
-export const createWSConnection = (url) => new WSClient(url);

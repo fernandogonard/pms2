@@ -2,9 +2,7 @@
 // Componente para gestionar el mantenimiento y la relocalización de huéspedes
 
 import React, { useState, useEffect } from 'react';
-import useBackendReady from '../hooks/useBackendReady';
 import { apiFetch } from '../utils/api';
-import useSessionGuard from '../hooks/useSessionGuard';
 
 const MaintenanceManager = () => {
   const [rooms, setRooms] = useState([]);
@@ -22,38 +20,14 @@ const MaintenanceManager = () => {
   const [impactData, setImpactData] = useState(null);
   const [showRelocateModal, setShowRelocateModal] = useState(false);
   const [relocating, setRelocating] = useState(false);
-  const { canFetch, sessionExpired, authLoading } = useSessionGuard();
 
-  const { backendReady, backendLoading, backendError } = useBackendReady();
   // Cargar habitaciones al inicio
   useEffect(() => {
-    if (!canFetch || !backendReady) {
-      if (!authLoading && !backendLoading) {
-        setRooms([]);
-        setOccupiedRooms([]);
-        setAvailableRooms([]);
-        setMaintenanceRooms([]);
-        setLoading(false);
-        setError(sessionExpired ? 'Tu sesión expiró. Inicia sesión para gestionar mantenimiento.' : 'Debes iniciar sesión para gestionar mantenimiento.');
-      }
-      return;
-    }
     fetchRooms();
-  }, [canFetch, sessionExpired, authLoading, backendReady, backendLoading]);
-  if (backendLoading) {
-    return <div style={{textAlign:'center',marginTop:40}}><b>Conectando con backend...</b></div>;
-  }
-  if (backendError) {
-    return <div style={{textAlign:'center',marginTop:40,color:'#ef4444'}}><b>{backendError}</b></div>;
-  }
+  }, []);
 
   // Cargar todas las habitaciones
   const fetchRooms = async () => {
-    if (!canFetch) {
-      setLoading(false);
-      setError(sessionExpired ? 'Tu sesión expiró. Inicia sesión para gestionar mantenimiento.' : 'Debes iniciar sesión para gestionar mantenimiento.');
-      return;
-    }
     try {
       setLoading(true);
       setError('');
@@ -61,23 +35,23 @@ const MaintenanceManager = () => {
       const res = await apiFetch('/api/rooms');
       const data = await res.json();
 
-      // Normalizar respuesta: el backend devuelve un array plano o { rooms }
-      const allRooms = Array.isArray(data) ? data : data?.data?.rooms || data?.rooms;
-
-      if (!Array.isArray(allRooms)) {
+      if (!Array.isArray(data)) {
         throw new Error('Formato de respuesta inesperado');
       }
+
+      const allRooms = data;
       setRooms(allRooms);
+      
+      // Filtrar habitaciones por estado
       setOccupiedRooms(allRooms.filter(room => room.status === 'ocupada'));
       setAvailableRooms(allRooms.filter(room => room.status === 'disponible'));
+      
+      // Cargar habitaciones en mantenimiento
       fetchMaintenanceRooms();
+      
     } catch (err) {
       console.error('Error al cargar habitaciones:', err);
-      if (err.code === 429) {
-        setError('El sistema está recibiendo demasiadas peticiones. Espera unos segundos e intenta de nuevo.');
-      } else {
-        setError('No se pudieron cargar las habitaciones: ' + err.message);
-      }
+      setError('No se pudieron cargar las habitaciones: ' + err.message);
     } finally {
       setLoading(false);
     }
@@ -85,9 +59,6 @@ const MaintenanceManager = () => {
 
   // Cargar habitaciones en mantenimiento
   const fetchMaintenanceRooms = async () => {
-    if (!canFetch) {
-      return;
-    }
     try {
       const res = await apiFetch('/api/rooms/maintenance');
       const data = await res.json();
@@ -101,10 +72,6 @@ const MaintenanceManager = () => {
 
   // Verificar impacto de mantenimiento en una habitación
   const checkMaintenanceImpact = async (roomId) => {
-    if (!canFetch) {
-      setError(sessionExpired ? 'Tu sesión expiró. Inicia sesión para consultar el impacto.' : 'Debes iniciar sesión para consultar el impacto.');
-      return;
-    }
     try {
       setProcessLoading(true);
       setError('');
@@ -125,10 +92,6 @@ const MaintenanceManager = () => {
 
   // Iniciar mantenimiento de una habitación
   const startMaintenance = async (forceIfOccupied = false) => {
-    if (!canFetch) {
-      setError(sessionExpired ? 'Tu sesión expiró. Inicia sesión para administrar el mantenimiento.' : 'Debes iniciar sesión para administrar el mantenimiento.');
-      return;
-    }
     try {
       setProcessLoading(true);
       setError('');
@@ -185,10 +148,6 @@ const MaintenanceManager = () => {
 
   // Finalizar mantenimiento
   const completeMaintenance = async (roomId) => {
-    if (!canFetch) {
-      setError(sessionExpired ? 'Tu sesión expiró. Inicia sesión para completar mantenimiento.' : 'Debes iniciar sesión para completar mantenimiento.');
-      return;
-    }
     try {
       setProcessLoading(true);
       setError('');
@@ -230,10 +189,6 @@ const MaintenanceManager = () => {
 
   // Relocalizar huéspedes directamente (sin mantenimiento)
   const relocateGuests = async () => {
-    if (!canFetch) {
-      setError(sessionExpired ? 'Tu sesión expiró. Inicia sesión para relocalizar huéspedes.' : 'Debes iniciar sesión para relocalizar huéspedes.');
-      return;
-    }
     try {
       setRelocating(true);
       setError('');

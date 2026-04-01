@@ -12,12 +12,6 @@ const { logger } = require('../config/logger');
  * @route GET /api/stats/rooms
  */
 exports.getRoomStats = ErrorHandlingService.asyncWrapper(async (req, res) => {
-    // Añadir cabeceras CORS específicas para evitar problemas con cabeceras personalizadas
-    res.header('Access-Control-Allow-Origin', req.headers.origin || '*');
-    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, Accept, X-Requested-With, Cache-Control');
-    res.header('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS');
-    res.header('Access-Control-Allow-Credentials', 'true');
-    
     // No permitir caché
     res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
     
@@ -27,7 +21,7 @@ exports.getRoomStats = ErrorHandlingService.asyncWrapper(async (req, res) => {
       number: 1, 
       status: 1, 
       type: 1 
-    });
+    }).lean();
     
     // Obtener fecha actual para verificación usando DateService
     const DateService = require('../services/dateService');
@@ -35,7 +29,7 @@ exports.getRoomStats = ErrorHandlingService.asyncWrapper(async (req, res) => {
     
     // Obtener reservas activas con check-in (ocupadas - verde) con proyección optimizada
     const activeReservations = await Reservation.find({
-        status: 'checkin',
+        status: { $in: ['checkin', 'checked-in'] },
         checkOut: { $gt: today }
     }, { 
         room: 1,

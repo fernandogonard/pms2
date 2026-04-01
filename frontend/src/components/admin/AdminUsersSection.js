@@ -1,39 +1,31 @@
 // components/admin/AdminUsersSection.js
 // Sección de gestión de usuarios para administradores
 
-
-import React, { useEffect, useState } from 'react';
-import UserTable from '../UserTable';
+import React from 'react';
 import { apiFetch } from '../../utils/api';
+import UserTable from '../UserTable';
 
 const AdminUsersSection = () => {
-  const [showCreateModal, setShowCreateModal] = useState(false);
-  const [users, setUsers] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  const [showCreateModal, setShowCreateModal] = React.useState(false);
+  const [userStats, setUserStats] = React.useState({
+    total: 0, admins: 0, recepcionistas: 0, activos: 0
+  });
 
-  // Cargar usuarios reales del backend
-  useEffect(() => {
-    const fetchUsers = async () => {
-      setLoading(true);
-      try {
-        const res = await apiFetch('/api/users');
-        const data = await res.json();
-        setUsers(Array.isArray(data) ? data : []);
-      } catch (e) {
-        setError('No se pudieron cargar los usuarios.');
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchUsers();
+  React.useEffect(() => {
+    apiFetch('/api/users')
+      .then(r => r.json())
+      .then(data => {
+        if (Array.isArray(data)) {
+          setUserStats({
+            total: data.length,
+            admins: data.filter(u => u.role === 'admin').length,
+            recepcionistas: data.filter(u => u.role === 'recepcionista').length,
+            activos: data.filter(u => u.isActive !== false).length
+          });
+        }
+      })
+      .catch(() => {});
   }, []);
-
-  // Cálculos de estadísticas
-  const totalUsuarios = users.length;
-  const administradores = users.filter(u => u.role === 'admin' || u.role === 'administrador').length;
-  const recepcionistas = users.filter(u => u.role === 'recepcionista').length;
-  const activos = users.filter(u => u.activo !== false).length;
 
   return (
     <div style={containerStyle}>
@@ -51,33 +43,33 @@ const AdminUsersSection = () => {
         </button>
       </div>
 
-      {/* Estadísticas de usuarios (dinámicas) */}
+      {/* Estadísticas de usuarios */}
       <div style={statsRowStyle}>
         <div style={statCardStyle}>
           <div style={statIconStyle}>👨‍💼</div>
           <div>
-            <div style={statValueStyle}>{loading ? '...' : totalUsuarios}</div>
+            <div style={statValueStyle}>{userStats.total}</div>
             <div style={statLabelStyle}>Total Usuarios</div>
           </div>
         </div>
         <div style={statCardStyle}>
           <div style={statIconStyle}>🔑</div>
           <div>
-            <div style={statValueStyle}>{loading ? '...' : administradores}</div>
+            <div style={statValueStyle}>{userStats.admins}</div>
             <div style={statLabelStyle}>Administradores</div>
           </div>
         </div>
         <div style={statCardStyle}>
           <div style={statIconStyle}>📋</div>
           <div>
-            <div style={statValueStyle}>{loading ? '...' : recepcionistas}</div>
+            <div style={statValueStyle}>{userStats.recepcionistas}</div>
             <div style={statLabelStyle}>Recepcionistas</div>
           </div>
         </div>
         <div style={statCardStyle}>
           <div style={statIconStyle}>🟢</div>
           <div>
-            <div style={statValueStyle}>{loading ? '...' : activos}</div>
+            <div style={statValueStyle}>{userStats.activos}</div>
             <div style={statLabelStyle}>Activos</div>
           </div>
         </div>

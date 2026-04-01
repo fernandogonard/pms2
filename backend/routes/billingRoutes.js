@@ -12,7 +12,9 @@ const {
   getReservationBilling,
   getFinancialSummary,
   getPendingInvoices,
-  generateInvoice
+  generateInvoice,
+  generateInvoicePDF,
+  addCharge
 } = require('../controllers/billingController');
 
 // Bypass de autenticación en desarrollo para pruebas locales sin token
@@ -39,12 +41,18 @@ router.post('/calculate', devProtect, calculateReservationPrice);
 // POST /api/billing/reservations/:id/payment - Procesar pago
 router.post('/reservations/:id/payment', devProtect, authorize('admin', 'recepcionista'), processPayment);
 
+// POST /api/billing/reservations/:id/charge - Agregar cargo extra (minibar, lavanderia, etc.)
+router.post('/reservations/:id/charge', protect, authorize('admin', 'recepcionista'), addCharge);
+
 // GET /api/billing/reservations/:id - Obtener información de facturación de reserva
 router.get('/reservations/:id', devProtect, getReservationBilling);
 
 // 🧾 FACTURAS
 // POST /api/billing/reservations/:id/invoice - Generar factura
 router.post('/reservations/:id/invoice', devProtect, authorize('admin', 'recepcionista'), generateInvoice);
+
+// GET /api/billing/reservations/:id/invoice/pdf - Descargar factura en PDF
+router.get('/reservations/:id/invoice/pdf', protect, authorize('admin', 'recepcionista'), generateInvoicePDF);
 
 // GET /api/billing/invoices/pending - Obtener facturas pendientes
 router.get('/invoices/pending', devProtect, authorize('admin', 'recepcionista'), getPendingInvoices);

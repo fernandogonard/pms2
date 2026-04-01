@@ -213,25 +213,20 @@ const startPeriodicMetricsLogging = () => {
 // Manejador global de errores no capturados con contexto adicional
 const setupGlobalErrorHandlers = () => {
   process.on('uncaughtException', (error) => {
-    logger.error('Uncaught Exception', {
+    // IMPORTANTE: NO hacer process.exit() — deja el servidor vivo en Railway
+    // Solo err fatales de red/binding deben matar el proceso (manejados en server.js)
+    logger.error('Uncaught Exception (servidor continúa)', {
       error: error.message,
       stack: error.stack,
       pid: process.pid,
       uptime: process.uptime(),
       event: 'UNCAUGHT_EXCEPTION'
     });
-    
-    // Log métricas del sistema antes del crash
-    productionLoggerConfig.logSystemMetrics();
-    
-    // Graceful shutdown
-    process.exit(1);
   });
 
   process.on('unhandledRejection', (reason, promise) => {
     logger.error('Unhandled Rejection', {
       reason: reason ? reason.toString() : 'Unknown',
-      promise: promise.toString(),
       pid: process.pid,
       event: 'UNHANDLED_REJECTION'
     });

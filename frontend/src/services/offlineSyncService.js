@@ -63,7 +63,6 @@ class OfflineSyncService {
     this.saveQueue();
     this.notifyListeners();
 
-    console.log(`[OfflineSync] Added to queue: ${queueItem.type} - ${queueItem.id}`);
     return queueItem.id;
   }
 

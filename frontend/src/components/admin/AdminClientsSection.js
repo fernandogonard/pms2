@@ -2,10 +2,28 @@
 // Sección de gestión de clientes para administradores
 
 import React from 'react';
+import { apiFetch } from '../../utils/api';
 import ClientTable from '../ClientTable';
 
 const AdminClientsSection = () => {
   const [searchTerm, setSearchTerm] = React.useState('');
+  const [clientStats, setClientStats] = React.useState({
+    total: 0, nuevos: 0
+  });
+
+  React.useEffect(() => {
+    apiFetch('/api/clients')
+      .then(r => r.json())
+      .then(data => {
+        if (Array.isArray(data)) {
+          const ahora = new Date();
+          const primerDiaMes = new Date(ahora.getFullYear(), ahora.getMonth(), 1);
+          const nuevos = data.filter(c => c.createdAt && new Date(c.createdAt) >= primerDiaMes).length;
+          setClientStats({ total: data.length, nuevos });
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   return (
     <div style={containerStyle}>
@@ -25,28 +43,28 @@ const AdminClientsSection = () => {
         <div style={statCardStyle}>
           <div style={statIconStyle}>👤</div>
           <div>
-            <div style={statValueStyle}>1,247</div>
+            <div style={statValueStyle}>{clientStats.total.toLocaleString('es-AR')}</div>
             <div style={statLabelStyle}>Total Clientes</div>
           </div>
         </div>
         <div style={statCardStyle}>
           <div style={statIconStyle}>🆕</div>
           <div>
-            <div style={statValueStyle}>23</div>
+            <div style={statValueStyle}>{clientStats.nuevos}</div>
             <div style={statLabelStyle}>Nuevos Este Mes</div>
           </div>
         </div>
         <div style={statCardStyle}>
           <div style={statIconStyle}>⭐</div>
           <div>
-            <div style={statValueStyle}>189</div>
+            <div style={statValueStyle}>—</div>
             <div style={statLabelStyle}>VIP</div>
           </div>
         </div>
         <div style={statCardStyle}>
           <div style={statIconStyle}>🔄</div>
           <div>
-            <div style={statValueStyle}>76%</div>
+            <div style={statValueStyle}>—</div>
             <div style={statLabelStyle}>Repetidores</div>
           </div>
         </div>

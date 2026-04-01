@@ -51,6 +51,20 @@ const schemas = {
     })
   ),
 
+  // Schema para crear reservas desde el formulario público (auto-crea cliente)
+  reservationCreate: Joi.object({
+    tipo: Joi.string().valid('doble', 'triple', 'cuadruple').required(),
+    cantidad: Joi.number().integer().min(1).default(1),
+    checkIn: Joi.date().iso().required(),
+    checkOut: Joi.date().iso().greater(Joi.ref('checkIn')).required(),
+    nombre: Joi.string().min(2).max(50).required(),
+    apellido: Joi.string().min(2).max(50).required(),
+    dni: Joi.string().min(5).max(20).required(),
+    email: Joi.string().email().required(),
+    whatsapp: Joi.string().allow('').optional(),
+    notas: Joi.string().max(500).allow('').optional()
+  }),
+
   // Cliente
   client: Joi.object({
     firstName: Joi.string().min(2).max(50).required(),
@@ -77,6 +91,19 @@ const schemas = {
     currentPassword: Joi.string().required(),
     newPassword: Joi.string().min(6).max(128).required(),
     confirmPassword: Joi.string().valid(Joi.ref('newPassword')).required()
+  }),
+
+  // Habitación — actualización parcial (todos los campos opcionales)
+  roomUpdate: Joi.object({
+    number: Joi.number().integer().min(1).max(9999).optional(),
+    type: Joi.string().min(3).max(50).optional(),
+    price: Joi.number().min(0).optional(),
+    floor: Joi.number().integer().min(0).max(50).optional(),
+    status: Joi.string().valid('disponible', 'ocupada', 'limpieza', 'mantenimiento', 'fuera de servicio').optional(),
+    capacity: Joi.number().integer().min(1).max(10).optional(),
+    amenities: Joi.array().items(Joi.string()).optional(),
+    images: Joi.array().items(Joi.string().uri()).optional(),
+    description: Joi.string().max(500).allow('').optional()
   }),
 
   // MongoDB ObjectId

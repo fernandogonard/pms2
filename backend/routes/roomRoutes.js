@@ -9,10 +9,45 @@ const { protect, authorize } = require('../middlewares/authMiddleware');
 const { roomsLimiter, adminLimiter } = require('../config/rateLimiter');
 const maintenanceMiddleware = require('../middlewares/maintenanceMiddleware');
 
-// 🆕 Importar validaciones Joi
 const { createValidationMiddleware, validateParams } = require('../services/validationService');
 
-// 🆕 Solo admin puede crear, actualizar o eliminar habitaciones con validación Joi
+/**
+ * @swagger
+ * /api/rooms:
+ *   get:
+ *     tags: [Rooms]
+ *     summary: Listar todas las habitaciones
+ *     parameters:
+ *       - in: query
+ *         name: status
+ *         schema: { type: string, enum: [disponible, ocupada, limpieza, mantenimiento] }
+ *         description: Filtrar por estado
+ *       - in: query
+ *         name: type
+ *         schema: { type: string, enum: [doble, triple, cuadruple, suite] }
+ *         description: Filtrar por tipo
+ *     responses:
+ *       200:
+ *         description: Lista de habitaciones
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items: { $ref: '#/components/schemas/Room' }
+ *       401: { description: No autorizado }
+ *   post:
+ *     tags: [Rooms]
+ *     summary: Crear habitación (solo admin)
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema: { $ref: '#/components/schemas/Room' }
+ *     responses:
+ *       201: { description: Habitación creada }
+ *       400: { description: Datos inválidos }
+ *       403: { description: Sin permisos }
+ */
 router.post('/', 
   adminLimiter, 
   protect, 
@@ -20,12 +55,13 @@ router.post('/',
   createValidationMiddleware('room'), // 🔄 Validar datos de habitación
   roomController.createRoom
 );
+router.put('/mark-clean-bulk', adminLimiter, protect, authorize('admin', 'recepcionista'), roomController.markRoomsAsClean);
 router.put('/:id', 
   adminLimiter, 
   protect, 
   authorize('admin'), 
   validateParams('mongoId'), // 🔄 Validar ID de MongoDB
-  createValidationMiddleware('room'), // 🔄 Validar datos de habitación
+  createValidationMiddleware('roomUpdate'), // 🔄 Validar actualización parcial de habitación
   roomController.updateRoom
 );
 router.delete('/:id', 
@@ -36,12 +72,18 @@ router.delete('/:id',
   roomController.deleteRoom
 );
 
-// Endpoint para consultar habitaciones disponibles por tipo y fechas
-router.get('/available', roomsLimiter, protect, roomController.getAvailableRooms);
+// Endpoint público: tipos de habitación disponibles (sin auth — usado por el motor de reservas)
+router.get('/types', roomsLimiter, roomController.getRoomTypes);
+
+// Endpoint público: consultar disponibilidad por tipo y fechas (sin auth — motor de reservas web)
+router.get('/available', roomsLimiter, roomController.getAvailableRooms);
 
 // Todos los roles pueden ver habitaciones y estado real
 router.get('/', roomsLimiter, protect, roomController.getRooms); // requiere autenticación
 router.get('/status', roomsLimiter, protect, roomController.getRoomsStatus); // requiere autenticación
+// 🔒 Rutas estáticas ANTES de /:id para evitar conflictos de Express
+router.get('/cleaning', roomsLimiter, protect, authorize('admin', 'recepcionista'), roomController.getRoomsInCleaning);
+router.get('/maintenance', roomsLimiter, protect, authorize('admin', 'recepcionista'), maintenanceController.getRoomsInMaintenance);
 router.get('/:id', 
   roomsLimiter, 
   protect, 
@@ -50,14 +92,13 @@ router.get('/:id',
 );
 
 // 🧹 GESTIÓN DE LIMPIEZA - Solo admin/recepcionista
-router.get('/cleaning', roomsLimiter, protect, authorize('admin', 'recepcionista'), roomController.getRoomsInCleaning);
+router.put('/:id/set-status', adminLimiter, protect, authorize('admin', 'recepcionista'), roomController.setRoomStatus);
 router.put('/:id/mark-clean', adminLimiter, protect, authorize('admin', 'recepcionista'), roomController.markRoomAsClean);
-router.put('/mark-clean-bulk', adminLimiter, protect, authorize('admin', 'recepcionista'), roomController.markRoomsAsClean);
+router.put('/:id/complete-task', adminLimiter, protect, authorize('admin', 'recepcionista'), roomController.completeHousekeeping);
 
 // 🔧 GESTIÓN DE MANTENIMIENTO - Solo admin
 router.post('/:id/maintenance', adminLimiter, protect, authorize('admin'), maintenanceMiddleware.validateMaintenance, maintenanceController.startMaintenance);
 router.put('/:id/maintenance/complete', adminLimiter, protect, authorize('admin'), maintenanceController.completeMaintenance);
-router.get('/maintenance', roomsLimiter, protect, authorize('admin', 'recepcionista'), maintenanceController.getRoomsInMaintenance);
 router.get('/:id/maintenance/history', roomsLimiter, protect, authorize('admin'), maintenanceController.getMaintenanceHistory);
 router.get('/:id/maintenance/impact', roomsLimiter, protect, authorize('admin'), maintenanceController.checkMaintenanceImpact);
 
