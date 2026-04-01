@@ -145,14 +145,17 @@ mongoose.connect(MONGO_URI, {
       log('error', 'Error en servidor WebSocket:', err);
     });
 
-    // Heartbeat: terminar conexiones muertas cada 30s
+    // Heartbeat: enviar ping JSON + ping WS cada 25s para mantener viva la conexión en Railway
     const interval = setInterval(() => {
       wss.clients.forEach((ws) => {
         if (ws.isAlive === false) { try { ws.terminate(); } catch (e) {} return; }
         ws.isAlive = false;
         try { ws.ping(); } catch (e) {}
+        // Enviar también un ping a nivel de aplicación (JSON) porque
+        // algunos proxies (Railway) solo cuentan tráfico de datos, no frames ping/pong
+        try { if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'ping' })); } catch (e) {}
       });
-    }, 30000);
+    }, 25000);
 
     server.on('close', () => clearInterval(interval));
 

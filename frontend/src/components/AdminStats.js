@@ -41,10 +41,10 @@ const AdminStats = () => {
     };
     load();
     
-    // Actualizar cada 30 segundos para mantener datos frescos
+    // Actualizar cada 5 minutos (el WS se encarga de datos en tiempo real)
     const interval = setInterval(() => {
       load();
-    }, 30000);
+    }, 300000);
     
     return () => clearInterval(interval);
   }, []);

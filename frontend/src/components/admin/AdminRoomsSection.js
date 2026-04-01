@@ -50,8 +50,8 @@ const AdminRoomsSection = () => {
     // Cargar datos inmediatamente
     fetchRoomStats();
     
-    // Configurar actualización periódica como respaldo
-    const interval = setInterval(fetchRoomStats, 60000);
+    // Configurar actualización periódica como respaldo (5 min, el WS empuja cambios)
+    const interval = setInterval(fetchRoomStats, 300000);
     
     // Limpiar conexiones al desmontar
     return () => {
