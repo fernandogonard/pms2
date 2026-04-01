@@ -38,15 +38,17 @@ export const useCalendarData = (startDate, days = 14) => {
       if (!response.ok) throw new Error('Failed to fetch room status');
       const result = await response.json();
 
-      // Normalizar formato: /status devuelve [{...room, states:{}}] 
-      // pero RoomCalendar espera [{roomId, roomNumber, roomType, dates:[]}]
-      const normalized = Array.isArray(result) ? result.map(item => {
-        // Si ya tiene el formato calendar-status, devolverlo tal cual
+      // Normalizar formato: /status devuelve {rooms:[...], reservations, users}
+      // mientras que /calendar-status devuelve [{roomId, roomNumber, roomType, dates:[]}]
+      let items = result;
+      if (!Array.isArray(result) && result && Array.isArray(result.rooms)) {
+        items = result.rooms;
+      }
+      const normalized = Array.isArray(items) ? items.map(item => {
         if (item.roomId && item.dates) return item;
-        // Transformar formato /status (states object → dates array)
-        if (item._id && item.states) {
+        if ((item._id || item.id) && item.states) {
           return {
-            roomId: item._id,
+            roomId: item._id || item.id,
             roomNumber: item.number,
             roomType: item.type,
             dates: Object.entries(item.states).map(([date, status]) => ({
@@ -57,7 +59,7 @@ export const useCalendarData = (startDate, days = 14) => {
           };
         }
         return item;
-      }) : result;
+      }) : [];
 
       setData(normalized);
     } catch (err) {
