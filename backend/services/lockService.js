@@ -1,5 +1,6 @@
 const { randomUUID } = require('crypto');
 const Lock = require('../models/Lock');
+const { logger } = require('./loggerService');
 
 class LockBusyError extends Error {
   constructor(key) {
@@ -55,7 +56,7 @@ async function withLock(key, ttlMs, callback) {
     try {
       await releaseLock(key, owner);
     } catch (error) {
-      console.error(`No se pudo liberar el lock ${key}:`, error);
+      logger.error(`No se pudo liberar el lock ${key}:`, error);
     }
   }
 }

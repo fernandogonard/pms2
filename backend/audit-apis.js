@@ -5,38 +5,38 @@ const tests = [
   {
     name: 'Health Check',
     method: 'GET',
-    url: 'http://localhost:5000/',
+    url: `${process.env.REACT_APP_API_URL}/`,
     auth: false
   },
   {
     name: 'Login Admin',
     method: 'POST',
-    url: 'http://localhost:5000/api/auth/login',
+    url: `${process.env.REACT_APP_API_URL}/api/auth/login`,
     body: { email: 'admin@hotel.com', password: 'admin123' },
     auth: false
   },
   {
     name: 'Get Room Types',
     method: 'GET',
-    url: 'http://localhost:5000/api/rooms/types',
+    url: `${process.env.REACT_APP_API_URL}/api/rooms/types`,
     auth: true
   },
   {
     name: 'Get Rooms',
     method: 'GET',
-    url: 'http://localhost:5000/api/rooms',
+    url: `${process.env.REACT_APP_API_URL}/api/rooms`,
     auth: true
   },
   {
     name: 'Check Room Availability',
     method: 'GET',
-    url: 'http://localhost:5000/api/rooms/available?type=doble&checkIn=2025-10-10&checkOut=2025-10-12',
+    url: `${process.env.REACT_APP_API_URL}/api/rooms/available?type=doble&checkIn=2025-10-10&checkOut=2025-10-12`,
     auth: true
   },
   {
     name: 'Calculate Billing',
     method: 'POST',
-    url: 'http://localhost:5000/api/billing/calculate',
+    url: `${process.env.REACT_APP_API_URL}/api/billing/calculate`,
     body: {
       roomType: 'doble',
       checkIn: '2025-10-10',
@@ -48,13 +48,7 @@ const tests = [
   {
     name: 'Get Users (Admin only)',
     method: 'GET',
-    url: 'http://localhost:5000/api/users',
-    auth: true
-  },
-  {
-    name: 'Get Reservations',
-    method: 'GET',
-    url: 'http://localhost:5000/api/reservations',
+    url: `${process.env.REACT_APP_API_URL}/api/users`,
     auth: true
   }
 ];

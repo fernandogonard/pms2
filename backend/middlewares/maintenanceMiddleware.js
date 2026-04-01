@@ -5,6 +5,7 @@ const Room = require('../models/Room');
 const Reservation = require('../models/Reservation');
 const { ROOM_STATES } = require('../services/stateValidationService');
 const ErrorHandlingService = require('../services/errorHandlingService');
+const { logger } = require('../services/loggerService');
 
 /**
  * Valida la solicitud de mantenimiento antes de procesarla
@@ -79,7 +80,7 @@ exports.validateMaintenance = async (req, res, next) => {
     next();
     
   } catch (error) {
-    console.error('Error en validación de mantenimiento:', error);
+    logger.error('Error en validación de mantenimiento:', error);
     res.status(500).json({
       success: false,
       message: 'Error al validar solicitud de mantenimiento',
@@ -123,7 +124,7 @@ exports.validateRealData = async (req, res, next) => {
     next();
     
   } catch (error) {
-    console.error('Error validando datos reales:', error);
+    logger.error('Error validando datos reales:', error);
     next(); // Continuar de todos modos
   }
 };
@@ -158,7 +159,7 @@ exports.validateMaintenanceCompletion = async (req, res, next) => {
     next();
     
   } catch (error) {
-    console.error('Error en validación de finalización de mantenimiento:', error);
+    logger.error('Error en validación de finalización de mantenimiento:', error);
     res.status(500).json({
       success: false,
       message: 'Error al validar finalización de mantenimiento',

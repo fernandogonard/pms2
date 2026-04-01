@@ -1,5 +1,5 @@
-// components/ReceptionReservations.js
-// Panel de recepcionista optimizado con hooks centralizados
+// components/ReceptionReservations.optimized.js
+// Panel de recepcionista OPTIMIZADO con hooks centralizados
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import AdvancedReservationModal from './AdvancedReservationModal';
 
@@ -16,18 +16,23 @@ const ReceptionReservations = () => {
     date: ''
   });
 
-  // Función para cargar datos usando UN SOLO endpoint
+  // Función para cargar datos
   const loadData = useCallback(async () => {
     setLoading(true);
     setDataError('');
     try {
-      const today = new Date().toISOString().split('T')[0];
-      const response = await apiFetch(`/api/rooms/status?start=${today}&days=30`);
-      const statusData = await response.json();
-
-      // Extraer datos del endpoint único
-      const { rooms, reservations, users } = statusData;
-      setData({ reservations: reservations || [], rooms: rooms || [], users: users || [] });
+      const [reservationsRes, roomsRes, usersRes] = await Promise.all([
+        fetch('http://localhost:5001/api/reservations'),
+        fetch('http://localhost:5001/api/rooms'),
+        fetch('http://localhost:5001/api/users')
+      ]);
+      if (!reservationsRes.ok || !roomsRes.ok || !usersRes.ok) {
+        throw new Error('Error al cargar datos');
+      }
+      const reservations = await reservationsRes.json();
+      const rooms = await roomsRes.json();
+      const users = await usersRes.json();
+      setData({ reservations, rooms, users });
     } catch (err) {
       setDataError(err.message || 'Error desconocido al cargar datos');
     } finally {
@@ -44,30 +49,30 @@ const ReceptionReservations = () => {
   const rooms = data.rooms;
   const users = data.users;
 
-  // Función refetch con debounce
+  // Función refetch
   const refetch = useCallback(() => {
-    // Debounce 1000ms para evitar refetch infinito
-    setTimeout(() => loadData(), 1000);
+    loadData();
   }, [loadData]);
 
   // Cambiar estado de reserva
   const handleStatus = useCallback(async (id, status) => {
     try {
-      const res = await fetch(`${process.env.REACT_APP_API_URL}/reservations/${id}`, {
+      const res = await fetch(`http://localhost:5001/api/reservations/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status })
       });
-
+      
       if (!res.ok) {
         const data = await res.json();
         setError(data.message || 'Error al actualizar estado');
         return;
       }
-
+      
       setError('');
       refetch();
     } catch (err) {
+      // Mejorar manejo de errores para evitar "Error: [object Object]"
       const errorMessage = err?.message || err?.toString() || 'Error desconocido en la red';
       setError(errorMessage);
     }
@@ -113,6 +118,12 @@ const ReceptionReservations = () => {
       return match;
     });
   }, [reservations, filters, users]);
+
+  const handleDateChange = (date) => {
+    const utcDate = new Date(date);
+    utcDate.setUTCHours(0, 0, 0, 0);
+    // Use utcDate
+  };
 
   const tableStyle = {
     borderCollapse: 'collapse',

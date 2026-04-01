@@ -9,6 +9,8 @@ const Client = require('../models/Client');
 const { assignRoomsToReservation, processCheckin, processCheckout } = require('../services/roomAssignmentService');
 const BillingService = require('../services/billingService');
 const ReservationService = require('../services/ReservationService');
+const AvailabilityEngine = require('../services/availabilityEngine');
+const wsManager = require('../utils/wsManager');
 
 // 🆕 Importar nuevo sistema de logging Winston
 const { logger } = require('../services/loggerService');
@@ -95,17 +97,20 @@ const getPendingCheckouts = async (req, res) => {
   }
 };
 
-// 🆕 Crear reserva con logging avanzado
+// Crear reserva — delega toda la lógica de negocio a ReservationService
 const createReservation = async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
   const startTime = Date.now();
-  let { tipo, cantidad, checkIn, checkOut, nombre, apellido, dni, email, whatsapp } = req.body;
+  const { tipo, cantidad, checkIn, checkOut } = req.body;
   const lockKey = `reservation-type:${tipo || 'unknown'}`;
+
   let user = undefined;
   if (req.user && req.user.userId) {
     user = req.user.userId;
   }
   if (user && !mongoose.Types.ObjectId.isValid(user)) {
-    user = undefined; // Evita fallos de casteo cuando devProtect inyecta ids no-Mongo
+    user = undefined;
   }
 
   logger.audit.userAction(
@@ -113,222 +118,47 @@ const createReservation = async (req, res) => {
     user || 'anonymous',
     'reservation',
     null,
-    { tipo, cantidad, checkIn, checkOut, email, ip: req.ip }
+    { tipo, cantidad, checkIn, checkOut, email: req.body.email, ip: req.ip }
   );
 
   try {
+    let result;
     await lockService.withLock(lockKey, 15000, async () => {
-      const missingClientFields = ['nombre', 'apellido', 'dni', 'email', 'whatsapp'].filter(f => !req.body[f]);
       const isStaff = req.user?.role && ['admin', 'recepcionista'].includes(req.user.role);
-      if (missingClientFields.length > 0 && isStaff) {
-        const stamp = Date.now();
-        nombre = nombre || 'Invitado';
-        apellido = apellido || 'Reserva rápida';
-        dni = dni || `ADM-${stamp}`;
-        email = email || `guest+${stamp}@hotel.local`;
-        whatsapp = whatsapp || '000000000';
-        req.body.nombre = nombre;
-        req.body.apellido = apellido;
-        req.body.dni = dni;
-        req.body.email = email;
-        req.body.whatsapp = whatsapp;
-      } else if (missingClientFields.length > 0) {
-        return res.status(400).json({
-          message: 'Faltan datos obligatorios del cliente',
-          missingClientFields: missingClientFields
-        });
-      }
 
-      // Validar fechas
-      if (new Date(checkIn) > new Date(checkOut)) {
-        return res.status(400).json({ message: 'La fecha de check-in no puede ser posterior a la de check-out.' });
-      }
-
-      // Buscar o crear cliente
-      let client = await Client.findOne({ $or: [{ dni }, { email }] });
-      if (!client) {
-        client = await Client.create({ nombre, apellido, dni, email, whatsapp });
-      } else {
-        let updated = false;
-        if (client.nombre !== nombre) { client.nombre = nombre; updated = true; }
-        if (client.apellido !== apellido) { client.apellido = apellido; updated = true; }
-        if (client.whatsapp !== whatsapp) { client.whatsapp = whatsapp; updated = true; }
-        if (updated) await client.save();
-      }
-
-      if (!tipo) {
-        return res.status(400).json({ message: 'El tipo de habitación es obligatorio.' });
-      }
-
-      // 🚫 VALIDACIÓN ESTRICTA: NO SOBREVENTA
-      const cantidadSolicitada = cantidad || 1;
-      const habitacionesDelTipo = await Room.find({
-        type: tipo,
-        status: { $nin: ['mantenimiento', 'limpieza'] }
-      });
-      const totalHabitaciones = habitacionesDelTipo.length;
-
-      if (totalHabitaciones === 0) {
-        return res.status(400).json({ 
-          message: `No existen habitaciones del tipo "${tipo}".` 
-        });
-      }
-
-      const fechaInicio = new Date(checkIn);
-      const fechaFin = new Date(checkOut);
-      const fechasReserva = [];
-      for (let d = new Date(fechaInicio); d < fechaFin; d.setDate(d.getDate() + 1)) {
-        fechasReserva.push(d.toISOString().split('T')[0]);
-      }
-
-      for (const fecha of fechasReserva) {
-        const fechaObj = new Date(fecha + 'T00:00:00.000Z');
-        const fechaSiguiente = new Date(fechaObj);
-        fechaSiguiente.setDate(fechaSiguiente.getDate() + 1);
-
-        const reservasEnFecha = await Reservation.find({
-          tipo: tipo,
-          status: { $ne: 'checkout' },
-          checkIn: { $lt: fechaSiguiente },
-          checkOut: { $gt: fechaObj }
-        });
-
-        for (const reserva of reservasEnFecha) {
-          if (reserva.status === 'checkin' && new Date(reserva.checkOut) < new Date()) {
-            reserva.status = 'checkout';
-            await reserva.save();
-
-            if (reserva.room && reserva.room.length > 0) {
-              for (const roomId of reserva.room) {
-                const room = await Room.findById(roomId);
-                if (room && room.status === 'ocupada') {
-                  room.status = 'disponible';
-                  await room.save();
-                  console.log(`[API] Habitación ${room.number} liberada automáticamente por checkout anticipado`);
-                }
-              }
-            }
-            continue;
-          }
-        }
-
-        let habitacionesOcupadas = 0;
-        reservasEnFecha.forEach(reserva => {
-          if (reserva.room && reserva.room.length > 0) {
-            habitacionesOcupadas += reserva.room.length;
-          } else {
-            habitacionesOcupadas += (reserva.cantidad || 1);
-          }
-        });
-
-        const habitacionesDisponibles = totalHabitaciones - habitacionesOcupadas;
-        if (cantidadSolicitada > habitacionesDisponibles) {
-          return res.status(409).json({ 
-            message: `No hay suficientes habitaciones ${tipo} disponibles para el ${fecha}. Solicitadas: ${cantidadSolicitada}, Disponibles: ${habitacionesDisponibles}`,
-            detalles: {
-              fecha,
-              tipo,
-              totalHabitaciones,
-              habitacionesOcupadas,
-              habitacionesDisponibles,
-              cantidadSolicitada
-            }
-          });
-        }
-      }
-
-      // Validación de solapamiento de reservas
-      const overlappingReservations = await Reservation.find({
-        room: { $in: habitacionesDelTipo.map(h => h._id) },
-        $or: [
-          { checkIn: { $lt: fechaFin }, checkOut: { $gt: fechaInicio } },
-          { checkIn: { $gte: fechaInicio, $lt: fechaFin } },
-          { checkOut: { $gt: fechaInicio, $lte: fechaFin } }
-        ]
+      result = await ReservationService.createReservation(req.body, {
+        session,
+        userId: user,
+        isStaff
       });
 
-      if (overlappingReservations.length > 0) {
-        return res.status(409).json({
-          message: 'Conflicto: Ya existen reservas que solapan con las fechas seleccionadas.',
-          detalles: overlappingReservations.map(r => ({
-            id: r._id,
-            checkIn: r.checkIn,
-            checkOut: r.checkOut,
-            room: r.room
-          }))
-        });
-      }
-
-      console.log(`✅ Validación pasada: Creando reserva ${tipo} x${cantidadSolicitada} del ${checkIn} al ${checkOut}`);
-      const reservationData = { tipo, cantidad, checkIn, checkOut };
-      const pricing = await BillingService.calculateReservationPricing(reservationData);
-
-      const reservation = new Reservation({ 
-        tipo, 
-        cantidad, 
-        user, 
-        client: client._id, 
-        checkIn, 
-        checkOut,
-        pricing: {
-          pricePerNight: pricing.pricePerNight,
-          totalNights: pricing.totalNights,
-          subtotal: pricing.subtotal,
-          taxes: pricing.taxes,
-          total: pricing.total,
-          currency: pricing.currency
-        },
-        payment: {
-          status: 'pendiente',
-          method: 'efectivo',
-          amountPaid: 0
-        },
-        invoice: {
-          isPaid: false
-        }
-      });
-
-      await reservation.save();
-      console.log(`💰 Precios calculados: $${pricing.total} por ${pricing.totalNights} noches`);
-
-      console.log('🔄 Intentando asignación automática de habitaciones...');
-      await assignRoomsToReservation(reservation);
-
-      const updatedReservation = await Reservation.findById(reservation._id).populate('room client');
-
+      // Broadcast WebSocket
       const wss = req.app.get('wss');
       if (wss) {
         wss.clients.forEach(wsclient => {
           if (wsclient.readyState === 1) {
-            wsclient.send(JSON.stringify({ type: 'reservation_created', reservation: updatedReservation }));
+            wsclient.send(JSON.stringify({ type: 'reservation_created', reservation: result }));
           }
         });
       }
 
-      const duration = Date.now() - startTime;
-      logger.audit.userAction(
-        'CREATE_RESERVATION_SUCCESS',
-        user || 'anonymous',
-        'reservation',
-        updatedReservation._id.toString(),
-        { 
-          tipo, 
-          cantidad, 
-          checkIn, 
-          checkOut, 
-          totalPrice: pricing.total,
-          roomsAssigned: updatedReservation.room?.length || 0,
-          duration
-        }
-      );
-
-      logger.performance.requestTime(req.method, req.originalUrl, duration, 201, user);
-
-      return res.status(201).json(updatedReservation);
+      await session.commitTransaction();
     });
 
-    return;
+    const duration = Date.now() - startTime;
+    logger.audit.userAction(
+      'CREATE_RESERVATION_SUCCESS',
+      user || 'anonymous',
+      'reservation',
+      result?._id?.toString(),
+      { tipo, cantidad, checkIn, checkOut, totalPrice: result?.pricing?.total, roomsAssigned: result?.room?.length || 0, duration }
+    );
+    logger.performance.requestTime(req.method, req.originalUrl, duration, 201, user);
+
+    return res.status(201).json(result);
   } catch (error) {
+    await session.abortTransaction();
+
     if (error && error.name === 'LockBusyError') {
       logger.warn('createReservation lock busy', { tipo, userId: user, ip: req.ip });
       return res.status(423).json({ message: 'Otra operación está creando una reserva del mismo tipo. Intenta nuevamente en unos segundos.' });
@@ -337,24 +167,19 @@ const createReservation = async (req, res) => {
     const duration = Date.now() - startTime;
     logger.error('Error al crear reserva', error, {
       userId: user,
-      requestData: { tipo, cantidad, checkIn, checkOut, email },
+      requestData: { tipo, cantidad, checkIn, checkOut, email: req.body.email },
       ip: req.ip,
-      userAgent: req.get('User-Agent'),
       duration
     });
 
-    const message = (error && error.message) ? error.message : 'Error al crear reserva.';
-    // Si el problema es de negocio (p.ej. tipo de habitación inexistente), responder 400 en lugar de 500
-    const isBusinessError = message.toLowerCase().includes('tipo de habitación') || message.toLowerCase().includes('disponibles');
-    const statusCode = isBusinessError ? 400 : 500;
+    const statusCode = error.statusCode || 500;
+    const payload = { message: error.message || 'Error al crear reserva.' };
+    if (error.details) payload.details = error.details;
 
     logger.performance.requestTime(req.method, req.originalUrl, duration, statusCode, user);
-
-    // Propagar detalles si existen
-    const payload = { message };
-    if (error?.details) payload.details = error.details;
-
     return res.status(statusCode).json(payload);
+  } finally {
+    session.endSession();
   }
 };
 
@@ -556,7 +381,7 @@ const assignRoomToReservation = async (req, res) => {
     if (error && error.name === 'LockBusyError') {
       return res.status(423).json({ message: 'Otra operación está modificando esta reserva. Intenta en unos segundos.' });
     }
-    console.error('assignRoomToReservation error', error);
+    logger.error('assignRoomToReservation error', error);
     return res.status(500).json({ message: 'Error al asignar habitación.', error: (error && error.message) ? error.message : error });
   }
 };
@@ -567,14 +392,14 @@ const unassignRoomsFromReservation = async (req, res) => {
     const reservationId = req.params.id;
     let { rooms } = req.body;
     
-    console.log(`[API] unassignRoomsFromReservation called for reservation ${reservationId}`);
+    logger.info(`[API] unassignRoomsFromReservation called for reservation ${reservationId}`);
     
     const reservation = await Reservation.findById(reservationId).populate('room');
     if (!reservation) {
       return res.status(404).json({ message: 'Reserva no encontrada.' });
     }
     
-    console.log(`[API] Reserva actual tiene ${reservation.room ? reservation.room.length : 0} habitaciones asignadas`);
+    logger.info(`[API] Reserva actual tiene ${reservation.room ? reservation.room.length : 0} habitaciones asignadas`);
     
     if (!reservation.room || reservation.room.length === 0) {
       return res.status(400).json({ message: 'La reserva no tiene habitaciones asignadas para desasignar.' });
@@ -582,9 +407,9 @@ const unassignRoomsFromReservation = async (req, res) => {
     
     if (!rooms || rooms.length === 0) {
       rooms = reservation.room.map(r => r._id.toString());
-      console.log(`[API] Desasignando TODAS las habitaciones: [${rooms.join(', ')}]`);
+      logger.info(`[API] Desasignando TODAS las habitaciones: [${rooms.join(', ')}]`);
     } else {
-      console.log(`[API] Desasignando habitaciones específicas: [${rooms.join(', ')}]`);
+      logger.info(`[API] Desasignando habitaciones específicas: [${rooms.join(', ')}]`);
     }
     
     const assignedRoomIds = reservation.room.map(r => r._id.toString());
@@ -600,7 +425,7 @@ const unassignRoomsFromReservation = async (req, res) => {
     reservation.room = remainingRooms;
     
     if (remainingRooms.length === 0) {
-      console.log(`[API] Todas las habitaciones desasignadas - convirtiendo a reserva virtual`);
+      logger.info(`[API] Todas las habitaciones desasignadas - convirtiendo a reserva virtual`);
       reservation.status = 'reservada';
     }
     
@@ -612,10 +437,10 @@ const unassignRoomsFromReservation = async (req, res) => {
         if (room && room.status === 'ocupada') {
           room.status = 'disponible';
           await room.save();
-          console.log(`[API] Habitación ${room.number} marcada como disponible`);
+          logger.info(`[API] Habitación ${room.number} marcada como disponible`);
         }
       } catch (error) {
-        console.error(`[API] Error actualizando habitación ${roomId}:`, error);
+        logger.error(`[API] Error actualizando habitación ${roomId}:`, error);
       }
     }
     
@@ -640,7 +465,7 @@ const unassignRoomsFromReservation = async (req, res) => {
     });
     
   } catch (error) {
-    console.error('unassignRoomsFromReservation error', error);
+    logger.error('unassignRoomsFromReservation error', error);
     res.status(500).json({ message: 'Error al desasignar habitaciones.', error: error.message });
   }
 };
@@ -675,10 +500,10 @@ const deleteReservation = async (req, res) => {
           if (room && room.status === 'ocupada') {
             room.status = 'disponible';
             await room.save();
-            console.log(`[API] Habitación ${room.number} liberada tras eliminar reserva`);
+            logger.info(`[API] Habitación ${room.number} liberada tras eliminar reserva`);
           }
         } catch (error) {
-          console.error(`[API] Error liberando habitación ${roomId}:`, error);
+          logger.error(`[API] Error liberando habitación ${roomId}:`, error);
         }
       }
     }
@@ -844,7 +669,7 @@ function optimizarCombinacion(combinaciones) {
 const checkinReservation = async (req, res) => {
   try {
     const { id } = req.params;
-    console.log(`🏨 Iniciando check-in para reserva ${id}`);
+    logger.info(`🏨 Iniciando check-in para reserva ${id}`);
     
     const reservation = await processCheckin(id);
     
@@ -863,7 +688,7 @@ const checkinReservation = async (req, res) => {
       reservation
     });
   } catch (error) {
-    console.error('❌ Error en check-in:', error);
+    logger.error('❌ Error en check-in:', error);
     res.status(500).json({ message: 'Error al procesar check-in', error: error.message });
   }
 };
@@ -872,7 +697,7 @@ const checkinReservation = async (req, res) => {
 const checkoutReservation = async (req, res) => {
   try {
     const { id } = req.params;
-    console.log(`🚪 Iniciando check-out para reserva ${id}`);
+    logger.info(`🚪 Iniciando check-out para reserva ${id}`);
     
     const reservation = await processCheckout(id);
     
@@ -891,7 +716,7 @@ const checkoutReservation = async (req, res) => {
       reservation
     });
   } catch (error) {
-    console.error('❌ Error en check-out:', error);
+    logger.error('❌ Error en check-out:', error);
     res.status(500).json({ message: 'Error al procesar check-out', error: error.message });
   }
 };

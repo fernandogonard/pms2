@@ -1,3 +1,5 @@
+const { logger } = require('./loggerService');
+
 // Prioridad PMS para overlays y estados (ORDEN CRÍTICO - NO CAMBIAR)
 // 1. fuera_de_servicio: habitación completamente fuera de operaciones
 // 2. mantenimiento: reparación, inspección, etc.
@@ -6,6 +8,7 @@
 // 5. checkin_pendiente: check-in esperado hoy pero no confirmado
 // 6. ocupada: huésped presente
 // 7. disponible: libre para reservar
+
 const STATE_PRIORITY = [
   'fuera_de_servicio',
   'mantenimiento',
@@ -175,7 +178,7 @@ const calculateRoomStates = (rooms, reservations, startDate, days) => {
             }
           } catch (error) {
             // Si hay error parsing fechas, ignorar reserva
-            console.warn(`[calculateRoomStates] Error validando reserva ${res._id}:`, error);
+            logger.warn(`[calculateRoomStates] Error validando reserva ${res._id}:`, error);
             continue;
           }
         }

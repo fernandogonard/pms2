@@ -36,17 +36,17 @@ const corsOptions = {
   origin: function(origin, callback) {
     // permitir solicitudes desde herramientas como curl/postman sin origin
     if (!origin) {
-      console.log('[CORS] Sin origin (herramienta) - permitiendo');
+      logger.debug('[CORS] Sin origin (herramienta) - permitiendo');
       return callback(null, true);
     }
     // Normalizar origin: quitar barra final si existe
     const originNorm = origin.replace(/\/$/, '');
     const allowed = allowedOrigins.indexOf(originNorm) !== -1;
-    console.log(`[CORS] Origin=${origin} normalized=${originNorm} allowed=${allowed}`);
+    logger.debug(`[CORS] Origin=${origin} normalized=${originNorm} allowed=${allowed}`);
     if (allowed) return callback(null, true);
     // En desarrollo aceptar cualquier localhost explícito (incluye puerto y slash opcional)
     if (process.env.NODE_ENV !== 'production' && /^https?:\/\/localhost(:\d+)?\/?$/.test(origin)) {
-      console.log(`[CORS] DEV: permitiendo origin localhost dinámico: ${origin}`);
+      logger.debug(`[CORS] DEV: permitiendo origin localhost dinámico: ${origin}`);
       return callback(null, true);
     }
     return callback(new Error('CORS origin not allowed'));
@@ -76,7 +76,7 @@ app.use((req, res, next) => {
     res.header('Access-Control-Allow-Credentials', 'true');
     res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, Accept, X-Requested-With, Cache-Control, expires, pragma');
     res.header('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS');
-    console.log(`[CORS] Añadidas cabeceras CORS para origin=${origin}`);
+    logger.debug(`[CORS] Añadidas cabeceras CORS para origin=${origin}`);
   }
   next();
 });

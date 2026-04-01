@@ -4,7 +4,7 @@ import React from 'react';
 import ReceptionLayout from '../layouts/ReceptionLayout';
 import ReceptionReservations from '../components/ReceptionReservations';
 import RoomStatusBoard from '../components/RoomStatusBoard';
-import RoomCalendar from '../components/RoomCalendar';
+import { RoomCalendar } from '../components/RoomCalendar';
 import CleaningManager from '../components/CleaningManager';
 import PendingCheckouts from '../components/PendingCheckouts';
 

@@ -1,11 +1,12 @@
 // controllers/reportController.js
-// Controlador para generación de reportes en Excel
+// Controlador para generaciÃ³n de reportes en Excel
 const Room = require('../models/Room');
 const Reservation = require('../models/Reservation');
 const ExcelJS = require('exceljs');
 const ReportService = require('../services/ReportService');
+const { logger } = require('../services/loggerService');
 
-// Reporte de ocupación por rango de fechas, tipo y piso
+// Reporte de ocupaciÃ³n por rango de fechas, tipo y piso
 exports.occupancyReport = async (req, res) => {
   try {
     const { start, end } = req.query;
@@ -57,7 +58,7 @@ exports.occupancyReport = async (req, res) => {
 };
 
 /**
- * Obtener reporte de ocupación por rango de fechas
+ * Obtener reporte de ocupaciÃ³n por rango de fechas
  * @route GET /api/reports/occupancy
  */
 exports.getOccupancyReport = async (req, res) => {
@@ -99,7 +100,7 @@ exports.revenueReport = async (req, res) => {
   try {
     const { startDate, endDate } = req.query;
 
-    // Validar parámetros
+    // Validar parÃ¡metros
     if (!startDate || !endDate) {
       return res.status(400).json({
         message: 'Debe proporcionar startDate y endDate en formato YYYY-MM-DD.'
@@ -111,7 +112,7 @@ exports.revenueReport = async (req, res) => {
 
     if (isNaN(start) || isNaN(end) || start > end) {
       return res.status(400).json({
-        message: 'Las fechas son inválidas o startDate es mayor que endDate.'
+        message: 'Las fechas son invÃ¡lidas o startDate es mayor que endDate.'
       });
     }
 
@@ -135,7 +136,7 @@ exports.revenueReport = async (req, res) => {
       endDate: endDate
     });
   } catch (error) {
-    console.error('Error en revenueReport:', error);
+    logger.error('Error en revenueReport:', error);
     res.status(500).json({
       message: 'Error al generar el reporte de ingresos.',
       error: error.message

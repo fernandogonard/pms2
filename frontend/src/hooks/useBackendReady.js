@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from 'react';
-import { discoverBackendPort } from '../utils/api';
+import discoverBackendPort from '../utils/api';
 
 /**
  * Hook global para asegurar que el backend esté listo antes de hacer llamadas API.

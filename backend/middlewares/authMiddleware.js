@@ -2,23 +2,26 @@
 // Middleware para verificar JWT y roles
 
 const jwt = require('jsonwebtoken');
+const authService = require('../services/authService');
 
 // Verifica si el usuario está autenticado (obligatorio)
 exports.protect = (req, res, next) => {
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    // Log ligero para depuración: header ausente o mal formado
-    console.log(`[AUTH] Solicitud sin Authorization header: ${req.method} ${req.originalUrl} from ${req.ip || req.connection.remoteAddress}`);
     return res.status(401).json({ message: 'No autorizado, token faltante.' });
   }
   const token = authHeader.split(' ')[1];
+
+  // Verificar blacklist antes de validar el JWT
+  if (authService.isTokenBlacklisted(token)) {
+    return res.status(401).json({ message: 'Token revocado. Por favor inicie sesión nuevamente.' });
+  }
+
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     req.user = decoded;
     next();
   } catch (error) {
-    // Log del fallo de verificación para facilitar diagnóstico (no imprimir token)
-    console.log(`[AUTH] Token inválido para ${req.method} ${req.originalUrl}: ${error.message}`);
     res.status(401).json({ message: 'Token inválido.' });
   }
 };
@@ -28,12 +31,13 @@ exports.protectOptional = (req, res, next) => {
   const authHeader = req.headers.authorization;
   if (authHeader && authHeader.startsWith('Bearer ')) {
     const token = authHeader.split(' ')[1];
-    try {
-      const decoded = jwt.verify(token, process.env.JWT_SECRET);
-      req.user = decoded;
-    } catch (error) {
-      // Token inválido, ignorar y seguir como público — registrar para depuración
-      console.log(`[AUTH] protectOptional: token inválido en ${req.method} ${req.originalUrl}: ${error.message}`);
+    if (!authService.isTokenBlacklisted(token)) {
+      try {
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        req.user = decoded;
+      } catch (error) {
+        // Token inválido, ignorar y seguir como público
+      }
     }
   }
   next();

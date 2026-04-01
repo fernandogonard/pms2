@@ -1,9 +1,9 @@
 // components/RoomStatusBoard.js
 // Estado en tiempo real de habitaciones para el panel recepcionista
 import React, { useEffect, useState } from 'react';
-import { createWS } from '../utils/wsClient';
+import { createWSConnection } from '../utils/wsClient';
 import { apiFetch } from '../utils/api';
-import redirectorService from '../services/redirectorService';
+import WSClient from '../utils/wsClient';
 import useSessionGuard from '../hooks/useSessionGuard';
 
 const API_ROOMS_STATUS = '/api/rooms/status';
@@ -49,7 +49,8 @@ const RoomStatusBoard = () => {
     };
 
     const buildWsBase = () => {
-      const wsUrl = redirectorService.getWebSocketUrl();
+      // URL fija desde variables de entorno
+      const wsUrl = process.env.REACT_APP_WS_URL;
       if (wsUrl) {
         return wsUrl.replace('/ws', '');
       }

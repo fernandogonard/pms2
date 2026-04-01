@@ -2,7 +2,6 @@
 import AdminLayout from '../layouts/AdminLayout';
 import AdminSidebar from '../components/AdminSidebar';
 import { useAuth } from '../contexts/AuthContext';
-import { cleanupGhostReservations } from '../utils/api';
 
 // Importar secciones modulares
 import AdminDashboardSection from '../components/admin/AdminDashboardSection';
@@ -19,25 +18,6 @@ const AdminDashboard = () => {
   const { user } = useAuth();
   const [activeSection, setActiveSection] = useState('dashboard');
   const [loading, setLoading] = useState(false);
-
-  // Función para limpiar reservas fantasma
-  const handleCleanupGhostReservations = async () => {
-    if (!window.confirm('¿Está seguro de que desea limpiar las reservas fantasma? Esta acción no se puede deshacer.')) {
-      return;
-    }
-
-    setLoading(true);
-    try {
-      const result = await cleanupGhostReservations();
-      alert(`Limpieza completada. ${result.deleted} reservas fantasma eliminadas.`);
-      window.location.reload();
-    } catch (error) {
-      console.error('Error:', error);
-      alert('Error al limpiar reservas fantasma');
-    } finally {
-      setLoading(false);
-    }
-  };
 
   // Renderizar sección activa basada en el estado (IDs en español para coincidir con sidebar)
   const renderActiveSection = () => {
@@ -124,27 +104,6 @@ const AdminDashboard = () => {
                   Bienvenido, {user.email || user.username}
                 </p>
               </div>
-              
-              <button 
-                onClick={handleCleanupGhostReservations}
-                disabled={loading}
-                style={{
-                  background: loading ? '#555' : 'linear-gradient(135deg, #059669 0%, #047857 100%)',
-                  color: '#fff',
-                  border: 'none',
-                  borderRadius: '8px',
-                  padding: '10px 20px',
-                  fontSize: '13px',
-                  fontWeight: '600',
-                  cursor: loading ? 'not-allowed' : 'pointer',
-                  boxShadow: '0 3px 8px rgba(5, 150, 105, 0.3)',
-                  transition: 'all 0.3s ease',
-                  opacity: loading ? 0.7 : 1,
-                  whiteSpace: 'nowrap'
-                }}
-              >
-{loading ? 'Limpiando...' : 'Limpiar Reservas'}
-              </button>
             </div>
           )}
           

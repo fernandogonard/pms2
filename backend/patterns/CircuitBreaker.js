@@ -1,6 +1,8 @@
 // patterns/CircuitBreaker.js
 // Patrón Circuit Breaker para resiliencia enterprise
 
+const { logger } = require('../services/loggerService');
+
 class CircuitBreaker {
   constructor(options = {}) {
     this.failureThreshold = options.failureThreshold || 5;
@@ -118,7 +120,7 @@ class CircuitBreakerFactory {
     const breaker = new CircuitBreaker({
       ...options,
       onStateChange: (state) => {
-        console.log(`Circuit breaker '${name}' changed to ${state}`);
+        logger.info(`Circuit breaker '${name}' changed to ${state}`);
         if (options.onStateChange) {
           options.onStateChange(state);
         }

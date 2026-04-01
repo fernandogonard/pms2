@@ -82,8 +82,8 @@ const RoomTable = () => {
     const init = async () => {
       await fetchRoomsAndReservations();
       if (cancelled) return;
-      const backendPort = localStorage.getItem('backend-port') || '5000';
-      const wsUrl = `ws://localhost:${backendPort}/ws`;
+      // URL fija desde variables de entorno
+      const wsUrl = process.env.REACT_APP_WS_URL;
       ws = new WebSocket(wsUrl);
       ws.onmessage = (event) => {
         try {

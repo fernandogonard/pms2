@@ -3,12 +3,12 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import RoomTable from '../RoomTable';
-import RoomCalendar from '../RoomCalendar';
-import CleaningManager from '../CleaningManager';
-import MaintenanceManager from '../MaintenanceManager';
+import { useWebSocket } from '../../hooks/useWebSocket';
 import { apiFetch } from '../../utils/api';
 import useSessionGuard from '../../hooks/useSessionGuard';
-import useWebSocket from '../../hooks/useWebSocket';
+import { RoomCalendar } from '../RoomCalendar';
+import CleaningManager from '../CleaningManager';
+import MaintenanceManager from '../MaintenanceManager';
 
 const INITIAL_ROOM_STATS = {
   disponibles: 0,

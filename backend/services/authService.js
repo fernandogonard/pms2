@@ -11,6 +11,52 @@ class AuthService {
     // Caché en memoria para usuarios (TTL de 5 minutos)
     this.userCache = new Map();
     this.cacheTimeout = 5 * 60 * 1000; // 5 minutos
+
+    // Token blacklist in-memory (Map<token, expiresAt>)
+    this._tokenBlacklist = new Map();
+    // Limpieza periódica de tokens expirados cada 10 minutos
+    this._blacklistCleanupInterval = setInterval(() => this._cleanupBlacklist(), 10 * 60 * 1000);
+    // Evitar que el interval mantenga el proceso vivo
+    if (this._blacklistCleanupInterval.unref) this._blacklistCleanupInterval.unref();
+  }
+
+  /**
+   * Añade un token a la blacklist hasta su expiración natural.
+   * @param {string} token - JWT a invalidar
+   */
+  blacklistToken(token) {
+    try {
+      const decoded = jwt.decode(token);
+      // exp es epoch en segundos
+      const expiresAt = decoded && decoded.exp ? decoded.exp * 1000 : Date.now() + 24 * 60 * 60 * 1000;
+      this._tokenBlacklist.set(token, expiresAt);
+    } catch {
+      // Si no se puede decodificar, guardar con TTL de 24h
+      this._tokenBlacklist.set(token, Date.now() + 24 * 60 * 60 * 1000);
+    }
+  }
+
+  /**
+   * Verifica si un token está en la blacklist.
+   * @param {string} token
+   * @returns {boolean}
+   */
+  isTokenBlacklisted(token) {
+    if (!this._tokenBlacklist.has(token)) return false;
+    const expiresAt = this._tokenBlacklist.get(token);
+    if (Date.now() > expiresAt) {
+      this._tokenBlacklist.delete(token);
+      return false;
+    }
+    return true;
+  }
+
+  /** Elimina tokens expirados de la blacklist */
+  _cleanupBlacklist() {
+    const now = Date.now();
+    for (const [token, expiresAt] of this._tokenBlacklist) {
+      if (now > expiresAt) this._tokenBlacklist.delete(token);
+    }
   }
   
   // Limpiar caché de usuario
@@ -24,11 +70,11 @@ class AuthService {
     const cached = this.userCache.get(userKey);
     
     if (cached && (Date.now() - cached.timestamp) < this.cacheTimeout) {
-      console.log(`⚡ [AuthService] Cache hit para usuario ${userId}`);
+      logger.debug(`[AuthService] Cache hit para usuario ${userId}`);
       return cached.user;
     }
     
-    console.log(`🔍 [AuthService] Cache miss para usuario ${userId}, consultando DB`);
+    logger.debug(`[AuthService] Cache miss para usuario ${userId}, consultando DB`);
     const user = await User.findById(userId).lean(); // .lean() para mejor rendimiento
     
     if (user) {
@@ -259,7 +305,7 @@ class AuthService {
       const user = await this.getCachedUser(userId);
       const queryTime = Date.now() - startTime;
       
-      console.log(`⏱️ [AuthService] getCurrentUser tomó ${queryTime}ms`);
+      logger.debug(`[AuthService] getCurrentUser tomó ${queryTime}ms`);
       
       if (!user) {
         return {
@@ -334,11 +380,15 @@ class AuthService {
     }
   }
 
-  // Logout (invalidar token - en una implementación real usaríamos una blacklist)
+  // Logout — invalida el token añadiéndolo a la blacklist
   async logout(token) {
     try {
+      if (token) {
+        this.blacklistToken(token);
+      }
       const decoded = this.verifyToken(token);
       if (decoded) {
+        this.clearUserCache(decoded.userId);
         logger.info('Logout exitoso', { userId: decoded.userId });
       }
 
@@ -347,6 +397,7 @@ class AuthService {
         message: 'Logout exitoso'
       };
     } catch (error) {
+      // Token puede ser inválido pero igual lo blacklisteamos
       return {
         success: true,
         message: 'Logout exitoso'

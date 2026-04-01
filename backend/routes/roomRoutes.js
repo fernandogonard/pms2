@@ -64,4 +64,7 @@ router.get('/:id/maintenance/impact', roomsLimiter, protect, authorize('admin'),
 // 🔄 VALIDACIÓN DE ESTADOS
 router.get('/:id/allowed-states', roomsLimiter, protect, authorize('admin', 'recepcionista'), roomController.getRoomAllowedStates);
 
+// ÚNICO endpoint público para calendario
+router.get('/status', roomController.getRoomStatus);
+
 module.exports = router;

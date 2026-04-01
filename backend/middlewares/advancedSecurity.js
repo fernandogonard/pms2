@@ -1,5 +1,6 @@
 // Enhanced security middleware - migrado del otro PMS
 const helmet = require('helmet');
+const { logger } = require('../services/loggerService');
 const mongoSanitize = require('express-mongo-sanitize');
 const xssClean = require('xss-clean');
 
@@ -114,7 +115,7 @@ const securityLogger = (event, details, req) => {
     details
   };
   
-  console.log(`[SECURITY ${event}]`, logEntry);
+  logger.info(`[SECURITY ${event}]`, logEntry);
   
   // En producción, enviar a servicio de logging
   if (process.env.NODE_ENV === 'production') {

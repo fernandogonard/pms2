@@ -3,6 +3,7 @@
 
 const Redis = require('ioredis');
 const NodeCache = require('node-cache');
+const { logger } = require('../services/loggerService');
 
 class CacheManager {
   constructor() {
@@ -19,7 +20,7 @@ class CacheManager {
       });
       
       this.redis.on('error', (err) => {
-        console.error('Redis error:', err);
+        logger.error('Redis error:', err);
       });
     } else {
       // Cache en memoria para desarrollo
@@ -40,7 +41,7 @@ class CacheManager {
         return this.memoryCache.get(key) || null;
       }
     } catch (error) {
-      console.error('Cache get error:', error);
+      logger.error('Cache get error:', error);
       return null;
     }
   }
@@ -54,7 +55,7 @@ class CacheManager {
       }
       return true;
     } catch (error) {
-      console.error('Cache set error:', error);
+      logger.error('Cache set error:', error);
       return false;
     }
   }
@@ -68,7 +69,7 @@ class CacheManager {
       }
       return true;
     } catch (error) {
-      console.error('Cache delete error:', error);
+      logger.error('Cache delete error:', error);
       return false;
     }
   }
@@ -82,7 +83,7 @@ class CacheManager {
       }
       return true;
     } catch (error) {
-      console.error('Cache clear error:', error);
+      logger.error('Cache clear error:', error);
       return false;
     }
   }
@@ -121,7 +122,7 @@ class CacheManager {
         });
       }
     } catch (error) {
-      console.error('Cache invalidation error:', error);
+      logger.error('Cache invalidation error:', error);
     }
   }
 }

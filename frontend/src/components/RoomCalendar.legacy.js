@@ -1,6 +1,6 @@
 // components/RoomCalendar.js
 // Calendario visual de ocupación de habitaciones con virtualización
-import React, { useCallback, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import useCalendarData from '../hooks/useCalendarData';
 import useWebSocket from '../hooks/useWebSocket';
 import './AccessibilityFeatures.css';
@@ -13,46 +13,42 @@ const RoomCalendar = () => {
   const { data, loading, refresh } = useCalendarData(14);
   const [scrollTop, setScrollTop] = useState(0);
   const scrollContainer = useRef(null);
+  const [wsError, setWsError] = useState(false);
+  const [roomsData, setRoomsData] = useState([]);
+  const [overbooked, setOverbooked] = useState({});
+  const [assignments, setAssignments] = useState({});
+  const [reservations, setReservations] = useState([]);
+  const [days, setDays] = useState([]);
 
   useEffect(() => {
     const fetchAll = async () => {
       try {
         const { apiFetch } = await import('../utils/api');
-        
+
         // Calcular rango de fechas (14 días desde hoy para mostrar todas las reservas)
         const startDate = new Date();
         startDate.setHours(0, 0, 0, 0);
         const startDateStr = startDate.toISOString().slice(0, 10);
-        
+
         const [roomsStatusRes, reservationsRes] = await Promise.all([
           apiFetch(`/api/rooms/status?start=${startDateStr}&days=14`),
           apiFetch('/api/reservations')
         ]);
-        
+
         const statusData = await roomsStatusRes.json();
-        const reservationsData = await (reservationsRes.ok ? reservationsRes.json() : []);
-        
-        // El backend ya calcula todo correctamente
-        // Debug: Log para verificar los datos del backend
-        console.log('Datos del backend:', {
-          statusData,
-          reservationsData,
-          startDate: startDateStr,
-          days: 14
-        });
-        
+        const reservationsData = reservationsRes.ok ? await reservationsRes.json() : [];
+
         setRoomsData(statusData.rooms || []);
         setOverbooked(statusData.overbooked || {});
         setAssignments(statusData.assignments || {});
         setReservations(Array.isArray(reservationsData) ? reservationsData : []);
 
         // Generar lista de días (14 días)
-        const daysList = [];
-        for (let i = 0; i < 14; i++) {
+        const daysList = Array.from({ length: 14 }, (_, i) => {
           const d = new Date(startDate);
           d.setDate(startDate.getDate() + i);
-          daysList.push(d.toISOString().slice(0, 10));
-        }
+          return d.toISOString().slice(0, 10);
+        });
         setDays(daysList);
         setLoading(false);
       } catch (err) {
@@ -69,35 +65,33 @@ const RoomCalendar = () => {
     const buildWsBase = () => {
       // Intentar usar el puerto descubierto por el redirectorService
       const wsUrl = redirectorService.getWebSocketUrl();
-      if (wsUrl) {
-        return wsUrl.replace('/ws', '');
-      }
-      
-      // Fallback al método anterior
-      const wsEnv = process.env.REACT_APP_WS_URL && process.env.REACT_APP_WS_URL.trim();
-      const apiEnv = process.env.REACT_APP_API_URL && process.env.REACT_APP_API_URL.trim();
-      let base = wsEnv || apiEnv || (typeof window !== 'undefined' && window.location && window.location.origin) || 'http://localhost:5000';
-      if (!wsEnv && !apiEnv && typeof window !== 'undefined' && window.location && window.location.hostname === 'localhost') {
-        const p = window.location.port;
-        if (p === '3000' || p === '3001') {
-          // Obtener el puerto guardado del localStorage o usar el puerto por defecto
+      if (wsUrl) return wsUrl.replace('/ws', '');
+
+      const wsEnv = process.env.REACT_APP_WS_URL?.trim();
+      const apiEnv = process.env.REACT_APP_API_URL?.trim();
+      let base = wsEnv || apiEnv || window?.location?.origin || 'http://localhost:5000';
+
+      if (!wsEnv && !apiEnv && window?.location?.hostname === 'localhost') {
+        const port = window.location.port;
+        if (['3000', '3001'].includes(port)) {
           const savedPort = localStorage.getItem('backend-port') || '5000';
           base = base.replace(/:30(00|01)$/, `:${savedPort}`);
         }
       }
-      if (!/^wss?:\/\//i.test(base)) {
-        base = base.replace(/^http/i, 'ws');
-      }
-      return base;
+
+      return base.replace(/^http/i, 'ws');
     };
+
     const wsUrl = `${buildWsBase().replace(/\/$/, '')}/ws`;
     const client = createWS(wsUrl, {
       onopen: () => setWsError(false),
       onmessage: (event) => {
         try {
           const data = JSON.parse(event.data);
-          if (data.type && data.type.startsWith('reservation_')) fetchAll();
-        } catch (e) {}
+          if (data.type?.startsWith('reservation_')) fetchAll();
+        } catch (e) {
+          console.error('WebSocket message error:', e);
+        }
       },
       onclose: () => setWsError(true),
       onerror: () => setWsError(true)
@@ -310,3 +304,7 @@ const RoomCalendar = () => {
 };
 
 export default RoomCalendar;
+
+// Revisar el manejo de datos del backend y WebSocket
+// Verificar que no haya lógica redundante en el frontend
+// Validar que los datos del calendario sean consistentes con el backend

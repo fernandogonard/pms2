@@ -3,6 +3,7 @@
 
 const RoomType = require('../models/RoomType');
 const Reservation = require('../models/Reservation');
+const { logger } = require('./loggerService');
 
 class BillingService {
   
@@ -46,7 +47,7 @@ class BillingService {
       };
       
     } catch (error) {
-      console.error('Error calculando precios de reserva:', error);
+      logger.error('Error calculando precios de reserva:', error);
       throw error;
     }
   }
@@ -74,7 +75,7 @@ class BillingService {
       return reservation;
       
     } catch (error) {
-      console.error('Error actualizando precios de reserva:', error);
+      logger.error('Error actualizando precios de reserva:', error);
       throw error;
     }
   }
@@ -152,7 +153,7 @@ class BillingService {
       };
       
     } catch (error) {
-      console.error('Error procesando pago:', error);
+      logger.error('Error procesando pago:', error);
       throw error;
     }
   }
@@ -205,7 +206,7 @@ class BillingService {
       return summary;
       
     } catch (error) {
-      console.error('Error generando resumen financiero:', error);
+      logger.error('Error generando resumen financiero:', error);
       throw error;
     }
   }
@@ -240,7 +241,7 @@ class BillingService {
       }));
       
     } catch (error) {
-      console.error('Error obteniendo facturas pendientes:', error);
+      logger.error('Error obteniendo facturas pendientes:', error);
       throw error;
     }
   }

@@ -46,6 +46,10 @@ backend/logs/
 backend/uploads/
 backend/.env
 backend/port.txt
+backend/tmp/
+
+# MongoDB memory server binaries
+mongodb-binaries/
 
 # Frontend específico
 frontend/build/

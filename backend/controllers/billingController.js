@@ -1,12 +1,13 @@
 // controllers/billingController.js
-// Controlador para gestión de facturación y pagos
+// Controlador para gestiÃƒÂ³n de facturaciÃƒÂ³n y pagos
 
 const Reservation = require('../models/Reservation');
 const RoomType = require('../models/RoomType');
 const BillingService = require('../services/billingService');
+const { logger } = require('../services/loggerService');
 
 /**
- * Obtener tipos de habitación con precios
+ * Obtener tipos de habitaciÃƒÂ³n con precios
  */
 const getRoomTypes = async (req, res) => {
   try {
@@ -27,17 +28,17 @@ const getRoomTypes = async (req, res) => {
     });
     
   } catch (error) {
-    console.error('Error obteniendo tipos de habitación:', error);
+    logger.error('Error obteniendo tipos de habitaciÃƒÂ³n:', error);
     res.status(500).json({
       success: false,
-      message: 'Error obteniendo tipos de habitación',
+      message: 'Error obteniendo tipos de habitaciÃƒÂ³n',
       error: error.message
     });
   }
 };
 
 /**
- * Actualizar precio de tipo de habitación
+ * Actualizar precio de tipo de habitaciÃƒÂ³n
  */
 const updateRoomTypePrice = async (req, res) => {
   try {
@@ -48,7 +49,7 @@ const updateRoomTypePrice = async (req, res) => {
     if (basePrice && (basePrice <= 0 || isNaN(basePrice))) {
       return res.status(400).json({
         success: false,
-        message: 'El precio debe ser un número mayor a 0'
+        message: 'El precio debe ser un nÃƒÂºmero mayor a 0'
       });
     }
     
@@ -66,7 +67,7 @@ const updateRoomTypePrice = async (req, res) => {
     if (!roomType) {
       return res.status(404).json({
         success: false,
-        message: 'Tipo de habitación no encontrado'
+        message: 'Tipo de habitaciÃƒÂ³n no encontrado'
       });
     }
     
@@ -84,7 +85,7 @@ const updateRoomTypePrice = async (req, res) => {
     });
     
   } catch (error) {
-    console.error('Error actualizando precio:', error);
+    logger.error('Error actualizando precio:', error);
     res.status(500).json({
       success: false,
       message: 'Error actualizando precio',
@@ -118,7 +119,7 @@ const calculateReservationPrice = async (req, res) => {
     });
     
   } catch (error) {
-    console.error('Error calculando precio:', error);
+    logger.error('Error calculando precio:', error);
     res.status(500).json({
       success: false,
       message: 'Error calculando precio de reserva',
@@ -143,12 +144,12 @@ const processPayment = async (req, res) => {
       });
     }
     
-    // Validar método de pago
+    // Validar mÃƒÂ©todo de pago
     const validMethods = ['efectivo', 'tarjeta', 'transferencia', 'cheque'];
     if (!validMethods.includes(method)) {
       return res.status(400).json({
         success: false,
-        message: `Método de pago inválido. Métodos válidos: ${validMethods.join(', ')}`
+        message: `MÃƒÂ©todo de pago invÃƒÂ¡lido. MÃƒÂ©todos vÃƒÂ¡lidos: ${validMethods.join(', ')}`
       });
     }
     
@@ -180,7 +181,7 @@ const processPayment = async (req, res) => {
     });
     
   } catch (error) {
-    console.error('Error procesando pago:', error);
+    logger.error('Error procesando pago:', error);
     res.status(500).json({
       success: false,
       message: error.message || 'Error procesando pago',
@@ -190,7 +191,7 @@ const processPayment = async (req, res) => {
 };
 
 /**
- * Obtener información de facturación de una reserva
+ * Obtener informaciÃƒÂ³n de facturaciÃƒÂ³n de una reserva
  */
 const getReservationBilling = async (req, res) => {
   try {
@@ -207,7 +208,7 @@ const getReservationBilling = async (req, res) => {
       });
     }
     
-    // Si no tiene información de precios, calcularla
+    // Si no tiene informaciÃƒÂ³n de precios, calcularla
     if (!reservation.pricing || !reservation.pricing.total) {
       const pricing = await BillingService.calculateReservationPricing({
         tipo: reservation.tipo,
@@ -249,10 +250,10 @@ const getReservationBilling = async (req, res) => {
     });
     
   } catch (error) {
-    console.error('Error obteniendo información de facturación:', error);
+    logger.error('Error obteniendo informaciÃƒÂ³n de facturaciÃƒÂ³n:', error);
     res.status(500).json({
       success: false,
-      message: 'Error obteniendo información de facturación',
+      message: 'Error obteniendo informaciÃƒÂ³n de facturaciÃƒÂ³n',
       error: error.message
     });
   }
@@ -265,7 +266,7 @@ const getFinancialSummary = async (req, res) => {
   try {
     const { startDate, endDate } = req.query;
     
-    // Fechas por defecto: último mes
+    // Fechas por defecto: ÃƒÂºltimo mes
     const defaultEndDate = new Date();
     const defaultStartDate = new Date();
     defaultStartDate.setMonth(defaultStartDate.getMonth() - 1);
@@ -287,7 +288,7 @@ const getFinancialSummary = async (req, res) => {
     });
     
   } catch (error) {
-    console.error('Error obteniendo resumen financiero:', error);
+    logger.error('Error obteniendo resumen financiero:', error);
     res.status(500).json({
       success: false,
       message: 'Error obteniendo resumen financiero',
@@ -309,7 +310,7 @@ const getPendingInvoices = async (req, res) => {
     });
     
   } catch (error) {
-    console.error('Error obteniendo facturas pendientes:', error);
+    logger.error('Error obteniendo facturas pendientes:', error);
     res.status(500).json({
       success: false,
       message: 'Error obteniendo facturas pendientes',
@@ -336,11 +337,11 @@ const generateInvoice = async (req, res) => {
       });
     }
     
-    // Generar número de factura si no existe
+    // Generar nÃƒÂºmero de factura si no existe
     if (!reservation.invoice.number) {
       reservation.invoice.number = BillingService.generateInvoiceNumber();
       reservation.invoice.issueDate = new Date();
-      reservation.invoice.dueDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 días
+      reservation.invoice.dueDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 dÃƒÂ­as
       await reservation.save();
     }
     
@@ -361,7 +362,7 @@ const generateInvoice = async (req, res) => {
     });
     
   } catch (error) {
-    console.error('Error generando factura:', error);
+    logger.error('Error generando factura:', error);
     res.status(500).json({
       success: false,
       message: 'Error generando factura',
