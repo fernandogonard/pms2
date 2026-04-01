@@ -4,7 +4,8 @@ import React, { useMemo, useState } from 'react';
 import { useCalendarData } from '../hooks/useCalendarData';
 import { useWebSocket } from '../hooks/useWebSocket';
 
-export const RoomCalendar = ({ startDate, days = 14 }) => {
+export const RoomCalendar = ({ startDate: startDateProp, days = 14 }) => {
+  const startDate = startDateProp || new Date().toISOString().slice(0, 10);
   const { data, loading, error, refetch } = useCalendarData(startDate, days);
   const [selectedRoom, setSelectedRoom] = useState(null);
 
