@@ -31,7 +31,7 @@ const RoomCalendar = () => {
         const startDateStr = startDate.toISOString().slice(0, 10);
 
         const [roomsStatusRes, reservationsRes] = await Promise.all([
-          apiFetch(`/api/rooms/status?start=${startDateStr}&days=14`),
+          apiFetch(`/api/rooms/calendar-status?start=${startDateStr}&days=14`),
           apiFetch('/api/reservations')
         ]);
 

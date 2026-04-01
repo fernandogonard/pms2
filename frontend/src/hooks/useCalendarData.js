@@ -21,7 +21,7 @@ export const useCalendarData = (startDate, days = 14) => {
       setLoading(true);
       setError(null);
       const response = await apiFetch(
-        `/api/rooms/status?start=${resolvedStart}&days=${days}`,
+        `/api/rooms/calendar-status?start=${resolvedStart}&days=${days}`,
         {
           signal: abortControllerRef.current.signal
         }

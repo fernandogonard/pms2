@@ -22,7 +22,7 @@ const ReceptionReservations = () => {
     setDataError('');
     try {
       const today = new Date().toISOString().split('T')[0];
-      const response = await apiFetch(`/api/rooms/status?start=${today}&days=30`);
+      const response = await apiFetch(`/api/rooms/calendar-status?start=${today}&days=30`);
       const statusData = await response.json();
 
       // Extraer datos del endpoint único

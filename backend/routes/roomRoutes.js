@@ -78,6 +78,9 @@ router.get('/types', roomsLimiter, roomController.getRoomTypes);
 // Endpoint público: consultar disponibilidad por tipo y fechas (sin auth — motor de reservas web)
 router.get('/available', roomsLimiter, roomController.getAvailableRooms);
 
+// Endpoint público: calendario de ocupación día-a-día (sin auth estricto)
+router.get('/calendar-status', roomsLimiter, roomController.getRoomStatus);
+
 // Todos los roles pueden ver habitaciones y estado real
 router.get('/', roomsLimiter, protect, roomController.getRooms); // requiere autenticación
 router.get('/status', roomsLimiter, protect, roomController.getRoomsStatus); // requiere autenticación
@@ -104,8 +107,5 @@ router.get('/:id/maintenance/impact', roomsLimiter, protect, authorize('admin'),
 
 // 🔄 VALIDACIÓN DE ESTADOS
 router.get('/:id/allowed-states', roomsLimiter, protect, authorize('admin', 'recepcionista'), roomController.getRoomAllowedStates);
-
-// ÚNICO endpoint público para calendario
-router.get('/status', roomController.getRoomStatus);
 
 module.exports = router;
