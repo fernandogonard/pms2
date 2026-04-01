@@ -5,6 +5,8 @@ import { createWS } from '../utils/wsClient';
 
 export const useWebSocket = ({ onMessage, onError, onClose }) => {
   const wsRef = useRef(null);
+  const callbacksRef = useRef({ onMessage, onError, onClose });
+  callbacksRef.current = { onMessage, onError, onClose };
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -13,9 +15,9 @@ export const useWebSocket = ({ onMessage, onError, onClose }) => {
     const wsUrl = process.env.REACT_APP_WS_URL || `ws://${window.location.hostname}:5001`;
 
     const client = createWS(`${wsUrl}/ws`, {
-      onmessage: (ev) => { if (onMessage) onMessage(ev); },
-      onerror: (err) => { if (onError) onError(err.message || 'WebSocket error'); },
-      onclose: () => { if (onClose) onClose(); },
+      onmessage: (ev) => { callbacksRef.current.onMessage?.(ev); },
+      onerror: (err) => { callbacksRef.current.onError?.(err.message || 'WebSocket error'); },
+      onclose: () => { callbacksRef.current.onClose?.(); },
     });
 
     wsRef.current = client;
@@ -26,5 +28,5 @@ export const useWebSocket = ({ onMessage, onError, onClose }) => {
         wsRef.current = null;
       }
     };
-  }, [onMessage, onError, onClose]);
+  }, []); // solo se crea una vez al montar
 };

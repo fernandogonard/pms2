@@ -1,8 +1,10 @@
 // hooks/useCalendarData.js
 // Hook para manejar datos del calendario con cache y debounce
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { apiFetch } from '../utils/api';
 
 export const useCalendarData = (startDate, days = 14) => {
+  const resolvedStart = startDate || new Date().toISOString().slice(0, 10);
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -18,8 +20,8 @@ export const useCalendarData = (startDate, days = 14) => {
     try {
       setLoading(true);
       setError(null);
-      const response = await fetch(
-        `/api/rooms/status?start=${startDate}&days=${days}`,
+      const response = await apiFetch(
+        `/api/rooms/status?start=${resolvedStart}&days=${days}`,
         {
           signal: abortControllerRef.current.signal
         }
@@ -34,7 +36,7 @@ export const useCalendarData = (startDate, days = 14) => {
     } finally {
       setLoading(false);
     }
-  }, [startDate, days]);
+  }, [resolvedStart, days]);
 
   const debouncedFetch = useCallback(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
