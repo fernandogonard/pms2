@@ -1,49 +1,30 @@
 // hooks/useWebSocket.js
-// Hook centralizado para WebSocket com reconexão, deduplicação e backoff
+// Hook centralizado para WebSocket con reconexión, deduplicación y backoff
 import { useEffect, useRef } from 'react';
-import WSClient from '../utils/wsClient';
+import { createWS } from '../utils/wsClient';
 
 export const useWebSocket = ({ onMessage, onError, onClose }) => {
-  const wsClientRef = useRef(null);
-  const messageHandlerRef = useRef(null);
-  const errorHandlerRef = useRef(null);
-  const closeHandlerRef = useRef(null);
+  const wsRef = useRef(null);
 
   useEffect(() => {
-    const token = localStorage.getItem('token'); // Assuming token is stored here
+    const token = localStorage.getItem('token');
     if (!token) return;
 
-    if (!wsClientRef.current) {
-      wsClientRef.current = new WSClient(process.env.REACT_APP_WS_URL);
-    }
+    const wsUrl = process.env.REACT_APP_WS_URL || `ws://${window.location.hostname}:5001`;
 
-    messageHandlerRef.current = (data) => {
-      if (onMessage) onMessage(data);
-    };
+    const client = createWS(`${wsUrl}/ws`, {
+      onmessage: (ev) => { if (onMessage) onMessage(ev); },
+      onerror: (err) => { if (onError) onError(err.message || 'WebSocket error'); },
+      onclose: () => { if (onClose) onClose(); },
+    });
 
-    errorHandlerRef.current = (error) => {
-      if (onError) onError(error.message);
-    };
-
-    closeHandlerRef.current = () => {
-      if (onClose) onClose();
-    };
-
-    wsClientRef.current.addListener(messageHandlerRef.current);
-    wsClientRef.current.connect(token);
+    wsRef.current = client;
 
     return () => {
-      if (wsClientRef.current) {
-        wsClientRef.current.removeListener(messageHandlerRef.current);
+      if (wsRef.current) {
+        wsRef.current.close();
+        wsRef.current = null;
       }
     };
   }, [onMessage, onError, onClose]);
-
-  useEffect(() => {
-    return () => {
-      if (wsClientRef.current) {
-        wsClientRef.current.disconnect();
-      }
-    };
-  }, []);
 };

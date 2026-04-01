@@ -120,8 +120,9 @@ self.addEventListener('fetch', event => {
     return;
   }
   
-  // Los bundles JS/CSS generados por React (con hash) NUNCA se cachean — siempre red
-  if (url.pathname.match(/\/static\/(js|css)\/main\.[a-f0-9]+\.(js|css)(\.map)?$/)) {
+  // Los bundles JS/CSS generados por React NUNCA se cachean — siempre red
+  // Incluye bundles de producción (main.[hash].js) y desarrollo (bundle.js)
+  if (url.pathname.match(/\/static\/(js|css)\/(main\.[a-f0-9]+|bundle)\.(js|css)(\.map)?$/)) {
     return; // pasar directamente sin interceptar
   }
 

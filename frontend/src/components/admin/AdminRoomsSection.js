@@ -3,7 +3,7 @@
 
 import React, { useState, useEffect } from 'react';
 import RoomTable from '../RoomTable';
-import RoomCalendar from '../RoomCalendar';
+import { RoomCalendar } from '../RoomCalendar';
 import CleaningManager from '../CleaningManager';
 import MaintenanceManager from '../MaintenanceManager';
 import { apiFetch } from '../../utils/api';
