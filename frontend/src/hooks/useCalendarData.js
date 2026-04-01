@@ -20,12 +20,21 @@ export const useCalendarData = (startDate, days = 14) => {
     try {
       setLoading(true);
       setError(null);
-      const response = await apiFetch(
+
+      // Intentar endpoint primario, fallback al anterior si falla
+      let response = await apiFetch(
         `/api/rooms/calendar-status?start=${resolvedStart}&days=${days}`,
-        {
-          signal: abortControllerRef.current.signal
-        }
+        { signal: abortControllerRef.current.signal }
       );
+
+      if (!response.ok) {
+        // Fallback: endpoint autenticado (compatible con deploys anteriores)
+        response = await apiFetch(
+          `/api/rooms/status?start=${resolvedStart}&days=${days}`,
+          { signal: abortControllerRef.current.signal }
+        );
+      }
+
       if (!response.ok) throw new Error('Failed to fetch room status');
       const result = await response.json();
       setData(result);
