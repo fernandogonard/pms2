@@ -38,33 +38,43 @@ export const useCalendarData = (startDate, days = 14) => {
       if (!response.ok) throw new Error('Failed to fetch room status');
       const result = await response.json();
 
-      // Normalizar formato: /status devuelve {rooms:[...], reservations, users}
-      // mientras que /calendar-status devuelve [{roomId, roomNumber, roomType, dates:[]}]
+      // Normalizar: Railway devuelve {rooms:[{..., calendar:{date:status}}], dateRange, assignments, summary}
+      // /calendar-status devuelve [{roomId, roomNumber, roomType, dates:[{date, status, reservation}]}]
       let items = result;
+      let assignmentsMap = {};
       if (!Array.isArray(result) && result && Array.isArray(result.rooms)) {
         items = result.rooms;
+        // Guardar assignments para enriquecer datos de reservas
+        if (result.assignments) assignmentsMap = result.assignments;
       }
       const normalized = Array.isArray(items) ? items.map(item => {
         // Formato calendar-status: ya tiene roomId + dates array
         if (item.roomId && Array.isArray(item.dates)) return item;
-        // Formato /status (getRoomsAvailability): {_id, number, type, states:{date:status}}
-        if ((item._id || item.id) && item.states && typeof item.states === 'object') {
+
+        // Formato Railway /status: {_id, number, type, calendar:{date:status}}
+        // o formato alterno:       {_id, number, type, states:{date:status}}
+        const statesObj = item.calendar || item.states;
+        if ((item._id || item.id) && statesObj && typeof statesObj === 'object') {
           return {
             roomId: item._id || item.id,
             roomNumber: item.number,
             roomType: item.type,
-            dates: Object.entries(item.states).map(([date, status]) => ({
+            roomStatus: item.status,
+            lastCleaning: item.lastCleaning,
+            pendingHousekeeping: item.pendingHousekeeping,
+            dates: Object.entries(statesObj).map(([date, status]) => ({
               date,
               status: status === 'disponible' ? 'available' : status,
               reservation: null
             }))
           };
         }
-        // Fallback seguro: garantizar dates como array vacío
+        // Fallback seguro
         return {
           roomId: item._id || item.id || item.roomId || 'unknown',
           roomNumber: item.number || item.roomNumber || '?',
           roomType: item.type || item.roomType || 'unknown',
+          roomStatus: item.status,
           dates: []
         };
       }) : [];
