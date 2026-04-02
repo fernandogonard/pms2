@@ -122,12 +122,14 @@ const ReservationTable = () => {
       const method = editingId ? 'PUT' : 'POST';
       const url = editingId ? `${API_RESERVATIONS}/${editingId}` : API_RESERVATIONS;
       const { apiFetch } = await import('../utils/api');
+      // No enviar campo 'user' en el body — el backend lo maneja internamente
+      const { user, ...payload } = form;
       const res = await apiFetch(url, {
         method,
         headers: {
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify(form)
+        body: JSON.stringify(payload)
       });
       if (!res.ok) {
         const data = await res.json();
@@ -135,7 +137,13 @@ const ReservationTable = () => {
           setError('No autorizado. Por favor, inicia sesión nuevamente.');
           return;
         }
-        setError(data.message || 'Error al guardar reserva');
+        // Mostrar detalles de validación si existen
+        if (data.errors && Array.isArray(data.errors)) {
+          const details = data.errors.map(e => e.message || `${e.field}: inválido`).join('. ');
+          setError(details);
+        } else {
+          setError(data.message || 'Error al guardar reserva');
+        }
         return;
       }
       setSuccess(editingId ? 'Reserva actualizada con éxito.' : 'Reserva creada con éxito.');
