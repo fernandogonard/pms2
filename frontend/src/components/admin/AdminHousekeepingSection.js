@@ -86,14 +86,19 @@ const AdminHousekeepingSection = () => {
   };
 
   // Habitaciones con tarea pendiente
-  const pendingRooms = rooms.filter(r => r.pendingHousekeeping);
-  const filtered = filter === 'all' ? pendingRooms : pendingRooms.filter(r => r.pendingHousekeeping === filter);
+  // Incluir también habitaciones con status 'limpieza' que no tengan pendingHousekeeping asignado
+  // (puede pasar si el backend no lo asignó al completar mantenimiento)
+  const pendingRooms = rooms.filter(r =>
+    r.pendingHousekeeping || (r.status === 'limpieza' && !r.pendingHousekeeping)
+  );
+  const getEffectiveTask = (r) => r.pendingHousekeeping || (r.status === 'limpieza' ? 'limpieza_profunda' : null);
+  const filtered = filter === 'all' ? pendingRooms : pendingRooms.filter(r => getEffectiveTask(r) === filter);
 
   // Contadores por tipo
   const counts = {
-    repaso: rooms.filter(r => r.pendingHousekeeping === 'repaso').length,
-    limpieza_profunda: rooms.filter(r => r.pendingHousekeeping === 'limpieza_profunda').length,
-    limpieza_checkout: rooms.filter(r => r.pendingHousekeeping === 'limpieza_checkout').length,
+    repaso: rooms.filter(r => getEffectiveTask(r) === 'repaso').length,
+    limpieza_profunda: rooms.filter(r => getEffectiveTask(r) === 'limpieza_profunda').length,
+    limpieza_checkout: rooms.filter(r => getEffectiveTask(r) === 'limpieza_checkout').length,
   };
 
   return (
@@ -179,7 +184,8 @@ const AdminHousekeepingSection = () => {
             </thead>
             <tbody>
               {filtered.map(room => {
-                const meta = TASK_META[room.pendingHousekeeping];
+                const effectiveTask = getEffectiveTask(room);
+                const meta = TASK_META[effectiveTask];
                 const isProcessing = completing === room._id;
                 return (
                   <tr key={room._id} style={styles.tr}>
@@ -201,7 +207,7 @@ const AdminHousekeepingSection = () => {
                         background: meta?.bg || '#111', color: meta?.color || '#fff',
                         border: `1px solid ${meta?.border || '#555'}`,
                       }}>
-                        {meta?.icon} {meta?.label || room.pendingHousekeeping}
+                        {meta?.icon} {meta?.label || effectiveTask}
                       </span>
                     </td>
                     <td style={{ ...styles.td, color: '#6b7280', fontSize: 12 }}>
@@ -211,7 +217,7 @@ const AdminHousekeepingSection = () => {
                     </td>
                     <td style={styles.td}>
                       <button
-                        onClick={() => handleCompleteTask(room._id, room.pendingHousekeeping)}
+                        onClick={() => handleCompleteTask(room._id, effectiveTask)}
                         disabled={isProcessing}
                         style={{
                           ...styles.completeBtn,

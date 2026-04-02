@@ -20,6 +20,11 @@ if (USE_STATIC_API && STATIC_API_URL) {
 
 // Función para descubrir el puerto del backend usando redirectorService
 export async function discoverBackendPort() {
+  // En producción, la URL ya está configurada estáticamente — no hacer discovery de puertos localhost
+  if (USE_STATIC_API && API_BASE_URL) {
+    return 'production';
+  }
+
   try {
     // Usar el servicio de redirección para obtener el puerto
     const result = await redirectorService.detectBackendPort();
