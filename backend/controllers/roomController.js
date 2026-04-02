@@ -606,6 +606,11 @@ exports.completeHousekeeping = async (req, res) => {
     const room = await Room.findById(roomId);
     if (!room) return res.status(404).json({ message: 'Habitación no encontrada' });
 
+    // Si no hay tarea pendiente pero la habitación está en limpieza, tratarla como limpieza profunda
+    if (!room.pendingHousekeeping && room.status === 'limpieza') {
+      room.pendingHousekeeping = 'limpieza_profunda';
+    }
+
     if (!room.pendingHousekeeping) {
       return res.status(400).json({ message: 'No hay tarea de housekeeping pendiente para esta habitación' });
     }
