@@ -6,6 +6,8 @@ import ReceptionReservations from '../components/ReceptionReservations';
 import RoomStatusBoard from '../components/RoomStatusBoard';
 import { RoomCalendar } from '../components/RoomCalendar';
 import CleaningManager from '../components/CleaningManager';
+import { useAuth } from '../contexts/AuthContext';
+import { useNavigate } from 'react-router-dom';
 import { apiFetch } from '../utils/api';
 
 // ─── Resumen del día ────────────────────────────────────────────────────────
@@ -330,6 +332,13 @@ const ReceptionPayments = () => {
 // ─── Dashboard principal ─────────────────────────────────────────────────────
 const ReceptionDashboard = () => {
   const [activeTab, setActiveTab] = useState('inicio');
+  const { user, logout } = useAuth();
+  const navigate = useNavigate();
+
+  const handleLogout = async () => {
+    await logout();
+    navigate('/login');
+  };
 
   const tabs = [
     { id: 'inicio',       label: 'Inicio',       icon: '🏠' },
@@ -355,8 +364,24 @@ const ReceptionDashboard = () => {
   return (
     <ReceptionLayout>
       <div style={{ background: '#18191A', color: '#fff', minHeight: '100vh', fontFamily: 'Inter, Arial, sans-serif' }}>
-        {/* Tab bar */}
-        <div style={{ background: '#111', borderBottom: '1px solid #2a2a2a', display: 'flex', overflowX: 'auto', flexShrink: 0 }}>
+        {/* Header compacto + Tab bar */}
+        <div style={{ background: '#111', borderBottom: '1px solid #2a2a2a', position: 'sticky', top: 0, zIndex: 50 }}>
+          {/* Fila superior: logo + usuario */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 20px 0' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <span style={{ fontSize: 22 }}>🏨</span>
+              <div>
+                <div style={{ fontWeight: 700, fontSize: 15, color: '#fff', lineHeight: 1.1 }}>MiHotel CRM</div>
+                <div style={{ fontSize: 11, color: '#6b7280' }}>Recepción</div>
+              </div>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <span style={{ color: '#9ca3af', fontSize: 13 }}>{user?.email?.split('@')[0] || 'Usuario'}</span>
+              <button onClick={handleLogout} style={{ background: '#374151', color: '#d1d5db', border: 'none', borderRadius: 6, padding: '5px 12px', fontSize: 12, cursor: 'pointer' }}>🚪 Salir</button>
+            </div>
+          </div>
+          {/* Tabs */}
+          <div style={{ display: 'flex', overflowX: 'auto', flexShrink: 0 }}>
           {tabs.map(t => (
             <button key={t.id} onClick={() => setActiveTab(t.id)}
               style={{
@@ -374,6 +399,7 @@ const ReceptionDashboard = () => {
               {t.icon} {t.label}
             </button>
           ))}
+          </div>
         </div>
         {/* Contenido */}
         <div style={{ padding: 24, maxWidth: 1200 }}>
