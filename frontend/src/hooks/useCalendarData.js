@@ -45,8 +45,10 @@ export const useCalendarData = (startDate, days = 14) => {
         items = result.rooms;
       }
       const normalized = Array.isArray(items) ? items.map(item => {
-        if (item.roomId && item.dates) return item;
-        if ((item._id || item.id) && item.states) {
+        // Formato calendar-status: ya tiene roomId + dates array
+        if (item.roomId && Array.isArray(item.dates)) return item;
+        // Formato /status (getRoomsAvailability): {_id, number, type, states:{date:status}}
+        if ((item._id || item.id) && item.states && typeof item.states === 'object') {
           return {
             roomId: item._id || item.id,
             roomNumber: item.number,
@@ -58,7 +60,13 @@ export const useCalendarData = (startDate, days = 14) => {
             }))
           };
         }
-        return item;
+        // Fallback seguro: garantizar dates como array vacío
+        return {
+          roomId: item._id || item.id || item.roomId || 'unknown',
+          roomNumber: item.number || item.roomNumber || '?',
+          roomType: item.type || item.roomType || 'unknown',
+          dates: []
+        };
       }) : [];
 
       setData(normalized);

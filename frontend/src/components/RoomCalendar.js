@@ -41,7 +41,7 @@ export const RoomCalendar = ({ startDate: startDateProp, days = 14 }) => {
             <div style={{ background: '#18191A', color: '#fff', padding: '10px', cursor: 'pointer' }} onClick={() => setSelectedRoom(room)}>
               #{room.roomNumber} ({room.roomType})
             </div>
-            {room.dates.map((day, index) => (
+            {(room.dates || []).map((day, index) => (
               <div
                 key={index}
                 style={{
