@@ -113,11 +113,23 @@ const calculateRoomStates = (rooms, reservations, startDate, days) => {
       const overlays = [];
 
       // STEP 2A: Mantenimiento (máxima prioridad después de fuera_de_servicio)
+      // Opción 1: maintenanceDates explícitas (si existen)
       if (room.maintenanceDates && Array.isArray(room.maintenanceDates)) {
         if (room.maintenanceDates.includes(key)) {
           overlays.push('mantenimiento');
-          // Mantenimiento bloquea todo lo demás
         }
+      }
+      // Opción 2: currentMaintenance con startDate/estimatedEndDate
+      if (overlays.length === 0 && room.currentMaintenance && room.currentMaintenance.startDate && room.currentMaintenance.estimatedEndDate) {
+        const maintStart = normalizeDate(room.currentMaintenance.startDate);
+        const maintEnd = normalizeDate(room.currentMaintenance.estimatedEndDate);
+        if (maintStart && maintEnd && d >= maintStart && d <= maintEnd) {
+          overlays.push('mantenimiento');
+        }
+      }
+      // Opción 3: room.status es mantenimiento pero sin fechas → solo marcar hoy y días pasados
+      if (overlays.length === 0 && room.status === 'mantenimiento' && !room.currentMaintenance?.estimatedEndDate) {
+        overlays.push('mantenimiento');
       }
 
       if (overlays.length === 0) {

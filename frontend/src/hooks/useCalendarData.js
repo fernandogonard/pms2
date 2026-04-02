@@ -100,11 +100,19 @@ export const useCalendarData = (startDate, days = 14) => {
             lastCleaning: item.lastCleaning,
             pendingHousekeeping: item.pendingHousekeeping,
             currentMaintenance: item.currentMaintenance,
-            dates: Object.entries(statesObj).map(([date, status]) => ({
-              date,
-              status: status === 'disponible' ? 'available' : status,
-              reservation: resMap[`${roomId}_${date}`] || null
-            }))
+            dates: Object.entries(statesObj).map(([date, status]) => {
+              let finalStatus = status === 'disponible' ? 'available' : status;
+              // Fix: si la room tiene mantenimiento con fin estimado, no marcar días posteriores
+              if (finalStatus === 'mantenimiento' && item.currentMaintenance?.estimatedEndDate) {
+                const endDate = new Date(item.currentMaintenance.estimatedEndDate).toISOString().split('T')[0];
+                if (date > endDate) finalStatus = 'available';
+              }
+              return {
+                date,
+                status: finalStatus,
+                reservation: resMap[`${roomId}_${date}`] || null
+              };
+            })
           };
         }
         // Fallback seguro
