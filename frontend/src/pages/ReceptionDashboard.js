@@ -193,6 +193,14 @@ const ReceptionPayments = () => {
   const fmt = n => n >= 1000 ? `$${Math.round(n).toLocaleString('es-AR')}` : `$${Math.round(n || 0)}`;
   const inp = { background: '#18191A', color: '#fff', border: '1px solid #444', borderRadius: 6, padding: '8px 12px' };
 
+  const getGuestLabel = (targetId) => {
+    const res = activeReservations.find(r => r._id === targetId);
+    if (!res) return targetId?.slice(-6).toUpperCase() || '';
+    const name = res.client ? `${res.client.nombre || ''} ${res.client.apellido || ''}`.trim() : (res.nombre || '');
+    const room = Array.isArray(res.room) ? res.room.map(rm => rm.number || rm).join(', ') : (res.room?.number || '');
+    return `${name}${room ? ` — Hab. ${room}` : ''}`;
+  };
+
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
@@ -206,7 +214,7 @@ const ReceptionPayments = () => {
 
       {paymentTarget && (
         <div style={{ background: 'rgba(0,153,255,0.08)', border: '1px solid rgba(0,153,255,0.3)', borderRadius: 12, padding: 18, marginBottom: 14 }}>
-          <h4 style={{ color: '#00ccff', margin: '0 0 12px 0' }}>💳 Pago — {paymentTarget.slice(-6).toUpperCase()}</h4>
+          <h4 style={{ color: '#00ccff', margin: '0 0 12px 0' }}>💳 Pago — {getGuestLabel(paymentTarget)}</h4>
           <form onSubmit={handleProcessPayment} style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
             <div><div style={{ color: '#aaa', fontSize: 12, marginBottom: 3 }}>Monto ($)</div>
               <input type="number" min="1" step="0.01" value={paymentForm.amount} onChange={e => setPaymentForm({ ...paymentForm, amount: e.target.value })} required style={{ ...inp, width: 130 }} /></div>
@@ -226,7 +234,7 @@ const ReceptionPayments = () => {
 
       {chargeTarget && (
         <div style={{ background: 'rgba(167,139,250,0.08)', border: '1px solid rgba(167,139,250,0.3)', borderRadius: 12, padding: 18, marginBottom: 14 }}>
-          <h4 style={{ color: '#a78bfa', margin: '0 0 12px 0' }}>➕ Cargo — {chargeTarget.slice(-6).toUpperCase()}</h4>
+          <h4 style={{ color: '#a78bfa', margin: '0 0 12px 0' }}>➕ Cargo — {getGuestLabel(chargeTarget)}</h4>
           <form onSubmit={handleAddCharge} style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
             <div><div style={{ color: '#aaa', fontSize: 12, marginBottom: 3 }}>Descripción</div>
               <input type="text" value={chargeForm.description} onChange={e => setChargeForm({ ...chargeForm, description: e.target.value })} required placeholder="Minibar, cena..." style={{ ...inp, width: 200 }} /></div>

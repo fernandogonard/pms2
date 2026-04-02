@@ -17,22 +17,23 @@ const ReceptionReservations = () => {
     date: ''
   });
 
-  // Función para cargar datos usando UN SOLO endpoint
+  // Función para cargar datos
   const loadData = useCallback(async () => {
     setLoading(true);
     setDataError('');
     try {
-      const today = new Date().toISOString().split('T')[0];
-      let response = await apiFetch(`/api/rooms/calendar-status?start=${today}&days=30`);
-      if (!response.ok) {
-        // Fallback al endpoint anterior (compatible con deploys viejos)
-        response = await apiFetch(`/api/rooms/status?start=${today}&days=30`);
-      }
-      const statusData = await response.json();
+      const [roomsRes, reservationsRes] = await Promise.all([
+        apiFetch('/api/rooms'),
+        apiFetch('/api/reservations'),
+      ]);
+      const roomsData = await roomsRes.json();
+      const reservationsData = await reservationsRes.json();
 
-      // Extraer datos del endpoint único
-      const { rooms, reservations, users } = statusData;
-      setData({ reservations: reservations || [], rooms: rooms || [], users: users || [] });
+      setData({
+        reservations: Array.isArray(reservationsData) ? reservationsData : [],
+        rooms: Array.isArray(roomsData) ? roomsData : [],
+        users: [],
+      });
     } catch (err) {
       setDataError(err.message || 'Error desconocido al cargar datos');
     } finally {
@@ -101,17 +102,19 @@ const ReceptionReservations = () => {
       }
       
       if (filters.search) {
-        const userName = (r.user && typeof r.user === 'object' && r.user.name) 
-          ? r.user.name 
-          : users.find(u => u._id === (typeof r.user === 'object' && r.user ? r.user._id : r.user))?.name || '';
-        const publicName = r.name || '';
-        const email = r.email || '';
+        const clientName = r.client
+          ? `${r.client.nombre || ''} ${r.client.apellido || ''}`.trim()
+          : (r.nombre ? `${r.nombre} ${r.apellido || ''}`.trim() : '');
+        const dni = r.client?.dni || '';
+        const email = r.client?.email || r.email || '';
+        const phone = r.client?.whatsapp || r.client?.telefono || '';
         const searchLower = filters.search.toLowerCase();
         
         match = match && (
-          userName.toLowerCase().includes(searchLower) ||
-          publicName.toLowerCase().includes(searchLower) ||
-          email.toLowerCase().includes(searchLower)
+          clientName.toLowerCase().includes(searchLower) ||
+          dni.toLowerCase().includes(searchLower) ||
+          email.toLowerCase().includes(searchLower) ||
+          phone.toLowerCase().includes(searchLower)
         );
       }
       
@@ -277,29 +280,40 @@ const ReceptionReservations = () => {
           <table role="table" style={tableStyle}>
             <thead>
               <tr style={{ background: '#18191A', color: '#fff' }}>
-                <th scope="col" style={{ padding: 10 }}>Habitación</th>
-                <th scope="col" style={{ padding: 10 }}>Cliente</th>
+                <th scope="col" style={{ padding: 10 }}>Hab.</th>
+                <th scope="col" style={{ padding: 10 }}>Huésped</th>
+                <th scope="col" style={{ padding: 10 }}>DNI</th>
+                <th scope="col" style={{ padding: 10 }}>Teléfono</th>
                 <th scope="col" style={{ padding: 10 }}>Check-in</th>
                 <th scope="col" style={{ padding: 10 }}>Check-out</th>
+                <th scope="col" style={{ padding: 10 }}>Noches</th>
+                <th scope="col" style={{ padding: 10 }}>Total</th>
                 <th scope="col" style={{ padding: 10 }}>Estado</th>
                 <th scope="col" style={{ padding: 10 }}>Acciones</th>
               </tr>
             </thead>
             <tbody>
-              {filtered.map(r => (
+              {filtered.map(r => {
+                const clientName = r.client
+                  ? `${r.client.nombre || ''} ${r.client.apellido || ''}`.trim()
+                  : (r.nombre ? `${r.nombre} ${r.apellido || ''}`.trim() : '-');
+                const roomLabel = Array.isArray(r.room)
+                  ? r.room.map(rm => typeof rm === 'object' ? rm.number : rooms.find(x => x._id === rm)?.number || rm).join(', ')
+                  : (r.room && typeof r.room === 'object' ? r.room.number : rooms.find(x => x._id === r.room)?.number || '-');
+                const nights = r.checkIn && r.checkOut
+                  ? Math.max(1, Math.round((new Date(r.checkOut) - new Date(r.checkIn)) / 86400000))
+                  : '-';
+                const total = r.pricing?.totalAmount || r.pricing?.total || 0;
+                return (
                 <tr key={r._id} style={{ background: '#222', color: '#fff', borderBottom: '1px solid #333' }}>
-                  <td style={{ padding: 10 }}>
-                    {(r.room && typeof r.room === 'object' && r.room.number) 
-                      ? r.room.number 
-                      : rooms.find(room => room._id === (typeof r.room === 'object' && r.room ? r.room._id : r.room))?.number || '-'}
-                  </td>
-                  <td style={{ padding: 10 }}>
-                    {(r.user && typeof r.user === 'object' && r.user.name) 
-                      ? r.user.name 
-                      : users.find(user => user._id === (typeof r.user === 'object' && r.user ? r.user._id : r.user))?.name || r.name || '-'}
-                  </td>
+                  <td style={{ padding: 10, fontWeight: 600 }}>{roomLabel}</td>
+                  <td style={{ padding: 10 }}>{clientName}</td>
+                  <td style={{ padding: 10, color: '#aaa', fontSize: 13 }}>{r.client?.dni || '-'}</td>
+                  <td style={{ padding: 10, color: '#aaa', fontSize: 13 }}>{r.client?.whatsapp || r.client?.telefono || '-'}</td>
                   <td style={{ padding: 10 }}>{r.checkIn ? r.checkIn.slice(0, 10) : '-'}</td>
                   <td style={{ padding: 10 }}>{r.checkOut ? r.checkOut.slice(0, 10) : '-'}</td>
+                  <td style={{ padding: 10, textAlign: 'center' }}>{nights}</td>
+                  <td style={{ padding: 10, color: '#22c55e', fontWeight: 600 }}>{total ? `$${Math.round(total).toLocaleString('es-AR')}` : '-'}</td>
                   <td style={{ padding: 10 }}>
                     <span style={{
                       padding: '4px 8px',
@@ -315,25 +329,34 @@ const ReceptionReservations = () => {
                   <td style={{ padding: 10 }}>
                     {r.status === 'reservada' && (
                       <button 
-                        onClick={() => handleStatus(r._id, 'checkin')} 
-                        aria-label={`Hacer check-in de reserva ${r._id}`}
+                        onClick={() => {
+                          if (window.confirm(`¿Confirmar CHECK-IN de ${clientName} en Hab. ${roomLabel}?`)) {
+                            handleStatus(r._id, 'checkin');
+                          }
+                        }} 
+                        aria-label={`Hacer check-in de ${clientName}`}
                         style={{ ...buttonStyle, marginRight: 8 }}
                       >
-                        Check-in
+                        ✅ Check-in
                       </button>
                     )}
                     {r.status === 'checkin' && (
                       <button 
-                        onClick={() => handleStatus(r._id, 'checkout')} 
-                        aria-label={`Hacer check-out de reserva ${r._id}`}
-                        style={buttonStyle}
+                        onClick={() => {
+                          if (window.confirm(`¿Confirmar CHECK-OUT de ${clientName} de Hab. ${roomLabel}?`)) {
+                            handleStatus(r._id, 'checkout');
+                          }
+                        }} 
+                        aria-label={`Hacer check-out de ${clientName}`}
+                        style={{ ...buttonStyle, background: '#dc2626' }}
                       >
-                        Check-out
+                        🚪 Check-out
                       </button>
                     )}
                   </td>
                 </tr>
-              ))}
+              );
+              })}
             </tbody>
           </table>
         </>
