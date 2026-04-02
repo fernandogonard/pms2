@@ -2,7 +2,6 @@
 // Gestión de habitaciones en limpieza
 
 import React, { useState, useEffect } from 'react';
-import useBackendReady from '../hooks/useBackendReady';
 import { apiFetch } from '../utils/api';
 import useSessionGuard from '../hooks/useSessionGuard';
 
@@ -14,10 +13,9 @@ const CleaningManager = () => {
   const [selectedRooms, setSelectedRooms] = useState([]);
   const { canFetch, sessionExpired, authLoading } = useSessionGuard();
 
-  const { backendReady, backendLoading, backendError } = useBackendReady();
   // Cargar habitaciones en limpieza
   const loadRoomsInCleaning = async () => {
-    if (!canFetch || !backendReady) {
+    if (!canFetch) {
       setLoading(false);
       setRoomsInCleaning([]);
       setSelectedRooms([]);
@@ -125,8 +123,8 @@ const CleaningManager = () => {
   };
 
   useEffect(() => {
-    if (!canFetch || !backendReady) {
-      if (!authLoading && !backendLoading) {
+    if (!canFetch) {
+      if (!authLoading) {
         setLoading(false);
         setRoomsInCleaning([]);
         setSelectedRooms([]);
@@ -135,13 +133,7 @@ const CleaningManager = () => {
       return;
     }
     loadRoomsInCleaning();
-  }, [canFetch, sessionExpired, authLoading, backendReady, backendLoading]);
-  if (backendLoading) {
-    return <div style={{textAlign:'center',marginTop:40}}><b>Conectando con backend...</b></div>;
-  }
-  if (backendError) {
-    return <div style={{textAlign:'center',marginTop:40,color:'#ef4444'}}><b>{backendError}</b></div>;
-  }
+  }, [canFetch, sessionExpired, authLoading]);
 
   return (
     <div className="cleaning-manager">
