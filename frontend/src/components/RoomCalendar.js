@@ -1,32 +1,135 @@
 // components/RoomCalendar.js
-// Calendario visual de ocupación de habitaciones — vista de un vistazo
-import React, { useMemo, useState } from 'react';
+// Calendario visual de ocupación — popover al hover con datos de reserva/limpieza/mantenimiento
+import React, { useMemo, useState, useCallback, useRef } from 'react';
 import { useCalendarData } from '../hooks/useCalendarData';
 import { useWebSocket } from '../hooks/useWebSocket';
 
 const STATUS_CONFIG = {
-  available:          { bg: '#22c55e', label: 'Libre',         icon: '✓' },
-  disponible:         { bg: '#22c55e', label: 'Libre',         icon: '✓' },
-  ocupada:            { bg: '#ef4444', label: 'Ocupada',       icon: '●' },
-  reservada:          { bg: '#f59e42', label: 'Reservada',     icon: '◉' },
-  confirmada:         { bg: '#3b82f6', label: 'Confirmada',    icon: '✔' },
-  checkout:           { bg: '#a855f7', label: 'Checkout',      icon: '↗' },
-  checkin:            { bg: '#06b6d4', label: 'Check-in',      icon: '↘' },
-  mantenimiento:      { bg: '#eab308', label: 'Mant.',         icon: '🔧' },
-  fuera_de_servicio:  { bg: '#6b7280', label: 'Fuera serv.',   icon: '✕' },
-  limpieza:           { bg: '#8b5cf6', label: 'Limpieza',      icon: '🧹' },
+  available:          { bg: '#22c55e', label: 'Libre',         icon: '✓', textColor: '#fff' },
+  disponible:         { bg: '#22c55e', label: 'Libre',         icon: '✓', textColor: '#fff' },
+  ocupada:            { bg: '#ef4444', label: 'Ocupada',       icon: '●', textColor: '#fff' },
+  reservada:          { bg: '#f59e42', label: 'Reservada',     icon: '◉', textColor: '#fff' },
+  confirmada:         { bg: '#3b82f6', label: 'Confirmada',    icon: '✔', textColor: '#fff' },
+  checkout:           { bg: '#a855f7', label: 'Checkout',      icon: '↗', textColor: '#fff' },
+  checkin:            { bg: '#06b6d4', label: 'Check-in',      icon: '↘', textColor: '#fff' },
+  mantenimiento:      { bg: '#eab308', label: 'Mantenimiento', icon: '🔧', textColor: '#000' },
+  fuera_de_servicio:  { bg: '#6b7280', label: 'Fuera de servicio', icon: '✕', textColor: '#fff' },
+  limpieza:           { bg: '#8b5cf6', label: 'Limpieza',      icon: '🧹', textColor: '#fff' },
 };
 
-const getStatusStyle = (status) => {
-  return STATUS_CONFIG[status] || { bg: '#374151', label: status || '?', icon: '?' };
-};
+const getStatusStyle = (status) => STATUS_CONFIG[status] || { bg: '#374151', label: status || '?', icon: '?', textColor: '#fff' };
 
 const today = new Date().toISOString().split('T')[0];
+
+// ── Popover flotante ────────────────────────────────────
+const CellPopover = ({ info, position }) => {
+  if (!info) return null;
+  const { room, date, status, dayData } = info;
+  const cfg = getStatusStyle(status);
+  const res = dayData?.reservation;
+  const d = new Date(date + 'T12:00:00');
+  const dateLabel = d.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' });
+
+  return (
+    <div style={{
+      position: 'fixed',
+      top: position.y,
+      left: position.x,
+      zIndex: 9999,
+      background: '#1e293b',
+      border: '1px solid #475569',
+      borderRadius: 10,
+      boxShadow: '0 12px 40px rgba(0,0,0,0.5)',
+      minWidth: 260,
+      maxWidth: 320,
+      pointerEvents: 'none',
+      animation: 'fadeIn 0.15s ease'
+    }}>
+      {/* Header con color del estado */}
+      <div style={{
+        background: cfg.bg,
+        color: cfg.textColor,
+        padding: '8px 14px',
+        borderRadius: '10px 10px 0 0',
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        fontWeight: 600,
+        fontSize: 13
+      }}>
+        <span>{cfg.icon} {cfg.label}</span>
+        <span style={{ opacity: 0.8, fontSize: 11 }}>#{room.roomNumber} · {room.roomType}</span>
+      </div>
+
+      <div style={{ padding: '10px 14px', fontSize: 12, color: '#cbd5e1', lineHeight: 1.7 }}>
+        {/* Fecha */}
+        <div style={{ color: '#94a3b8', fontSize: 11, textTransform: 'capitalize', marginBottom: 6 }}>
+          📅 {dateLabel}
+        </div>
+
+        {/* Datos de reserva */}
+        {res && res.guest && (
+          <div style={{ background: '#0f172a', borderRadius: 6, padding: '8px 10px', marginBottom: 6 }}>
+            <div style={{ fontWeight: 600, color: '#e2e8f0', fontSize: 13, marginBottom: 2 }}>
+              👤 {res.guest}
+            </div>
+            {res.dni && <div style={{ color: '#94a3b8' }}>DNI: {res.dni}</div>}
+            {res.email && <div style={{ color: '#94a3b8' }}>✉️ {res.email}</div>}
+            {res.phone && <div style={{ color: '#94a3b8' }}>📱 {res.phone}</div>}
+            {res.checkIn && res.checkOut && (
+              <div style={{ color: '#60a5fa', marginTop: 4, fontSize: 11 }}>
+                🗓️ {res.checkIn} → {res.checkOut}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Limpieza */}
+        {(room.pendingHousekeeping || room.lastCleaning) && (
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', fontSize: 11 }}>
+            {room.pendingHousekeeping && (
+              <span style={{ color: '#a78bfa', background: '#1e1b4b', padding: '2px 8px', borderRadius: 4 }}>
+                🧹 Limpieza pendiente
+              </span>
+            )}
+            {room.lastCleaning && (
+              <span style={{ color: '#94a3b8' }}>
+                Última: {new Date(room.lastCleaning).toLocaleDateString('es-ES')}
+              </span>
+            )}
+          </div>
+        )}
+
+        {/* Mantenimiento */}
+        {(status === 'mantenimiento' || room.currentMaintenance) && (
+          <div style={{ color: '#fbbf24', fontSize: 11, marginTop: 4 }}>
+            🔧 {room.currentMaintenance?.description || 'En mantenimiento'}
+          </div>
+        )}
+
+        {/* Fuera de servicio */}
+        {status === 'fuera_de_servicio' && (
+          <div style={{ color: '#9ca3af', fontSize: 11, marginTop: 4 }}>
+            ✕ Habitación inhabilitada
+          </div>
+        )}
+
+        {/* Info habitación */}
+        <div style={{ borderTop: '1px solid #334155', marginTop: 6, paddingTop: 6, display: 'flex', gap: 12, color: '#64748b', fontSize: 11 }}>
+          {room.roomFloor && <span>Piso {room.roomFloor}</span>}
+          {room.roomPrice && <span>${room.roomPrice}/noche</span>}
+        </div>
+      </div>
+    </div>
+  );
+};
 
 export const RoomCalendar = ({ startDate: startDateProp, days = 14 }) => {
   const startDate = startDateProp || new Date().toISOString().slice(0, 10);
   const { data, loading, error, refetch } = useCalendarData(startDate, days);
   const [selectedRoom, setSelectedRoom] = useState(null);
+  const [popover, setPopover] = useState(null);
+  const popoverTimeout = useRef(null);
 
   useWebSocket({
     onMessage: (payload) => {
@@ -37,6 +140,25 @@ export const RoomCalendar = ({ startDate: startDateProp, days = 14 }) => {
     onError: (msg) => console.error('WS Error:', msg),
     onClose: () => console.log('WS Closed')
   });
+
+  const handleCellEnter = useCallback((e, room, date, status, dayData) => {
+    clearTimeout(popoverTimeout.current);
+    const rect = e.currentTarget.getBoundingClientRect();
+    // Posicionar el popover: arriba de la celda si hay espacio, sino abajo
+    const popY = rect.top > 280 ? rect.top - 10 : rect.bottom + 10;
+    const popX = Math.min(rect.left, window.innerWidth - 330);
+    popoverTimeout.current = setTimeout(() => {
+      setPopover({
+        info: { room, date, status, dayData },
+        position: { x: Math.max(10, popX), y: popY > 280 ? popY : rect.bottom + 10 }
+      });
+    }, 250); // delay breve para evitar parpadeo
+  }, []);
+
+  const handleCellLeave = useCallback(() => {
+    clearTimeout(popoverTimeout.current);
+    setPopover(null);
+  }, []);
 
   const dates = useMemo(() => {
     const arr = [];
@@ -130,8 +252,9 @@ export const RoomCalendar = ({ startDate: startDateProp, days = 14 }) => {
                   return (
                     <td
                       key={date}
-                      title={`#${room.roomNumber} — ${date}: ${cfg.label}`}
-                      onClick={() => setSelectedRoom({ ...room, selectedDate: date, selectedStatus: status })}
+                      onClick={() => setSelectedRoom({ ...room, selectedDate: date, selectedStatus: status, dayData })}
+                      onMouseEnter={(e) => handleCellEnter(e, room, date, status, dayData)}
+                      onMouseLeave={handleCellLeave}
                       style={{
                         background: cfg.bg,
                         textAlign: 'center',
@@ -143,13 +266,11 @@ export const RoomCalendar = ({ startDate: startDateProp, days = 14 }) => {
                         outlineOffset: -2,
                         position: 'relative'
                       }}
-                      onMouseEnter={e => e.currentTarget.style.filter = 'brightness(1.25)'}
-                      onMouseLeave={e => e.currentTarget.style.filter = 'none'}
                     >
                       <div style={{ fontSize: 14, lineHeight: 1 }}>{cfg.icon}</div>
-                      {dayData?.reservation?.user && (
+                      {dayData?.reservation?.guest && (
                         <div style={{ fontSize: 9, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 50, margin: '0 auto' }}>
-                          {dayData.reservation.user}
+                          {dayData.reservation.guest.split(' ')[0]}
                         </div>
                       )}
                     </td>
@@ -160,6 +281,9 @@ export const RoomCalendar = ({ startDate: startDateProp, days = 14 }) => {
           </tbody>
         </table>
       </div>
+
+      {/* Popover flotante */}
+      {popover && <CellPopover info={popover.info} position={popover.position} />}
 
       {selectedRoom && (
         <div style={{ marginTop: 16, padding: 16, background: '#1f2937', borderRadius: 8, color: '#e5e7eb', border: '1px solid #374151' }}>
@@ -178,22 +302,29 @@ export const RoomCalendar = ({ startDate: startDateProp, days = 14 }) => {
               <span><strong>Fecha:</strong> {selectedRoom.selectedDate}</span>
               <span>
                 <strong>Estado:</strong>{' '}
-                <span style={{
-                  color: getStatusStyle(selectedRoom.selectedStatus).bg,
-                  fontWeight: 600
-                }}>
+                <span style={{ color: getStatusStyle(selectedRoom.selectedStatus).bg, fontWeight: 600 }}>
                   {getStatusStyle(selectedRoom.selectedStatus).label}
                 </span>
               </span>
-              {selectedRoom.roomStatus && <span><strong>Estado hab.:</strong> {selectedRoom.roomStatus}</span>}
-              {selectedRoom.pendingHousekeeping && <span style={{ color: '#a855f7' }}>🧹 Limpieza pendiente</span>}
-              {selectedRoom.lastCleaning && (
-                <span><strong>Última limpieza:</strong> {new Date(selectedRoom.lastCleaning).toLocaleDateString('es-ES')}</span>
+              {selectedRoom.dayData?.reservation?.guest && (
+                <span><strong>Huésped:</strong> {selectedRoom.dayData.reservation.guest}</span>
               )}
+              {selectedRoom.dayData?.reservation?.checkIn && (
+                <span><strong>Estadía:</strong> {selectedRoom.dayData.reservation.checkIn} → {selectedRoom.dayData.reservation.checkOut}</span>
+              )}
+              {selectedRoom.pendingHousekeeping && <span style={{ color: '#a855f7' }}>🧹 Limpieza pendiente</span>}
             </div>
           )}
         </div>
       )}
+
+      {/* CSS animation para popover */}
+      <style>{`
+        @keyframes fadeIn {
+          from { opacity: 0; transform: translateY(4px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+      `}</style>
     </div>
   );
 };
