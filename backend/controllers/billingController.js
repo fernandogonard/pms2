@@ -219,19 +219,18 @@ const getReservationBilling = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Reserva no encontrada' });
     }
     
-    // Si no tiene información de precios, calcularla
-    if (!reservation.pricing || !reservation.pricing.total) {
-      const pricing = await BillingService.calculateReservationPricing({
+    // Si no tiene información de precios, calcularla (sin persistir en GET)
+    let pricing = reservation.pricing;
+    if (!pricing || !pricing.total) {
+      pricing = await BillingService.calculateReservationPricing({
         tipo: reservation.tipo,
         cantidad: reservation.cantidad,
         checkIn: reservation.checkIn,
         checkOut: reservation.checkOut
       });
-      reservation.pricing = pricing;
-      await reservation.save();
     }
     
-    const total = reservation.pricing.total || 0;
+    const total = pricing.total || 0;
     const paid = reservation.payment.amountPaid || 0;
     
     res.json({
@@ -252,7 +251,7 @@ const getReservationBilling = async (req, res) => {
           status: reservation.status,
           rooms: reservation.room
         },
-        pricing: reservation.pricing,
+        pricing: pricing,
         extras: reservation.extras || [],
         payment: reservation.payment,
         paymentHistory: reservation.paymentHistory || [],

@@ -699,6 +699,13 @@ exports.setRoomStatus = async (req, res) => {
     const room = await Room.findById(req.params.id);
     if (!room) return res.status(404).json({ message: 'Habitación no encontrada' });
     const prev = room.status;
+
+    // Validar transición de estado permitida
+    const transition = validateRoomStateTransition(prev, status);
+    if (!transition.valid) {
+      return res.status(400).json({ message: transition.message });
+    }
+
     room.status = status;
     if (status === 'disponible') {
       room.lastCleaning = new Date();

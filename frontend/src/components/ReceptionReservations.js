@@ -56,14 +56,23 @@ const ReceptionReservations = () => {
     setTimeout(() => loadData(), 1000);
   }, [loadData]);
 
-  // Cambiar estado de reserva
+  // Cambiar estado de reserva usando endpoints dedicados
   const handleStatus = useCallback(async (id, status) => {
     try {
-      const res = await apiFetch(`/api/reservations/${id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status })
-      });
+      let res;
+      if (status === 'checkin' || status === 'checkout') {
+        // Usar endpoints dedicados que manejan asignación/liberación de habitaciones
+        res = await apiFetch(`/api/reservations/${id}/${status}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' }
+        });
+      } else {
+        res = await apiFetch(`/api/reservations/${id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status })
+        });
+      }
 
       if (!res.ok) {
         const data = await res.json();

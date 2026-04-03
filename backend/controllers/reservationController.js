@@ -295,97 +295,114 @@ const updateReservation = async (req, res) => {
 // Asignar una habitación concreta a una reserva (admin/recepcionista)
 const assignRoomToReservation = async (req, res) => {
   const reservationId = req.params.id;
-  const lockKey = `reservation:${reservationId}`;
+  let { room } = req.body;
+  if (!room) {
+    return res.status(400).json({ message: 'Debe indicar room (id) o array de ids en el body.' });
+  }
+  if (!Array.isArray(room)) room = [room];
+
+  // Lockear por room_id (ordenados para evitar deadlocks) en lugar de reservation_id
+  const sortedRoomIds = [...room].map(r => r.toString()).sort();
+  const lockKeys = sortedRoomIds.map(id => `room:${id}`);
+  const acquiredLocks = [];
+
   try {
-    await lockService.withLock(lockKey, 5000, async () => {
-      let { room } = req.body;
-      if (!room) {
-        return res.status(400).json({ message: 'Debe indicar room (id) o array de ids en el body.' });
-      }
-      if (!Array.isArray(room)) room = [room];
-
-      const reservation = await Reservation.findById(reservationId);
-      if (!reservation) {
-        return res.status(404).json({ message: 'Reserva no encontrada.' });
-      }
-
-      const requested = room.length;
-      const allowed = reservation.cantidad || 1;
-      if (requested > allowed) {
-        return res.status(400).json({ message: `Se intentan asignar ${requested} habitaciones pero la reserva solicita ${allowed}.` });
-      }
-
-      const roomsToUpdate = [];
-      for (const rId of room) {
-        const rm = await Room.findById(rId);
-        if (!rm) {
-          return res.status(404).json({ message: `Habitación ${rId} no encontrada.` });
+    // Adquirir locks para todas las habitaciones
+    for (const lockKey of lockKeys) {
+      const owner = `${process.pid}-${require('crypto').randomUUID()}`;
+      const lock = await lockService.acquireLock(lockKey, 5000, owner);
+      if (!lock) {
+        // Liberar locks ya adquiridos
+        for (const acquired of acquiredLocks) {
+          await lockService.releaseLock(acquired.key, acquired.owner).catch(() => {});
         }
-
-        if (['mantenimiento', 'limpieza'].includes(rm.status)) {
-          return res.status(400).json({ message: `La habitación ${rm.number} no está disponible para asignación (status ${rm.status}).` });
-        }
-
-        const overlap = await Reservation.findOne({
-          _id: { $ne: reservationId },
-          room: rm._id,
-          status: { $ne: 'checkout' },
-          $or: [
-            { checkIn: { $lt: new Date(reservation.checkOut) }, checkOut: { $gt: new Date(reservation.checkIn) } }
-          ]
-        });
-        if (overlap) {
-          return res.status(409).json({ message: `La habitación ${rm.number} ya está reservada en esas fechas.` });
-        }
-
-        roomsToUpdate.push(rm);
+        return res.status(423).json({ message: 'Otra operación está modificando una de las habitaciones. Intenta en unos segundos.' });
       }
-
-      const existingRooms = Array.isArray(reservation.room) ? reservation.room.map(r => r.toString()) : (reservation.room ? [reservation.room.toString()] : []);
-      const incomingRooms = room.map(r => r.toString());
-      const finalRoomIds = Array.from(new Set([...existingRooms, ...incomingRooms]));
-
-      if (finalRoomIds.length > allowed) {
-        return res.status(400).json({ message: `La asignación resultaría en ${finalRoomIds.length} habitaciones pero la reserva solicita ${allowed}.` });
-      }
-
-      reservation.room = finalRoomIds;
-
-      const checkInDate = new Date(reservation.checkIn);
-      checkInDate.setHours(0,0,0,0);
-      const today = new Date(); today.setHours(0,0,0,0);
-      if (today >= checkInDate) reservation.status = 'checkin';
-
-      await reservation.save();
-
-      const existingSet = new Set(existingRooms);
-      for (const rm of roomsToUpdate) {
-        if (!existingSet.has(rm._id.toString())) {
-          rm.status = 'ocupada';
-          await rm.save();
-        }
-      }
-
-      const updatedReservation = await Reservation.findById(reservationId).populate('room client');
-
-      const wss = req.app.get('wss');
-      if (wss) {
-        wss.clients.forEach(client => {
-          if (client.readyState === 1) {
-            client.send(JSON.stringify({ type: 'reservation_updated', reservation: updatedReservation }));
-          }
-        });
-      }
-
-      return res.status(200).json(updatedReservation);
-    });
-    return;
-  } catch (error) {
-    if (error && error.name === 'LockBusyError') {
-      return res.status(423).json({ message: 'Otra operación está modificando esta reserva. Intenta en unos segundos.' });
+      acquiredLocks.push({ key: lockKey, owner });
     }
+
+    const reservation = await Reservation.findById(reservationId);
+    if (!reservation) {
+      return res.status(404).json({ message: 'Reserva no encontrada.' });
+    }
+
+    const requested = room.length;
+    const allowed = reservation.cantidad || 1;
+    if (requested > allowed) {
+      return res.status(400).json({ message: `Se intentan asignar ${requested} habitaciones pero la reserva solicita ${allowed}.` });
+    }
+
+    const roomsToUpdate = [];
+    for (const rId of room) {
+      const rm = await Room.findById(rId);
+      if (!rm) {
+        return res.status(404).json({ message: `Habitación ${rId} no encontrada.` });
+      }
+
+      if (['mantenimiento', 'limpieza'].includes(rm.status)) {
+        return res.status(400).json({ message: `La habitación ${rm.number} no está disponible para asignación (status ${rm.status}).` });
+      }
+
+      const overlap = await Reservation.findOne({
+        _id: { $ne: reservationId },
+        room: rm._id,
+        status: { $ne: 'checkout' },
+        $or: [
+          { checkIn: { $lt: new Date(reservation.checkOut) }, checkOut: { $gt: new Date(reservation.checkIn) } }
+        ]
+      });
+      if (overlap) {
+        return res.status(409).json({ message: `La habitación ${rm.number} ya está reservada en esas fechas.` });
+      }
+
+      roomsToUpdate.push(rm);
+    }
+
+    const existingRooms = Array.isArray(reservation.room) ? reservation.room.map(r => r.toString()) : (reservation.room ? [reservation.room.toString()] : []);
+    const incomingRooms = room.map(r => r.toString());
+    const finalRoomIds = Array.from(new Set([...existingRooms, ...incomingRooms]));
+
+    if (finalRoomIds.length > allowed) {
+      return res.status(400).json({ message: `La asignación resultaría en ${finalRoomIds.length} habitaciones pero la reserva solicita ${allowed}.` });
+    }
+
+    reservation.room = finalRoomIds;
+
+    const checkInDate = new Date(reservation.checkIn);
+    checkInDate.setHours(0,0,0,0);
+    const today = new Date(); today.setHours(0,0,0,0);
+    if (today >= checkInDate) reservation.status = 'checkin';
+
+    await reservation.save();
+
+    const existingSet = new Set(existingRooms);
+    for (const rm of roomsToUpdate) {
+      if (!existingSet.has(rm._id.toString())) {
+        rm.status = 'ocupada';
+        await rm.save();
+      }
+    }
+
+    const updatedReservation = await Reservation.findById(reservationId).populate('room client');
+
+    const wss = req.app.get('wss');
+    if (wss) {
+      wss.clients.forEach(client => {
+        if (client.readyState === 1) {
+          client.send(JSON.stringify({ type: 'reservation_updated', reservation: updatedReservation }));
+        }
+      });
+    }
+
+    return res.status(200).json(updatedReservation);
+  } catch (error) {
     logger.error('assignRoomToReservation error', error);
     return res.status(500).json({ message: 'Error al asignar habitación.', error: (error && error.message) ? error.message : error });
+  } finally {
+    // Siempre liberar todos los locks adquiridos
+    for (const acquired of acquiredLocks) {
+      await lockService.releaseLock(acquired.key, acquired.owner).catch(() => {});
+    }
   }
 };
 

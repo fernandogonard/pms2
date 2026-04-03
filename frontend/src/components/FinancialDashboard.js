@@ -2,7 +2,6 @@
 // Dashboard financiero con resumen de ingresos y pagos
 
 import React, { useCallback, useEffect, useState } from 'react';
-import useBackendReady from '../hooks/useBackendReady';
 import { apiFetch } from '../utils/api';
 import useSessionGuard from '../hooks/useSessionGuard';
 
@@ -25,10 +24,9 @@ const FinancialDashboard = () => {
     [sessionExpired]
   );
 
-  const { backendReady, backendLoading, backendError } = useBackendReady();
   const loadFinancialData = useCallback(async () => {
-    if (!canFetch || !backendReady) {
-      if (!authLoading && !backendLoading) {
+    if (!canFetch) {
+      if (!authLoading) {
         setSummary(null);
         setPendingInvoices([]);
         setLoading(false);
@@ -59,7 +57,7 @@ const FinancialDashboard = () => {
     } finally {
       setLoading(false);
     }
-  }, [canFetch, authLoading, dateRange, sessionCopy, sessionExpired, backendReady, backendLoading]);
+  }, [canFetch, authLoading, dateRange, sessionCopy, sessionExpired]);
 
   useEffect(() => {
     loadFinancialData();
@@ -73,12 +71,6 @@ const FinancialDashboard = () => {
     return new Date(dateString).toLocaleDateString();
   };
 
-  if (backendLoading) {
-    return <div style={{textAlign:'center',marginTop:40}}><b>Conectando con backend...</b></div>;
-  }
-  if (backendError) {
-    return <div style={{textAlign:'center',marginTop:40,color:'#ef4444'}}><b>{backendError}</b></div>;
-  }
   if (loading) {
     return (
       <div className="financial-dashboard">

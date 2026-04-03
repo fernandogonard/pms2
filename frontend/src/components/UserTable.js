@@ -1,7 +1,6 @@
 // components/UserTable.js
 // Tabla de gestión visual de usuarios (CRUD)
 import React, { useEffect, useState } from 'react';
-import useBackendReady from '../hooks/useBackendReady';
 import { apiFetch } from '../utils/api';
 import useSessionGuard from '../hooks/useSessionGuard';
 
@@ -16,10 +15,9 @@ const UserTable = () => {
   const [success, setSuccess] = useState('');
   const { canFetch, sessionExpired, authLoading } = useSessionGuard();
 
-  const { backendReady, backendLoading, backendError } = useBackendReady();
   // Cargar usuarios
   const fetchUsers = async () => {
-    if (!canFetch || !backendReady) {
+    if (!canFetch) {
       setLoading(false);
       setUsers([]);
       setError(sessionExpired ? 'Tu sesión expiró. Inicia sesión para gestionar usuarios.' : 'Debes iniciar sesión para gestionar usuarios.');
@@ -37,8 +35,8 @@ const UserTable = () => {
   };
 
   useEffect(() => {
-    if (!canFetch || !backendReady) {
-      if (!authLoading && !backendLoading) {
+    if (!canFetch) {
+      if (!authLoading) {
         setLoading(false);
         setUsers([]);
         setError(sessionExpired ? 'Tu sesión expiró. Inicia sesión para gestionar usuarios.' : 'Debes iniciar sesión para gestionar usuarios.');
@@ -46,13 +44,7 @@ const UserTable = () => {
       return;
     }
     fetchUsers();
-  }, [canFetch, sessionExpired, authLoading, backendReady, backendLoading]);
-  if (backendLoading) {
-    return <div style={{textAlign:'center',marginTop:40}}><b>Conectando con backend...</b></div>;
-  }
-  if (backendError) {
-    return <div style={{textAlign:'center',marginTop:40,color:'#ef4444'}}><b>{backendError}</b></div>;
-  }
+  }, [canFetch, sessionExpired, authLoading]);
 
   // Crear o editar usuario
   const handleSubmit = async e => {

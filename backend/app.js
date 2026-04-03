@@ -184,6 +184,20 @@ app.get('/', (req, res) => {
   });
 });
 
+// Health check dedicado con estado de DB (para Railway/monitoring)
+app.get('/health', (req, res) => {
+  const mongoose = require('mongoose');
+  const dbState = mongoose.connection.readyState;
+  const dbStatus = { 0: 'disconnected', 1: 'connected', 2: 'connecting', 3: 'disconnecting' };
+  const isHealthy = dbState === 1;
+  res.status(isHealthy ? 200 : 503).json({
+    status: isHealthy ? 'healthy' : 'unhealthy',
+    uptime: process.uptime(),
+    database: dbStatus[dbState] || 'unknown',
+    timestamp: new Date().toISOString()
+  });
+});
+
 // Middlewares de manejo de errores (deben ir al final)
 const { 
   globalErrorHandler, 
