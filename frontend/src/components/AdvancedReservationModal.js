@@ -1,12 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import Modal from 'react-modal';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
+import { apiFetch } from '../utils/api';
 
 Modal.setAppElement('#root');
 
-
-import { apiFetch } from '../utils/api';
 const API_RESERVATIONS = '/api/reservations';
 
 const AdvancedReservationModal = ({ isOpen, onRequestClose, onClose, onReservationSuccess, afterReservation }) => {
@@ -24,6 +23,9 @@ const AdvancedReservationModal = ({ isOpen, onRequestClose, onClose, onReservati
     notas: ''
   });
   const [loading, setLoading] = useState(false);
+  const submittingRef = useRef(false);
+
+  const todayStr = new Date().toISOString().split('T')[0];
 
   const handleChange = e => {
     setForm({ ...form, [e.target.name]: e.target.value });
@@ -31,9 +33,17 @@ const AdvancedReservationModal = ({ isOpen, onRequestClose, onClose, onReservati
 
   const handleSubmit = async e => {
     e.preventDefault();
+    if (submittingRef.current) return;
+
+    // Validaciones de fecha
+    if (form.checkIn && form.checkOut && form.checkOut <= form.checkIn) {
+      toast.error('La fecha de check-out debe ser posterior al check-in');
+      return;
+    }
+
+    submittingRef.current = true;
     setLoading(true);
     try {
-      // Enviar reserva a la API real
       const res = await apiFetch(API_RESERVATIONS, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -52,15 +62,16 @@ const AdvancedReservationModal = ({ isOpen, onRequestClose, onClose, onReservati
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || 'Error al crear la reserva');
-      setLoading(false);
       toast.success('Reserva creada con éxito');
       onReservationSuccess && onReservationSuccess();
       afterReservation && afterReservation();
       closeModal();
       setForm({ tipo: 'doble', cantidad: 1, checkIn: '', checkOut: '', nombre: '', apellido: '', dni: '', email: '', whatsapp: '', notas: '' });
     } catch (err) {
-      setLoading(false);
       toast.error(err.message || 'Error al crear la reserva');
+    } finally {
+      setLoading(false);
+      submittingRef.current = false;
     }
   };
 
@@ -78,12 +89,13 @@ const AdvancedReservationModal = ({ isOpen, onRequestClose, onClose, onReservati
             <option value="doble">Doble</option>
             <option value="triple">Triple</option>
             <option value="cuadruple">Cuádruple</option>
+            <option value="suite">Suite</option>
           </select>
-          <input name="cantidad" type="number" min={1} value={form.cantidad} onChange={handleChange} required style={{ width: 70, background: '#2a2a3e', color: '#fff', border: '1px solid #444', borderRadius: 6, padding: '8px 10px' }} placeholder="Cant." />
+          <input name="cantidad" type="number" min={1} max={20} value={form.cantidad} onChange={handleChange} required style={{ width: 70, background: '#2a2a3e', color: '#fff', border: '1px solid #444', borderRadius: 6, padding: '8px 10px' }} placeholder="Cant." />
         </div>
         <div style={{ display: 'flex', gap: 10 }}>
-          <input name="checkIn" type="date" value={form.checkIn} onChange={handleChange} required style={{ flex: 1, background: '#2a2a3e', color: '#fff', border: '1px solid #444', borderRadius: 6, padding: '8px 10px' }} />
-          <input name="checkOut" type="date" value={form.checkOut} onChange={handleChange} required style={{ flex: 1, background: '#2a2a3e', color: '#fff', border: '1px solid #444', borderRadius: 6, padding: '8px 10px' }} />
+          <input name="checkIn" type="date" min={todayStr} value={form.checkIn} onChange={handleChange} required style={{ flex: 1, background: '#2a2a3e', color: '#fff', border: '1px solid #444', borderRadius: 6, padding: '8px 10px' }} />
+          <input name="checkOut" type="date" min={form.checkIn || todayStr} value={form.checkOut} onChange={handleChange} required style={{ flex: 1, background: '#2a2a3e', color: '#fff', border: '1px solid #444', borderRadius: 6, padding: '8px 10px' }} />
         </div>
         <div style={{ display: 'flex', gap: 10 }}>
           <input name="nombre" placeholder="Nombre *" value={form.nombre} onChange={handleChange} required style={{ flex: 1, background: '#2a2a3e', color: '#fff', border: '1px solid #444', borderRadius: 6, padding: '8px 10px' }} />

@@ -24,7 +24,7 @@ class AvailabilityEngine {
       return cached.data;
     }
 
-    const rooms = await Room.find({ active: true }).sort({ number: 1 }).lean();
+    const rooms = await Room.find().sort({ number: 1 }).lean();
     const reservations = await Reservation.find({
       status: { $ne: 'cancelada' },
       checkIn: { $lt: endDate },
@@ -56,12 +56,12 @@ class AvailabilityEngine {
     const endUTC = new Date(startUTC);
     endUTC.setUTCDate(endUTC.getUTCDate() + days);
 
-    const rooms = await Room.find({ active: true }).sort({ number: 1 }).lean();
+    const rooms = await Room.find().sort({ number: 1 }).lean();
     const reservations = await Reservation.find({
       status: { $ne: 'cancelada' },
       checkIn: { $lt: endUTC },
       checkOut: { $gt: startUTC }
-    }).populate('user', 'name email').lean();
+    }).populate('user', 'name email').populate('client', 'nombre apellido email').lean();
 
     const status = rooms.map(room => {
       const roomReservations = reservations.filter(r => {
@@ -83,8 +83,8 @@ class AvailabilityEngine {
           status: resOnDate ? resOnDate.status : 'available',
           reservation: resOnDate ? {
             id: resOnDate._id,
-            user: resOnDate.user ? resOnDate.user.name : resOnDate.name,
-            email: resOnDate.email
+            user: resOnDate.user ? resOnDate.user.name : (resOnDate.client?.nombre || 'Huésped'),
+            email: resOnDate.client?.email || ''
           } : null
         });
       }

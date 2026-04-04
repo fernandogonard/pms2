@@ -717,8 +717,22 @@ exports.setRoomStatus = async (req, res) => {
         room.pendingHousekeeping = 'limpieza_profunda';
         room.pendingHousekeepingAt = new Date();
       }
-    } else if (status === 'mantenimiento' || status === 'ocupada') {
-      // Limpiar tareas de housekeeping pendientes al cambiar a otro estado
+    } else if (status === 'ocupada') {
+      // Verificar que exista una reserva activa para esta habitación
+      const Reservation = require('../models/Reservation');
+      const activeRes = await Reservation.findOne({
+        room: room._id,
+        status: 'checkin'
+      });
+      if (!activeRes) {
+        return res.status(400).json({ 
+          message: `No se puede marcar habitación #${room.number} como ocupada sin una reserva con check-in activo. Use el proceso de check-in.` 
+        });
+      }
+      room.pendingHousekeeping = null;
+      room.pendingHousekeepingAt = null;
+    } else if (status === 'mantenimiento') {
+      // Limpiar tareas de housekeeping pendientes al cambiar a mantenimiento
       room.pendingHousekeeping = null;
       room.pendingHousekeepingAt = null;
     }

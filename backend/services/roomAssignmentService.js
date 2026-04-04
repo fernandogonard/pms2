@@ -181,7 +181,24 @@ async function processCheckout(reservationId, options = {}) {
 
     logger.info(`🚪 Procesando check-out para reserva ${reservationId}`);
 
-    // 🧹 WORKFLOW COMPLETO: checkout → limpieza → disponible
+    // 🔄 Validar transición de estado ANTES de tocar habitaciones
+    const transitionValidation = validateReservationStateTransition(reservation.status, 'checkout');
+    if (!transitionValidation.valid) {
+      throw new Error(`Check-out no permitido: ${transitionValidation.message}`);
+    }
+    
+    const businessRulesValidation = validateReservationBusinessRules(reservation, 'checkout');
+    if (!businessRulesValidation.valid) {
+      throw new Error(`Check-out no permitido: ${businessRulesValidation.message}`);
+    }
+
+    // Actualizar estado a checkout PRIMERO (si falla, rooms intactas)
+    logger.info(`🔄 Reserva ${reservation._id}: ${reservation.status} → checkout`);
+    reservation.status = 'checkout';
+    const saveOptions = session ? { session } : undefined;
+    await reservation.save(saveOptions);
+
+    // 🧹 WORKFLOW COMPLETO: checkout → limpieza → disponible (solo si save exitoso)
     if (reservation.room && reservation.room.length > 0) {
       for (const roomId of reservation.room) {
         const updateOptions = session ? { session } : undefined;
@@ -196,23 +213,6 @@ async function processCheckout(reservationId, options = {}) {
         logger.info(`   🧹 Habitación #${room.number} marcada para LIMPIEZA en check-out`);
       }
     }
-
-    // 🔄 Validar transición de estado antes del check-out
-    const transitionValidation = validateReservationStateTransition(reservation.status, 'checkout');
-    if (!transitionValidation.valid) {
-      throw new Error(`Check-out no permitido: ${transitionValidation.message}`);
-    }
-    
-    const businessRulesValidation = validateReservationBusinessRules(reservation, 'checkout');
-    if (!businessRulesValidation.valid) {
-      throw new Error(`Check-out no permitido: ${businessRulesValidation.message}`);
-    }
-    
-    // Actualizar estado a checkout
-    logger.info(`🔄 Reserva ${reservation._id}: ${reservation.status} → checkout`);
-    reservation.status = 'checkout';
-    const saveOptions = session ? { session } : undefined;
-    await reservation.save(saveOptions);
 
     const finalQuery = Reservation.findById(reservationId).populate('room client');
     if (session) finalQuery.session(session);

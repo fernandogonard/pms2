@@ -16,6 +16,15 @@ class BillingService {
     try {
       const { tipo, cantidad, checkIn, checkOut } = reservationData;
       
+      // Validar fechas PRIMERO (antes de consultar DB)
+      const checkInDate = new Date(checkIn);
+      const checkOutDate = new Date(checkOut);
+      const diffTime = checkOutDate - checkInDate;
+      if (diffTime <= 0) {
+        throw new Error('La fecha de check-out debe ser posterior al check-in');
+      }
+      const totalNights = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      
       // Usar Room.price como fuente primaria (es lo que se muestra y edita en admin)
       // Ordenar por price desc para resultado determinístico
       const roomSample = await Room.findOne({ type: tipo }).sort({ price: -1 });
@@ -38,17 +47,11 @@ class BillingService {
         }
       }
       
-      // Calcular noches
-      const checkInDate = new Date(checkIn);
-      const checkOutDate = new Date(checkOut);
-      const diffTime = Math.abs(checkOutDate - checkInDate);
-      const totalNights = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) || 1;
-      
-      // Calcular precios
+      // Calcular precios con redondeo a centavos
       const pricePerNight = roomType.basePrice;
-      const subtotal = pricePerNight * totalNights * cantidad;
+      const subtotal = Math.round(pricePerNight * totalNights * cantidad * 100) / 100;
       const taxes = Math.round(subtotal * 0.21 * 100) / 100; // IVA 21% redondeado
-      const total = subtotal + taxes;
+      const total = Math.round((subtotal + taxes) * 100) / 100;
       
       return {
         pricePerNight,
@@ -108,7 +111,7 @@ class BillingService {
     const day = String(date.getDate()).padStart(2, '0');
     const hour = String(date.getHours()).padStart(2, '0');
     const minute = String(date.getMinutes()).padStart(2, '0');
-    const random = Math.floor(Math.random() * 100).toString().padStart(2, '0');
+    const random = Math.floor(Math.random() * 1000000).toString().padStart(6, '0');
     
     return `INV-${year}${month}${day}${hour}${minute}-${random}`;
   }
@@ -150,7 +153,7 @@ class BillingService {
       throw new Error('El monto debe ser mayor a 0');
     }
 
-    const lockKey = `payment:${reservationId}`;
+    const lockKey = `billing:${reservationId}`;
 
     return await lockService.withLock(lockKey, 10000, async () => {
       const reservation = await Reservation.findById(reservationId);
@@ -334,12 +337,12 @@ class BillingService {
       });
 
       // Recalcular total sumando extras
-      const extrasTotal = reservation.extras.reduce((sum, e) => sum + e.amount, 0);
+      const extrasTotal = Math.round(reservation.extras.reduce((sum, e) => sum + e.amount, 0) * 100) / 100;
       if (reservation.pricing) {
         const subtotal = reservation.pricing.subtotal || 0;
         const taxes = reservation.pricing.taxes || 0;
         reservation.pricing.extrasTotal = extrasTotal;
-        reservation.pricing.total = subtotal + taxes + extrasTotal;
+        reservation.pricing.total = Math.round((subtotal + taxes + extrasTotal) * 100) / 100;
       }
 
       // Actualizar estado de pago si el nuevo total cambia el saldo

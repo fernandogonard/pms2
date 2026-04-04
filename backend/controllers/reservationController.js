@@ -262,37 +262,84 @@ const updateReservation = async (req, res) => {
         message: 'No tienes permisos para modificar esta reserva.' 
       });
     }
-    
-    const { room, checkIn, checkOut } = req.body;
-    // Validar solapamiento excepto con la propia reserva
-    const overlap = await Reservation.findOne({
-      _id: { $ne: req.params.id },
-      room,
-      $or: [
-        { checkIn: { $lt: new Date(checkOut) }, checkOut: { $gt: new Date(checkIn) } }
-      ]
-    });
-    if (overlap) {
-      return res.status(409).json({ message: 'La habitación ya está reservada en esas fechas.' });
+
+    // 🔒 WHITELIST de campos editables — nunca pasar req.body directo
+    const ALLOWED_FIELDS = ['checkIn', 'checkOut', 'notas', 'nombre', 'apellido', 'dni', 'email', 'whatsapp'];
+    const ADMIN_FIELDS = ['tipo', 'cantidad']; // solo admin/recepcionista
+    const updates = {};
+
+    for (const field of ALLOWED_FIELDS) {
+      if (req.body[field] !== undefined) updates[field] = req.body[field];
     }
-    const updatedReservation = await Reservation.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    if (isAdminOrReceptionist) {
+      for (const field of ADMIN_FIELDS) {
+        if (req.body[field] !== undefined) updates[field] = req.body[field];
+      }
+    }
+
+    // Validar fechas si se modifican
+    const newCheckIn = updates.checkIn ? new Date(updates.checkIn) : new Date(reservation.checkIn);
+    const newCheckOut = updates.checkOut ? new Date(updates.checkOut) : new Date(reservation.checkOut);
+    if (newCheckOut <= newCheckIn) {
+      return res.status(400).json({ message: 'La fecha de check-out debe ser posterior al check-in.' });
+    }
+
+    // No permitir cambiar estado/pricing/payment vía este endpoint
+    // (usar checkin/checkout/payment endpoints dedicados)
+
+    // Validar solapamiento si la reserva tiene habitaciones asignadas
+    if (reservation.room && reservation.room.length > 0 && (updates.checkIn || updates.checkOut)) {
+      for (const roomId of reservation.room) {
+        const overlap = await Reservation.findOne({
+          _id: { $ne: req.params.id },
+          room: roomId,
+          status: { $nin: ['checkout', 'cancelada'] },
+          checkIn: { $lt: newCheckOut },
+          checkOut: { $gt: newCheckIn }
+        });
+        if (overlap) {
+          return res.status(409).json({ message: 'La habitación ya está reservada en esas fechas.' });
+        }
+      }
+    }
+
+    // Aplicar updates con $set (nunca overwrite completo)
+    const updatedReservation = await Reservation.findByIdAndUpdate(
+      req.params.id,
+      { $set: updates },
+      { new: true, runValidators: true }
+    ).populate('room client');
+
     if (!updatedReservation) return res.status(404).json({ message: 'Error al actualizar reserva.' });
+
+    // Recalcular pricing si se cambiaron fechas o tipo
+    let finalReservation = updatedReservation;
+    if (updates.checkIn || updates.checkOut || updates.tipo || updates.cantidad) {
+      try {
+        finalReservation = await BillingService.updateReservationPricing(updatedReservation._id);
+        // Repoblar refs perdidas en el save de pricing
+        finalReservation = await Reservation.findById(finalReservation._id).populate('room client');
+      } catch (pricingErr) {
+        logger.warn('No se pudo recalcular pricing tras update:', pricingErr.message);
+      }
+    }
+
     // Emitir evento WebSocket
     const wss = req.app.get('wss');
     if (wss) {
       wss.clients.forEach(client => {
         if (client.readyState === 1) {
-          client.send(JSON.stringify({ type: 'reservation_updated', reservation: updatedReservation }));
+          client.send(JSON.stringify({ type: 'reservation_updated', reservation: finalReservation }));
         }
       });
     }
-    res.json(updatedReservation);
+    res.json(finalReservation);
   } catch (error) {
-    res.status(500).json({ message: 'Error al actualizar reserva.', error });
+    res.status(500).json({ message: 'Error al actualizar reserva.', error: error.message });
   }
 };
 
-// Asignar una habitación concreta a una reserva (admin/recepcionista)
+// Asignar una habitación concreta a una reserva (admin/recepcionista) — ACID + locks
 const assignRoomToReservation = async (req, res) => {
   const reservationId = req.params.id;
   let { room } = req.body;
@@ -301,10 +348,11 @@ const assignRoomToReservation = async (req, res) => {
   }
   if (!Array.isArray(room)) room = [room];
 
-  // Lockear por room_id (ordenados para evitar deadlocks) en lugar de reservation_id
+  // Lockear por room_id (ordenados para evitar deadlocks)
   const sortedRoomIds = [...room].map(r => r.toString()).sort();
   const lockKeys = sortedRoomIds.map(id => `room:${id}`);
   const acquiredLocks = [];
+  const session = await mongoose.startSession();
 
   try {
     // Adquirir locks para todas las habitaciones
@@ -321,37 +369,45 @@ const assignRoomToReservation = async (req, res) => {
       acquiredLocks.push({ key: lockKey, owner });
     }
 
-    const reservation = await Reservation.findById(reservationId);
+    // Iniciar transacción DESPUÉS de adquirir locks
+    session.startTransaction();
+
+    const reservation = await Reservation.findById(reservationId).session(session);
     if (!reservation) {
+      await session.abortTransaction();
       return res.status(404).json({ message: 'Reserva no encontrada.' });
     }
 
     const requested = room.length;
     const allowed = reservation.cantidad || 1;
     if (requested > allowed) {
+      await session.abortTransaction();
       return res.status(400).json({ message: `Se intentan asignar ${requested} habitaciones pero la reserva solicita ${allowed}.` });
     }
 
     const roomsToUpdate = [];
     for (const rId of room) {
-      const rm = await Room.findById(rId);
+      const rm = await Room.findById(rId).session(session);
       if (!rm) {
+        await session.abortTransaction();
         return res.status(404).json({ message: `Habitación ${rId} no encontrada.` });
       }
 
       if (['mantenimiento', 'limpieza'].includes(rm.status)) {
+        await session.abortTransaction();
         return res.status(400).json({ message: `La habitación ${rm.number} no está disponible para asignación (status ${rm.status}).` });
       }
 
       const overlap = await Reservation.findOne({
         _id: { $ne: reservationId },
         room: rm._id,
-        status: { $ne: 'checkout' },
+        status: { $nin: ['checkout', 'cancelada'] },
         $or: [
           { checkIn: { $lt: new Date(reservation.checkOut) }, checkOut: { $gt: new Date(reservation.checkIn) } }
         ]
-      });
+      }).session(session);
       if (overlap) {
+        await session.abortTransaction();
         return res.status(409).json({ message: `La habitación ${rm.number} ya está reservada en esas fechas.` });
       }
 
@@ -363,6 +419,7 @@ const assignRoomToReservation = async (req, res) => {
     const finalRoomIds = Array.from(new Set([...existingRooms, ...incomingRooms]));
 
     if (finalRoomIds.length > allowed) {
+      await session.abortTransaction();
       return res.status(400).json({ message: `La asignación resultaría en ${finalRoomIds.length} habitaciones pero la reserva solicita ${allowed}.` });
     }
 
@@ -373,16 +430,19 @@ const assignRoomToReservation = async (req, res) => {
     const today = new Date(); today.setHours(0,0,0,0);
     if (today >= checkInDate) reservation.status = 'checkin';
 
-    await reservation.save();
+    await reservation.save({ session });
 
     const existingSet = new Set(existingRooms);
     for (const rm of roomsToUpdate) {
       if (!existingSet.has(rm._id.toString())) {
         rm.status = 'ocupada';
-        await rm.save();
+        await rm.save({ session });
       }
     }
 
+    await session.commitTransaction();
+
+    // Lectura final y WebSocket fuera de la transacción
     const updatedReservation = await Reservation.findById(reservationId).populate('room client');
 
     const wss = req.app.get('wss');
@@ -396,9 +456,11 @@ const assignRoomToReservation = async (req, res) => {
 
     return res.status(200).json(updatedReservation);
   } catch (error) {
+    await session.abortTransaction().catch(() => {});
     logger.error('assignRoomToReservation error', error);
     return res.status(500).json({ message: 'Error al asignar habitación.', error: (error && error.message) ? error.message : error });
   } finally {
+    session.endSession();
     // Siempre liberar todos los locks adquiridos
     for (const acquired of acquiredLocks) {
       await lockService.releaseLock(acquired.key, acquired.owner).catch(() => {});
@@ -406,87 +468,129 @@ const assignRoomToReservation = async (req, res) => {
   }
 };
 
-// Desasignar habitaciones de una reserva (admin/recepcionista)
+// Desasignar habitaciones de una reserva (admin/recepcionista) — ACID + locks
 const unassignRoomsFromReservation = async (req, res) => {
+  const reservationId = req.params.id;
+  let { rooms } = req.body;
+  const acquiredLocks = [];
+  const session = await mongoose.startSession();
+
   try {
-    const reservationId = req.params.id;
-    let { rooms } = req.body;
-    
     logger.info(`[API] unassignRoomsFromReservation called for reservation ${reservationId}`);
-    
-    const reservation = await Reservation.findById(reservationId).populate('room');
-    if (!reservation) {
+
+    // Lectura previa fuera de transacción para determinar qué habitaciones lockear
+    const reservationPreCheck = await Reservation.findById(reservationId).populate('room');
+    if (!reservationPreCheck) {
       return res.status(404).json({ message: 'Reserva no encontrada.' });
     }
-    
-    logger.info(`[API] Reserva actual tiene ${reservation.room ? reservation.room.length : 0} habitaciones asignadas`);
-    
-    if (!reservation.room || reservation.room.length === 0) {
+
+    if (!reservationPreCheck.room || reservationPreCheck.room.length === 0) {
       return res.status(400).json({ message: 'La reserva no tiene habitaciones asignadas para desasignar.' });
     }
-    
+
     if (!rooms || rooms.length === 0) {
-      rooms = reservation.room.map(r => r._id.toString());
+      rooms = reservationPreCheck.room.map(r => r._id.toString());
       logger.info(`[API] Desasignando TODAS las habitaciones: [${rooms.join(', ')}]`);
     } else {
       logger.info(`[API] Desasignando habitaciones específicas: [${rooms.join(', ')}]`);
     }
-    
-    const assignedRoomIds = reservation.room.map(r => r._id.toString());
+
+    // Validar que las habitaciones pertenecen a la reserva (pre-check)
+    const assignedRoomIds = reservationPreCheck.room.map(r => r._id.toString());
     const invalidRooms = rooms.filter(roomId => !assignedRoomIds.includes(roomId));
-    
     if (invalidRooms.length > 0) {
-      return res.status(400).json({ 
-        message: `Las siguientes habitaciones no están asignadas a esta reserva: ${invalidRooms.join(', ')}` 
+      return res.status(400).json({
+        message: `Las siguientes habitaciones no están asignadas a esta reserva: ${invalidRooms.join(', ')}`
       });
     }
-    
-    const remainingRooms = assignedRoomIds.filter(roomId => !rooms.includes(roomId));
+
+    // Adquirir locks por room_id (ordenados para evitar deadlocks)
+    const sortedRoomIds = [...rooms].map(r => r.toString()).sort();
+    for (const roomId of sortedRoomIds) {
+      const lockKey = `room:${roomId}`;
+      const owner = `${process.pid}-${require('crypto').randomUUID()}`;
+      const lock = await lockService.acquireLock(lockKey, 5000, owner);
+      if (!lock) {
+        for (const acquired of acquiredLocks) {
+          await lockService.releaseLock(acquired.key, acquired.owner).catch(() => {});
+        }
+        return res.status(423).json({ message: 'Otra operación está modificando una de las habitaciones. Intenta en unos segundos.' });
+      }
+      acquiredLocks.push({ key: lockKey, owner });
+    }
+
+    // Iniciar transacción DESPUÉS de adquirir locks
+    session.startTransaction();
+
+    // Re-leer reserva DENTRO de la transacción para consistencia
+    const reservation = await Reservation.findById(reservationId).populate('room').session(session);
+    if (!reservation) {
+      await session.abortTransaction();
+      return res.status(404).json({ message: 'Reserva no encontrada.' });
+    }
+
+    const assignedIds = reservation.room.map(r => r._id.toString());
+    const remainingRooms = assignedIds.filter(roomId => !rooms.includes(roomId));
+
+    // Guardar status original ANTES de mutarlo (para decidir limpieza vs disponible)
+    const originalStatus = reservation.status;
     reservation.room = remainingRooms;
-    
+
     if (remainingRooms.length === 0) {
       logger.info(`[API] Todas las habitaciones desasignadas - convirtiendo a reserva virtual`);
       reservation.status = 'reservada';
     }
-    
-    await reservation.save();
-    
+
+    await reservation.save({ session });
+
     for (const roomId of rooms) {
-      try {
-        const room = await Room.findById(roomId);
-        if (room && room.status === 'ocupada') {
+      const room = await Room.findById(roomId).session(session);
+      if (room && room.status === 'ocupada') {
+        // Usar status ORIGINAL para decidir workflow correcto
+        if (originalStatus === 'checkin') {
+          room.status = 'limpieza';
+          room.pendingHousekeeping = 'limpieza_checkout';
+          room.pendingHousekeepingAt = new Date();
+        } else {
           room.status = 'disponible';
-          await room.save();
-          logger.info(`[API] Habitación ${room.number} marcada como disponible`);
         }
-      } catch (error) {
-        logger.error(`[API] Error actualizando habitación ${roomId}:`, error);
+        await room.save({ session });
+        logger.info(`[API] Habitación ${room.number} → ${room.status}`);
       }
     }
-    
+
+    await session.commitTransaction();
+
+    // WebSocket y respuesta fuera de la transacción
     const wss = req.app.get('wss');
     if (wss) {
       wss.clients.forEach(client => {
         if (client.readyState === 1) {
-          client.send(JSON.stringify({ 
-            type: 'reservation_unassigned', 
+          client.send(JSON.stringify({
+            type: 'reservation_unassigned',
             reservation: reservation,
             unassignedRooms: rooms
           }));
         }
       });
     }
-    
+
     res.json({
       message: `Se desasignaron ${rooms.length} habitación(es) de la reserva.`,
       reservation: await Reservation.findById(reservationId).populate('room client'),
       unassignedRooms: rooms,
       remainingRooms: remainingRooms.length
     });
-    
+
   } catch (error) {
+    await session.abortTransaction().catch(() => {});
     logger.error('unassignRoomsFromReservation error', error);
     res.status(500).json({ message: 'Error al desasignar habitaciones.', error: error.message });
+  } finally {
+    session.endSession();
+    for (const acquired of acquiredLocks) {
+      await lockService.releaseLock(acquired.key, acquired.owner).catch(() => {});
+    }
   }
 };
 
@@ -518,9 +622,16 @@ const deleteReservation = async (req, res) => {
         try {
           const room = await Room.findById(roomId);
           if (room && room.status === 'ocupada') {
-            room.status = 'disponible';
+            // Si la reserva estaba en checkin, la habitación necesita limpieza
+            if (deletedReservation.status === 'checkin') {
+              room.status = 'limpieza';
+              room.pendingHousekeeping = 'limpieza_checkout';
+              room.pendingHousekeepingAt = new Date();
+            } else {
+              room.status = 'disponible';
+            }
             await room.save();
-            logger.info(`[API] Habitación ${room.number} liberada tras eliminar reserva`);
+            logger.info(`[API] Habitación ${room.number} → ${room.status} tras eliminar reserva`);
           }
         } catch (error) {
           logger.error(`[API] Error liberando habitación ${roomId}:`, error);
@@ -612,8 +723,13 @@ function optimizarCombinacion(combinaciones) {
       
       let cleaned = 0;
       for (const reserva of ghostReservations) {
-        // Marcar como checkout
-        reserva.status = 'checkout';
+        // No-shows (reservada sin checkin) → cancelada
+        // Overstays (checkin pasado de checkout) → checkout
+        if (reserva.status === 'reservada') {
+          reserva.status = 'cancelada';
+        } else {
+          reserva.status = 'checkout';
+        }
         await reserva.save();
         
         // Liberar habitaciones si estaban asignadas
@@ -629,7 +745,14 @@ function optimizarCombinacion(combinaciones) {
               });
               
               if (activeReservations.length === 0) {
-                room.status = 'disponible';
+                // Si estaba ocupada por checkin, necesita limpieza
+                if (room.status === 'ocupada') {
+                  room.status = 'limpieza';
+                  room.pendingHousekeeping = 'limpieza_checkout';
+                  room.pendingHousekeepingAt = new Date();
+                } else {
+                  room.status = 'disponible';
+                }
                 await room.save();
                 logger.info('Habitación liberada de reserva fantasma', {
                   service: 'crm-hotelero',
@@ -685,15 +808,21 @@ function optimizarCombinacion(combinaciones) {
     }
   };
 
-// Check-in con asignación automática
+// Check-in con asignación automática (ACID transacción + lock distribuido)
 const checkinReservation = async (req, res) => {
+  const { id } = req.params;
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
   try {
-    const { id } = req.params;
-    logger.info(`🏨 Iniciando check-in para reserva ${id}`);
-    
-    const reservation = await processCheckin(id);
-    
-    // Emitir evento WebSocket
+    let reservation;
+    await lockService.withLock(`reservation:${id}`, 10000, async () => {
+      logger.info(`🏨 Iniciando check-in transaccional para reserva ${id}`);
+      reservation = await processCheckin(id, { session });
+      await session.commitTransaction();
+    });
+
+    // Emitir evento WebSocket (fuera de la transacción)
     const wss = req.app.get('wss');
     if (wss) {
       wss.clients.forEach(client => {
@@ -702,7 +831,7 @@ const checkinReservation = async (req, res) => {
         }
       });
     }
-    
+
     auditService.log({
       action: 'CHECKIN_REALIZADO',
       entity: 'Reservation',
@@ -718,20 +847,32 @@ const checkinReservation = async (req, res) => {
       reservation
     });
   } catch (error) {
+    await session.abortTransaction().catch(() => {});
+    if (error.name === 'LockBusyError') {
+      return res.status(423).json({ message: 'Otra operación está procesando esta reserva. Intenta en unos segundos.' });
+    }
     logger.error('❌ Error en check-in:', error);
     res.status(500).json({ message: 'Error al procesar check-in', error: error.message });
+  } finally {
+    session.endSession();
   }
 };
 
-// Check-out con liberación de habitaciones
+// Check-out con liberación de habitaciones (ACID transacción + lock distribuido)
 const checkoutReservation = async (req, res) => {
+  const { id } = req.params;
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
   try {
-    const { id } = req.params;
-    logger.info(`🚪 Iniciando check-out para reserva ${id}`);
-    
-    const reservation = await processCheckout(id);
-    
-    // Emitir evento WebSocket
+    let reservation;
+    await lockService.withLock(`reservation:${id}`, 10000, async () => {
+      logger.info(`🚪 Iniciando check-out transaccional para reserva ${id}`);
+      reservation = await processCheckout(id, { session });
+      await session.commitTransaction();
+    });
+
+    // Emitir evento WebSocket (fuera de la transacción)
     const wss = req.app.get('wss');
     if (wss) {
       wss.clients.forEach(client => {
@@ -740,7 +881,7 @@ const checkoutReservation = async (req, res) => {
         }
       });
     }
-    
+
     auditService.log({
       action: 'CHECKOUT_REALIZADO',
       entity: 'Reservation',
@@ -756,8 +897,14 @@ const checkoutReservation = async (req, res) => {
       reservation
     });
   } catch (error) {
+    await session.abortTransaction().catch(() => {});
+    if (error.name === 'LockBusyError') {
+      return res.status(423).json({ message: 'Otra operación está procesando esta reserva. Intenta en unos segundos.' });
+    }
     logger.error('❌ Error en check-out:', error);
     res.status(500).json({ message: 'Error al procesar check-out', error: error.message });
+  } finally {
+    session.endSession();
   }
 };
 

@@ -8,6 +8,7 @@ import AdvancedReservationModal from '../AdvancedReservationModal';
 
 const AdminReservationsSection = () => {
   const [modalOpen, setModalOpen] = React.useState(false);
+  const [refreshKey, setRefreshKey] = React.useState(0);
   const [stats, setStats] = React.useState({
     totalReservations: 0,
     checkin: 0,
@@ -15,11 +16,19 @@ const AdminReservationsSection = () => {
     reservadas: 0
   });
 
-  React.useEffect(() => {
+  const loadStats = React.useCallback(() => {
     apiFetch('/api/reservations/stats')
       .then(r => r.json())
       .then(data => { if (data.success && data.data?.general) setStats(data.data.general); })
       .catch(() => {});
+  }, []);
+
+  React.useEffect(() => {
+    loadStats();
+  }, [loadStats, refreshKey]);
+
+  const handleReservationCreated = React.useCallback(() => {
+    setRefreshKey(k => k + 1);
   }, []);
 
   return (
@@ -72,7 +81,7 @@ const AdminReservationsSection = () => {
 
       {/* Tabla de reservas */}
       <div style={tableContainerStyle}>
-        <ReservationTable />
+        <ReservationTable key={refreshKey} />
       </div>
 
       {/* Modal de nueva reserva */}
@@ -80,6 +89,7 @@ const AdminReservationsSection = () => {
         <AdvancedReservationModal
           isOpen={modalOpen}
           onClose={() => setModalOpen(false)}
+          onReservationSuccess={handleReservationCreated}
         />
       )}
     </div>
