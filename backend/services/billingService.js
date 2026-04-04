@@ -17,7 +17,8 @@ class BillingService {
       const { tipo, cantidad, checkIn, checkOut } = reservationData;
       
       // Usar Room.price como fuente primaria (es lo que se muestra y edita en admin)
-      const roomSample = await Room.findOne({ type: tipo });
+      // Ordenar por price desc para resultado determinístico
+      const roomSample = await Room.findOne({ type: tipo }).sort({ price: -1 });
       let roomType;
 
       if (roomSample) {
@@ -228,6 +229,7 @@ class BillingService {
    * Eliminar un pago del historial y recalcular saldos
    */
   static async deletePayment(reservationId, paymentIndex) {
+    return await lockService.withLock(`billing:${reservationId}`, 10000, async () => {
     try {
       const reservation = await Reservation.findById(reservationId)
         .populate('client', 'nombre apellido');
@@ -261,12 +263,14 @@ class BillingService {
       logger.error('Error eliminando pago:', error);
       throw error;
     }
+    }); // end withLock
   }
 
   /**
    * Editar el monto de un pago existente en el historial
    */
   static async editPayment(reservationId, paymentIndex, newAmount) {
+    return await lockService.withLock(`billing:${reservationId}`, 10000, async () => {
     try {
       if (!newAmount || newAmount <= 0) throw new Error('El monto debe ser mayor a 0');
 
@@ -302,12 +306,14 @@ class BillingService {
       logger.error('Error editando pago:', error);
       throw error;
     }
+    }); // end withLock
   }
 
   /**
    * Agregar cargo extra a una reserva en curso
    */
   static async addCharge(reservationId, chargeData) {
+    return await lockService.withLock(`billing:${reservationId}`, 10000, async () => {
     try {
       const { description, amount, category } = chargeData;
 
@@ -358,6 +364,7 @@ class BillingService {
       console.error('Error agregando cargo:', error);
       throw error;
     }
+    }); // end withLock
   }
   
   /**

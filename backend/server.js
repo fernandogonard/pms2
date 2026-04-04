@@ -41,16 +41,26 @@ mongoose.connect(MONGO_URI, {
     // Auto-seed: crear RoomTypes si no existen (necesarios para facturación)
     try {
       const RoomType = require('./models/RoomType');
-      const count = await RoomType.countDocuments();
-      if (count === 0) {
-        const ROOM_TYPES_DATA = [
-          { name: 'doble',     basePrice: 8500,  currency: 'ARS', capacity: 2, description: 'Habitación doble', isActive: true },
-          { name: 'triple',    basePrice: 11500, currency: 'ARS', capacity: 3, description: 'Habitación triple', isActive: true },
-          { name: 'cuadruple', basePrice: 15000, currency: 'ARS', capacity: 4, description: 'Habitación cuádruple', isActive: true },
-        ];
-        await RoomType.insertMany(ROOM_TYPES_DATA);
-        logger.info('✅ RoomTypes sembrados automáticamente (doble, triple, cuadruple)');
+      // Sincronizar RoomTypes con Room.price en cada arranque
+      const Room = require('./models/Room');
+      const ROOM_TYPES_SEED = [
+        { name: 'doble',     capacity: 2, description: 'Habitación doble' },
+        { name: 'triple',    capacity: 3, description: 'Habitación triple' },
+        { name: 'cuadruple', capacity: 4, description: 'Habitación cuádruple' },
+        { name: 'suite',     capacity: 2, description: 'Suite de lujo' },
+      ];
+      for (const seed of ROOM_TYPES_SEED) {
+        const roomSample = await Room.findOne({ type: seed.name }).sort({ price: -1 });
+        const basePrice = roomSample ? roomSample.price : 0;
+        if (basePrice > 0) {
+          await RoomType.findOneAndUpdate(
+            { name: seed.name },
+            { ...seed, basePrice, currency: 'ARS', isActive: true },
+            { upsert: true, new: true }
+          );
+        }
       }
+      logger.info('✅ RoomTypes sincronizados con Room.price');
     } catch (seedErr) {
       logger.warn('⚠️  Auto-seed de RoomTypes falló (no crítico):', seedErr.message);
     }

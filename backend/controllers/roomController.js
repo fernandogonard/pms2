@@ -711,6 +711,16 @@ exports.setRoomStatus = async (req, res) => {
       room.lastCleaning = new Date();
       room.pendingHousekeeping = null;
       room.pendingHousekeepingAt = null;
+    } else if (status === 'limpieza') {
+      // Asignar tarea de limpieza para evitar estado huérfano
+      if (!room.pendingHousekeeping) {
+        room.pendingHousekeeping = 'limpieza_profunda';
+        room.pendingHousekeepingAt = new Date();
+      }
+    } else if (status === 'mantenimiento' || status === 'ocupada') {
+      // Limpiar tareas de housekeeping pendientes al cambiar a otro estado
+      room.pendingHousekeeping = null;
+      room.pendingHousekeepingAt = null;
     }
     await room.save();
     const wss = req.app.get('wss');

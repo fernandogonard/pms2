@@ -66,11 +66,21 @@ function initScheduledJobs() {
   });
 
   // TAREA 5: REPASO DIARIO — 9:00 AM todos los días
-  // Marca todas las habitaciones ocupadas con tarea de repaso
+  // Marca habitaciones ocupadas que no tienen tarea pendiente (o solo repaso)
+  // Respeta habitaciones que ya fueron limpiadas hoy
   cron.schedule('0 9 * * *', async () => {
     try {
+      const todayStart = new Date();
+      todayStart.setHours(0, 0, 0, 0);
       const result = await Room.updateMany(
-        { status: 'ocupada', pendingHousekeeping: { $in: [null, 'repaso'] } },
+        {
+          status: 'ocupada',
+          pendingHousekeeping: { $in: [null, 'repaso'] },
+          $or: [
+            { lastCleaning: { $lt: todayStart } },
+            { lastCleaning: null }
+          ]
+        },
         { pendingHousekeeping: 'repaso', pendingHousekeepingAt: new Date() }
       );
       logger.info(`🧹 Repaso diario programado: ${result.modifiedCount} habitaciones marcadas`);
@@ -79,20 +89,42 @@ function initScheduledJobs() {
     }
   });
 
-  // TAREA 6: LIMPIEZA PROFUNDA CADA 3 NOCHES — 9:05 AM todos los días
-  // Marca habitaciones cuyo checkIn fue exactamente hace 3, 6, 9... noches
+  // TAREA 6: LIMPIEZA PROFUNDA — 9:05 AM todos los días
+  // Usa lastCleaning para determinar si han pasado 3+ días sin limpieza profunda
+  // También marca si el checkIn lleva múltiplo de 3 noches
   cron.schedule('5 9 * * *', async () => {
     try {
       const today = new Date();
       today.setHours(0, 0, 0, 0);
-      const activeCheckins = await Reservation.find({ status: 'checkin' });
+      const threeDaysAgo = new Date(today);
+      threeDaysAgo.setDate(today.getDate() - 3);
       let markedCount = 0;
+
+      // Método 1: Por lastCleaning — si hace 3+ días que no se limpia, forzar profunda
+      const staleRooms = await Room.find({
+        status: 'ocupada',
+        $or: [
+          { lastCleaning: { $lte: threeDaysAgo } },
+          { lastCleaning: null }
+        ]
+      });
+      for (const room of staleRooms) {
+        await Room.findByIdAndUpdate(room._id, {
+          pendingHousekeeping: 'limpieza_profunda',
+          pendingHousekeepingAt: new Date()
+        });
+        markedCount++;
+      }
+
+      // Método 2: Por noches de estancia (múltiplo de 3 desde checkIn)
+      const activeCheckins = await Reservation.find({ status: 'checkin' });
       for (const res of activeCheckins) {
         const checkInDate = new Date(res.checkIn);
         checkInDate.setHours(0, 0, 0, 0);
         const nights = Math.round((today - checkInDate) / (1000 * 60 * 60 * 24));
         if (nights > 0 && nights % 3 === 0) {
-          for (const roomId of res.room) {
+          const roomIds = Array.isArray(res.room) ? res.room : [res.room];
+          for (const roomId of roomIds) {
             await Room.findByIdAndUpdate(roomId, {
               pendingHousekeeping: 'limpieza_profunda',
               pendingHousekeepingAt: new Date()
@@ -101,9 +133,9 @@ function initScheduledJobs() {
           }
         }
       }
-      if (markedCount > 0) logger.info(`🧼 Limpieza profunda (3 noches): ${markedCount} habitaciones marcadas`);
+      if (markedCount > 0) logger.info(`🧼 Limpieza profunda: ${markedCount} habitaciones marcadas`);
     } catch (error) {
-      logger.error('❌ Error en limpieza profunda (3 noches):', error);
+      logger.error('❌ Error en limpieza profunda:', error);
     }
   });
 
