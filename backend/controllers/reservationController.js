@@ -42,11 +42,11 @@ const getPendingCheckouts = async (req, res) => {
 
     // Buscar reservas que:
     // 1. Estén en estado 'checkin' (huésped ya hizo check-in)
-    // 2. Su fecha de checkout sea ayer o anterior
+    // 2. Su fecha de checkout sea hoy o anterior
     // 3. No hayan hecho checkout todavía
     const pendingReservations = await Reservation.find({
       status: 'checkin',
-      checkOut: { $lt: today } // Checkout anterior a hoy
+      checkOut: { $lte: today } // Checkout hoy o anterior
     })
     .populate('client', 'nombre apellido email dni')
     .populate('room', 'number type floor')

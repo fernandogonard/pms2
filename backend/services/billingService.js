@@ -16,15 +16,11 @@ class BillingService {
     try {
       const { tipo, cantidad, checkIn, checkOut } = reservationData;
       
-      // Obtener precio base por tipo de habitación
-      let roomType = await RoomType.findOne({ name: tipo, isActive: true });
-      
-      // Fallback: si no hay RoomType seedeado, usar el precio de la colección Room
-      if (!roomType) {
-        const roomSample = await Room.findOne({ type: tipo });
-        if (!roomSample) {
-          throw new Error(`Tipo de habitación '${tipo}' no encontrado en el sistema`);
-        }
+      // Usar Room.price como fuente primaria (es lo que se muestra y edita en admin)
+      const roomSample = await Room.findOne({ type: tipo });
+      let roomType;
+
+      if (roomSample) {
         const CAPACITY_MAP = { doble: 2, triple: 3, cuadruple: 4, suite: 2 };
         roomType = {
           basePrice: roomSample.price,
@@ -33,6 +29,12 @@ class BillingService {
           name: tipo,
           description: ''
         };
+      } else {
+        // Fallback: usar RoomType si no hay habitaciones de ese tipo
+        roomType = await RoomType.findOne({ name: tipo, isActive: true });
+        if (!roomType) {
+          throw new Error(`Tipo de habitación '${tipo}' no encontrado en el sistema`);
+        }
       }
       
       // Calcular noches
