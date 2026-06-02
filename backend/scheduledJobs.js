@@ -6,6 +6,7 @@ const { createBackup } = require('./scripts/createBackup');
 const { logger } = require('./config/logger');
 const Room = require('./models/Room');
 const Reservation = require('./models/Reservation');
+const Client = require('./models/Client');
 
 /**
  * Inicializa todas las tareas programadas del sistema
@@ -51,8 +52,17 @@ function initScheduledJobs() {
   });
   
   // TAREA 4: Backup automático - cada día a la 1am
+  // ADVERTENCIA: En Railway el filesystem es efímero — los backups se pierden en cada redeploy.
+  // Para backups persistentes usa MongoDB Atlas Backup (gratis en M0) o configura un Railway Volume.
+  // Este backup sirve como copia de seguridad temporal para el día de trabajo.
   cron.schedule('0 1 * * *', async () => {
     try {
+      // Solo ejecutar backup local si NO estamos en Railway producción sin volumen
+      // En producción confiar en Atlas Backup. En dev/staging, hacer backup local.
+      if (process.env.NODE_ENV === 'production' && !process.env.BACKUP_ENABLED) {
+        logger.info('💾 Backup local omitido en producción (usar Atlas Backup). Set BACKUP_ENABLED=true para forzar.');
+        return;
+      }
       logger.info('💾 Iniciando backup diario de la base de datos');
       const result = await createBackup();
       if (result.success) {
@@ -139,6 +149,35 @@ function initScheduledJobs() {
     }
   });
 
+  // TAREA 7: RECORDATORIO CHECK-IN — 10:00 AM todos los días
+  // Envía email a clientes con check-in programado para mañana
+  cron.schedule('0 10 * * *', async () => {
+    try {
+      const emailService = require('./services/emailService');
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      tomorrow.setHours(0, 0, 0, 0);
+      const dayAfter = new Date(tomorrow);
+      dayAfter.setDate(dayAfter.getDate() + 1);
+
+      const reservations = await Reservation.find({
+        checkIn: { $gte: tomorrow, $lt: dayAfter },
+        status: { $in: ['confirmada', 'pendiente'] }
+      }).populate('client', 'nombre apellido email');
+
+      let sent = 0;
+      for (const res of reservations) {
+        if (res.client?.email) {
+          await emailService.sendCheckinReminder({ reservation: res, client: res.client });
+          sent++;
+        }
+      }
+      if (sent > 0) logger.info(`📧 Recordatorios check-in enviados: ${sent}`);
+    } catch (error) {
+      logger.error('❌ Error enviando recordatorios check-in:', error);
+    }
+  });
+
   // Imprimir resumen de tareas programadas
   logger.info('📋 Sistema de tareas programadas iniciado correctamente');
   logger.info('📋 Resumen de tareas:');
@@ -148,6 +187,7 @@ function initScheduledJobs() {
   logger.info('  • Backup de la base de datos: Diario a la 1am');
   logger.info('  • Repaso diario: 9:00 AM (habitaciones ocupadas)');
   logger.info('  • Limpieza profunda (3 noches): 9:05 AM (checkins c/ múltiplo de 3)');
+  logger.info('  • Recordatorio check-in: 10:00 AM (reservas de mañana)');
 }
 
 module.exports = {

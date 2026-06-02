@@ -4,6 +4,7 @@
 import React, { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
+import logo from '../assets/images/logo.png';
 
 const AdminSidebar = ({ activeSection, onSectionChange }) => {
   const [collapsed, setCollapsed] = useState(false);
@@ -30,15 +31,33 @@ const AdminSidebar = ({ activeSection, onSectionChange }) => {
     }}>
       {/* Header del Sidebar */}
       <div style={sidebarHeaderStyle}>
-        <button
-          onClick={() => setCollapsed(!collapsed)}
-          style={collapseButtonStyle}
-          title={collapsed ? 'Expandir menú' : 'Contraer menú'}
-        >
-          {collapsed ? '▶️' : '◀️'}
-        </button>
-        {!collapsed && (
-          <span style={sidebarTitleStyle}>Administración</span>
+        {collapsed ? (
+          <img
+            src={logo}
+            alt="Hotel DIVA"
+            style={{ width: 36, height: 36, borderRadius: '50%', objectFit: 'cover', cursor: 'pointer' }}
+            onClick={() => setCollapsed(false)}
+            title="Expandir menú"
+          />
+        ) : (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%' }}>
+            <img
+              src={logo}
+              alt="Hotel DIVA"
+              style={{ width: 38, height: 38, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }}
+            />
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontWeight: 700, fontSize: 14, color: '#fff', lineHeight: 1.1 }}>Hotel DIVA</div>
+              <div style={{ fontSize: 10, color: '#6b7280' }}>Administración</div>
+            </div>
+            <button
+              onClick={() => setCollapsed(true)}
+              style={collapseButtonStyle}
+              title="Contraer menú"
+            >
+              ◀️
+            </button>
+          </div>
         )}
       </div>
 
@@ -78,8 +97,8 @@ const AdminSidebar = ({ activeSection, onSectionChange }) => {
       {!collapsed && (
         <div style={sidebarFooterStyle}>
           <div style={footerTextStyle}>
-            <div style={footerTitleStyle}>MiHotel CRM</div>
-            <div style={footerVersionStyle}>v1.0.0</div>
+            <div style={footerTitleStyle}>Hotel DIVA</div>
+            <div style={footerVersionStyle}>PMS v1.0.0</div>
           </div>
           <LogoutButton />
         </div>

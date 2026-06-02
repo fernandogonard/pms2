@@ -55,15 +55,6 @@ const globalErrorHandler = (error, req, res, next) => {
       message: errorInfo.userMessage,
       code: errorInfo.statusCode
     },
-    // Solo incluir detalles en desarrollo
-    ...(process.env.NODE_ENV === 'development' && { 
-      developerInfo: {
-        message: error.message,
-        details: errorInfo.details,
-        operation: `${req.method} ${req.path}`,
-        stack: error.stack?.split('\n').slice(0, 5)
-      }
-    }),
     timestamp: new Date().toISOString()
   });
 };

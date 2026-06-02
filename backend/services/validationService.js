@@ -65,20 +65,29 @@ const schemas = {
     notas: Joi.string().max(500).allow('').optional()
   }),
 
-  // Cliente
-  client: Joi.object({
-    firstName: Joi.string().min(2).max(50).required(),
-    lastName: Joi.string().min(2).max(50).required(),
-    email: Joi.string().email().required(),
-    phone: Joi.string().pattern(/^[+]?[\d\s\-()]+$/).min(10).max(20).required(),
-    idType: Joi.string().valid('dni', 'pasaporte', 'cedula').required(),
-    idNumber: Joi.string().min(5).max(20).required(),
-    address: Joi.string().max(200).allow('').default(''),
-    city: Joi.string().max(50).allow('').default(''),
-    country: Joi.string().max(50).allow('').default(''),
-    dateOfBirth: Joi.date().max('now').allow(null),
-    preferences: Joi.array().items(Joi.string()).default([])
-  }),
+  // Cliente - soporta payload actual (nombre/apellido/dni/whatsapp) y formato legado
+  client: Joi.alternatives().try(
+    Joi.object({
+      nombre: Joi.string().min(2).max(50).required(),
+      apellido: Joi.string().min(2).max(50).required(),
+      email: Joi.string().email().required(),
+      dni: Joi.string().min(5).max(20).required(),
+      whatsapp: Joi.string().pattern(/^[+]?[\d\s\-()]+$/).min(7).max(20).required()
+    }),
+    Joi.object({
+      firstName: Joi.string().min(2).max(50).required(),
+      lastName: Joi.string().min(2).max(50).required(),
+      email: Joi.string().email().required(),
+      phone: Joi.string().pattern(/^[+]?[\d\s\-()]+$/).min(7).max(20).required(),
+      idType: Joi.string().valid('dni', 'pasaporte', 'cedula').required(),
+      idNumber: Joi.string().min(5).max(20).required(),
+      address: Joi.string().max(200).allow('').default(''),
+      city: Joi.string().max(50).allow('').default(''),
+      country: Joi.string().max(50).allow('').default(''),
+      dateOfBirth: Joi.date().max('now').allow(null),
+      preferences: Joi.array().items(Joi.string()).default([])
+    })
+  ),
 
   // Login
   login: Joi.object({
@@ -189,7 +198,47 @@ const createValidationMiddleware = (schemaName, source = 'body') => {
 };
 
 // Validación de parámetros de URL
-const validateParams = (schemaName) => createValidationMiddleware(schemaName, 'params');
+const validateParams = (schemaName) => {
+  const schema = schemas[schemaName];
+  if (!schema) {
+    throw new Error(`Esquema de validación '${schemaName}' no encontrado`);
+  }
+
+  return (req, res, next) => {
+    try {
+      const schemaDesc = schema.describe ? schema.describe() : null;
+      let dataToValidate = req.params;
+      const singleParamKey = Object.keys(req.params).length === 1 ? Object.keys(req.params)[0] : null;
+
+      if (schemaDesc && schemaDesc.type && schemaDesc.type !== 'object' && singleParamKey) {
+        dataToValidate = req.params[singleParamKey];
+      }
+
+      const validatedData = validate(schema, dataToValidate);
+
+      if (schemaDesc && schemaDesc.type && schemaDesc.type !== 'object' && singleParamKey) {
+        req.params[singleParamKey] = validatedData;
+      } else {
+        req.params = validatedData;
+      }
+
+      next();
+    } catch (error) {
+      if (error instanceof ValidationError) {
+        return res.status(400).json({
+          success: false,
+          message: 'Error de validación',
+          errors: error.details
+        });
+      }
+
+      return res.status(500).json({
+        success: false,
+        message: 'Error interno de validación'
+      });
+    }
+  };
+};
 
 // Validación de query parameters
 const validateQuery = (schemaName) => createValidationMiddleware(schemaName, 'query');

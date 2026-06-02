@@ -15,15 +15,6 @@ const Login = () => {
 
   // Redirigir si ya está autenticado
   useEffect(() => {
-    console.log('🔍 [Login] Estado de autenticación:', {
-      isAuthenticated,
-      loading,
-      userRole: user?.role,
-      userEmail: user?.email,
-      hasLocation: !!location,
-      locationState: location.state
-    });
-    
     if (isAuthenticated && !loading && user) {
       // Determinar ruta basada en el rol
       let targetRoute = '/';
@@ -34,12 +25,7 @@ const Login = () => {
       }
       
       const from = location.state?.from || targetRoute;
-      console.log('🔄 [Login] Redirigiendo usuario autenticado a:', from);
-      console.log('👤 [Login] Usuario:', user.email, 'Rol:', user.role);
-      
       navigate(from, { replace: true });
-    } else if (isAuthenticated && !loading && !user) {
-      console.log('⚠️ [Login] Usuario autenticado pero sin datos de usuario');
     }
   }, [isAuthenticated, loading, user, navigate, location]);
 
@@ -64,7 +50,7 @@ const Login = () => {
         // La redirección se maneja en el useEffect de arriba
       }
     } catch (err) {
-      console.error('Error en login:', err);
+      // Error manejado por el contexto de auth
     } finally {
       setIsSubmitting(false);
     }

@@ -31,7 +31,7 @@ const AdminStats = () => {
         const statsData = await statsRes.json();
         
         setRooms(Array.isArray(roomsData) ? roomsData : []);
-        setReservations(Array.isArray(reservationsData) ? reservationsData : []);
+        setReservations(Array.isArray(reservationsData) ? reservationsData : (reservationsData?.data || []));
         setStats(statsData);
       } catch (e) {
         console.error('Error cargando estadísticas:', e);
@@ -133,4 +133,4 @@ const AdminStats = () => {
   );
 };
 
-export default AdminStats;
+export default React.memo(AdminStats);

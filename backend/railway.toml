@@ -3,10 +3,12 @@
 
 [build]
 builder = "NIXPACKS"
-buildCommand = "npm install"
+buildCommand = "npm ci --omit=dev"
 
 [deploy]
 startCommand = "node server.js"
+healthcheckPath = "/health"
+healthcheckTimeout = 30
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 3
 

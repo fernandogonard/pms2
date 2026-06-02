@@ -1,0 +1,9 @@
+User-agent: *
+Allow: /
+Allow: /hotel-info
+Disallow: /admin
+Disallow: /recepcion
+Disallow: /login
+Disallow: /api/
+
+Sitemap: https://hoteldiva.com/sitemap.xml

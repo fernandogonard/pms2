@@ -1,6 +1,7 @@
 // utils/wsClient.js
-// Pequeño cliente WebSocket con reconexión exponencial y API simple
+// Cliente WebSocket con reconexión exponencial, autenticación por mensaje (no URL)
 import redirectorService from '../services/redirectorService';
+import { getAccessToken } from './api';
 
 export function createWS(urlParam, handlers = {}) {
   let ws = null;
@@ -11,6 +12,7 @@ export function createWS(urlParam, handlers = {}) {
   let lastPong = Date.now();
   let url = urlParam;
   let isPortDiscoveryActive = false;
+  let isAuthenticated = false; // Track auth state
   
   // Al principio, intentar descubrir el puerto actual del servidor
   discoverServerPort();
@@ -64,16 +66,9 @@ export function createWS(urlParam, handlers = {}) {
     }
   }
 
-  function getUrlWithToken() {
-    try {
-      const token = localStorage.getItem('token');
-      // Log ligero: token presente o no (no imprimir token en claro)
-      const hasToken = !!token;
-      try { console.log(`[WS] construir URL. base=${url} tokenPresent=${hasToken}`); } catch (e) {}
-      if (!token) return url;
-      const sep = url.includes('?') ? '&' : '?';
-      return `${url}${sep}token=${encodeURIComponent(token)}`;
-    } catch (e) { return url; }
+  // CRIT7: NO enviar token en URL — se autentica via primer mensaje JSON
+  function getCleanUrl() {
+    return url;
   }
 
   function startHeartbeat() {
@@ -116,7 +111,7 @@ export function createWS(urlParam, handlers = {}) {
     }
     
     try {
-      const resolved = getUrlWithToken();
+      const resolved = getCleanUrl();
       // Solo log en desarrollo
       if (process.env.NODE_ENV === 'development') {
         try { console.log(`[WS] conectando a: ${resolved}`); } catch (e) {}
@@ -134,6 +129,14 @@ export function createWS(urlParam, handlers = {}) {
     ws.onopen = (ev) => {
       attempts = 0;
       lastPong = Date.now();
+      isAuthenticated = false;
+      // CRIT7: Enviar token en primer mensaje JSON, NO en la URL
+      const token = getAccessToken();
+      if (token) {
+        try {
+          ws.send(JSON.stringify({ type: 'auth', token }));
+        } catch (e) { /* ignore */ }
+      }
       startHeartbeat();
       onopen && onopen(ev);
     };
@@ -141,14 +144,18 @@ export function createWS(urlParam, handlers = {}) {
     ws.onmessage = (ev) => {
       try {
         const data = ev.data && ev.data.toString ? ev.data.toString() : ev.data;
-        // responder a pings y actualizar lastPong si viene pong
         try {
           const j = JSON.parse(data);
           if (j && j.type === 'pong') {
             lastPong = Date.now();
           } else if (j && j.type === 'ping') {
-            // responder pong de aplicación
             try { ws.send(JSON.stringify({ type: 'pong' })); } catch (e) {}
+          } else if (j && j.type === 'auth_ok') {
+            isAuthenticated = true;
+            return; // No propagar evento interno al handler del usuario
+          } else if (j && j.type === 'auth_error') {
+            isAuthenticated = false;
+            return;
           }
         } catch (e) {}
       } catch (e) {}

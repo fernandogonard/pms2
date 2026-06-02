@@ -6,7 +6,7 @@ const { logHelpers } = require('./logger');
 
 // Ajustar el límite de solicitudes para el entorno de desarrollo
 const isDevelopment = process.env.NODE_ENV === 'development';
-const isRateLimitDisabled = process.env.DISABLE_RATE_LIMIT === '1';
+const isRateLimitDisabled = process.env.DISABLE_RATE_LIMIT === '1' && isDevelopment;
 
 // Función para crear un rate limiter condicional
 const createRateLimiter = (options) => {

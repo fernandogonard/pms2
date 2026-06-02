@@ -1,2 +1,41 @@
+# Dependencias
+node_modules/
 
+# Variables de entorno - NUNCA commitear
+.env
+.env.*
+config/.env
+config/.env.*
+
+# Logs
+logs/
+*.log
+backend.log
+
+# Backups (generados automáticamente, no commitear)
+backups/*.json
+backups/*.json.gz
+
+# Archivos temporales / debug
 tmp/
+output.txt
+port.txt
+testoutput.txt
+test-output-final.txt
+debug/
+coverage/
+
+# Scripts de test manuales (no son tests autom�ticos)
+test-api.ps1
+test-client.js
+test-simple.ps1
+test-ws.js
+testAvailability.js
+testRoomsStatus.js
+debug-server.js
+test-server.js
+test-simple-server.js
+test-startup.js
+audit-apis.js
+sync-room-states.bat
+sync-room-states.sh

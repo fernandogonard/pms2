@@ -125,7 +125,8 @@ class OfflineSyncService {
 
   // Procesar un elemento individual de la cola
   async processSyncItem(item) {
-    const token = localStorage.getItem('token');
+    const { getAccessToken } = require('../utils/api');
+    const token = getAccessToken();
     const headers = {
       'Content-Type': 'application/json',
       ...item.headers

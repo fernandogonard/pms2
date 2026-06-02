@@ -2,6 +2,7 @@
 // Hook centralizado para WebSocket con reconexión, deduplicación y backoff
 import { useEffect, useRef } from 'react';
 import { createWS } from '../utils/wsClient';
+import { getAccessToken } from '../utils/api';
 
 export const useWebSocket = ({ onMessage, onError, onClose }) => {
   const wsRef = useRef(null);
@@ -9,7 +10,7 @@ export const useWebSocket = ({ onMessage, onError, onClose }) => {
   callbacksRef.current = { onMessage, onError, onClose };
 
   useEffect(() => {
-    const token = localStorage.getItem('token');
+    const token = getAccessToken();
     if (!token) return;
 
     const wsUrl = process.env.REACT_APP_WS_URL || `ws://${window.location.hostname}:5001`;

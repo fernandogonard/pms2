@@ -11,6 +11,30 @@ const { initScheduledJobs } = require('./scheduledJobs');
 
 dotenv.config({ path: './config/.env' });
 
+// ─── Validación de variables de entorno requeridas ────────────────────────────
+const REQUIRED_ENV = ['JWT_SECRET', 'JWT_REFRESH_SECRET'];
+if (process.env.NODE_ENV === 'production') {
+  REQUIRED_ENV.push('MONGO_URI', 'CORS_ORIGIN', 'FRONTEND_URL', 'BACKEND_URL');
+}
+// Advertir sobre secretos placeholder (no bloquear en dev, sí en prod)
+const PLACEHOLDER_SECRETS = ['your-super-secure-jwt-secret-here', 'CAMBIAR_POR_SECRET_SEGURO_MINIMO_64_CHARS'];
+if (process.env.NODE_ENV === 'production') {
+  if (PLACEHOLDER_SECRETS.includes(process.env.JWT_SECRET)) {
+    console.error('❌ FATAL: JWT_SECRET tiene valor placeholder. Configura un secreto real en producción.');
+    process.exit(1);
+  }
+  if (PLACEHOLDER_SECRETS.includes(process.env.JWT_REFRESH_SECRET)) {
+    console.error('❌ FATAL: JWT_REFRESH_SECRET tiene valor placeholder. Configura un secreto real en producción.');
+    process.exit(1);
+  }
+}
+const missing = REQUIRED_ENV.filter(key => !process.env[key]);
+if (missing.length > 0) {
+  console.error(`❌ FATAL: Variables de entorno requeridas no definidas: ${missing.join(', ')}`);
+  console.error('   Configure estas variables antes de iniciar el servidor.');
+  process.exit(1);
+}
+
 // Railway asigna PORT como variable de entorno — DEBE escucharse inmediatamente
 const PORT = process.env.PORT || 5000;
 const MONGO_URI = process.env.MONGO_URI || 'mongodb://localhost:27017/crm-hotelero';
@@ -31,12 +55,32 @@ server.on('error', (err) => {
 });
 
 // ─── Conectar a MongoDB de forma asíncrona ────────────────────────────────────
-mongoose.connect(MONGO_URI, {
-  useNewUrlParser: true,
-  useUnifiedTopology: true,
-})
+// Opciones optimizadas para MongoDB Atlas (connection pool, timeouts, retry)
+const MONGO_OPTIONS = {
+  maxPoolSize: 10,           // Máximo de conexiones simultáneas
+  serverSelectionTimeoutMS: 10000,  // Timeout de selección de servidor Atlas
+  socketTimeoutMS: 45000,   // Timeout de socket
+  connectTimeoutMS: 10000,  // Timeout de conexión inicial
+  heartbeatFrequencyMS: 10000,
+};
+
+mongoose.connect(MONGO_URI, MONGO_OPTIONS)
   .then(async () => {
     logHelpers.system.dbConnected();
+
+    // Detectar soporte de transacciones (replica set vs standalone)
+    try {
+      const testSession = await mongoose.startSession();
+      testSession.startTransaction();
+      await mongoose.connection.db.collection('_txtest').findOne({}, { session: testSession });
+      await testSession.commitTransaction();
+      testSession.endSession();
+      app.set('txSupported', true);
+      logger.info('✅ Transacciones MongoDB: soportadas (Replica Set)');
+    } catch {
+      app.set('txSupported', false);
+      logger.warn('⚠️  Transacciones MongoDB: NO disponibles (standalone). Operando sin ACID.');
+    }
 
     // Auto-seed: crear RoomTypes si no existen (necesarios para facturación)
     try {
@@ -78,7 +122,6 @@ mongoose.connect(MONGO_URI, {
       maxPayload: 1024 * 1024 // 1MB max
     });
 
-    const urlLib = require('url');
     const jwt = require('jsonwebtoken');
 
     // Logger con niveles controlados por WS_LOG_LEVEL (debug|info|warn|error)
@@ -95,33 +138,47 @@ mongoose.connect(MONGO_URI, {
     }
 
     // Almacenar clientes conectados
+    // CRIT7: Conexión WebSocket acepta auth por primer mensaje JSON (no por query string)
     wss.on('connection', (ws, req) => {
       try {
         const remote = req.socket.remoteAddress;
         const origin = req.headers.origin || req.headers.host || '<no-origin>';
-        const parsed = urlLib.parse(req.url, true);
-        const query = parsed.query || {};
-        const token = query.token || (req.headers && req.headers.authorization && req.headers.authorization.split(' ')[1]);
-
-        if (!token) {
-          log('info', `Rechazando WS sin token from=${remote} origin=${origin}`);
-          try { ws.close(1008, 'Unauthorized'); } catch(e) { ws.terminate && ws.terminate(); }
-          return;
-        }
+        
+        // Permitir auth por header (upgrade request) O por primer mensaje
+        const authHeader = req.headers && req.headers.authorization;
+        const headerToken = authHeader ? authHeader.split(' ')[1] : null;
 
         let decoded = null;
-        try {
-          decoded = jwt.verify(token, process.env.JWT_SECRET);
-          ws.user = decoded;
-        } catch (err) {
-          log('info', `Token inválido en WS from=${remote} origin=${origin} err=${err && err.message}`);
-          try { ws.close(1008, 'Unauthorized'); } catch(e) { ws.terminate && ws.terminate(); }
-          return;
-        }
+        let wsUserId = '<pending-auth>';
+        let authTimeout = null;
 
-        const wsUserId = decoded && (decoded.userId || decoded.id) ? (decoded.userId || decoded.id) : '<no-id>';
-        log('info', `Cliente WebSocket conectado from=${remote} user=${wsUserId} origin=${origin}`);
-        ws.send(JSON.stringify({ type: 'test', message: 'Conexión WebSocket exitosa desde backend' }));
+        // Si viene token en header, autenticar inmediatamente
+        if (headerToken) {
+          try {
+            decoded = jwt.verify(headerToken, process.env.JWT_SECRET);
+            ws.user = decoded;
+            wsUserId = decoded.userId || decoded.id || '<no-id>';
+            ws.isAuthenticated = true;
+            log('info', `Cliente WebSocket autenticado por header from=${remote} user=${wsUserId}`);
+            ws.send(JSON.stringify({ type: 'auth_ok' }));
+          } catch (err) {
+            log('info', `Token header inválido en WS from=${remote} err=${err && err.message}`);
+            try { ws.close(1008, 'Unauthorized'); } catch(e) { ws.terminate && ws.terminate(); }
+            return;
+          }
+        } else {
+          // Sin token en header: esperar mensaje { type: 'auth', token: '...' }
+          ws.isAuthenticated = false;
+          ws.send(JSON.stringify({ type: 'test', message: 'Conexión WebSocket establecida, enviar auth' }));
+
+          // Timeout: si no autentica en 10s, cerrar
+          authTimeout = setTimeout(() => {
+            if (!ws.isAuthenticated) {
+              log('info', `WS auth timeout from=${remote}`);
+              try { ws.close(1008, 'Auth timeout'); } catch(e) { ws.terminate && ws.terminate(); }
+            }
+          }, 10000);
+        }
 
         ws.isAlive = true;
         ws.on('pong', () => { ws.isAlive = true; });
@@ -132,6 +189,30 @@ mongoose.connect(MONGO_URI, {
             log('debug', `WS message from=${remote} user=${wsUserId} len=${s.length}`);
             try {
               const j = JSON.parse(s);
+
+              // Mensaje de autenticación (CRIT7)
+              if (j && j.type === 'auth' && j.token && !ws.isAuthenticated) {
+                try {
+                  decoded = jwt.verify(j.token, process.env.JWT_SECRET);
+                  ws.user = decoded;
+                  wsUserId = decoded.userId || decoded.id || '<no-id>';
+                  ws.isAuthenticated = true;
+                  if (authTimeout) { clearTimeout(authTimeout); authTimeout = null; }
+                  log('info', `Cliente WebSocket autenticado por mensaje from=${remote} user=${wsUserId}`);
+                  ws.send(JSON.stringify({ type: 'auth_ok' }));
+                } catch (authErr) {
+                  log('info', `Token inválido en WS auth msg from=${remote} err=${authErr && authErr.message}`);
+                  ws.send(JSON.stringify({ type: 'auth_error', message: 'Token inválido' }));
+                  try { ws.close(1008, 'Unauthorized'); } catch(e) { ws.terminate && ws.terminate(); }
+                }
+                return;
+              }
+
+              // Rechazar mensajes de clientes no autenticados (excepto ping)
+              if (!ws.isAuthenticated && j.type !== 'ping') {
+                return; // Silenciosamente ignorar
+              }
+
               if (j && j.type === 'ping') {
                 try { ws.send(JSON.stringify({ type: 'pong' })); } catch (e) {}
               }
@@ -140,10 +221,12 @@ mongoose.connect(MONGO_URI, {
         });
 
         ws.on('close', (code, reason) => {
+          if (authTimeout) { clearTimeout(authTimeout); authTimeout = null; }
           log('info', `WS desconectado from=${remote} user=${wsUserId} code=${code}`);
         });
 
         ws.on('error', (err) => {
+          if (authTimeout) { clearTimeout(authTimeout); authTimeout = null; }
           log('error', `Error WS from=${remote}:`, err && err.message ? err.message : err);
         });
       } catch (err) {
@@ -178,6 +261,17 @@ mongoose.connect(MONGO_URI, {
     logHelpers.system.dbError(err);
     logger.error('❌ No se pudo conectar a MongoDB. El servidor HTTP sigue activo pero las rutas de DB fallarán.');
   });
+
+// Reconexión automática en caso de pérdida de conexión (atlas puede desconectar idle)
+mongoose.connection.on('disconnected', () => {
+  logger.warn('MongoDB desconectado. Mongoose intentará reconectar automáticamente...');
+});
+mongoose.connection.on('reconnected', () => {
+  logger.info('MongoDB reconectado exitosamente.');
+});
+mongoose.connection.on('error', (err) => {
+  logger.error('Error de conexión MongoDB:', err.message);
+});
 
 // ─── Graceful shutdown ───────────────────────────────────────────────────────
 const shutdown = async (signal) => {

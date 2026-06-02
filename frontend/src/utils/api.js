@@ -93,6 +93,21 @@ export function startPortDiscovery() {
   };
 }
 
+// Token en memoria — seteado por AuthContext, NO en localStorage
+let _accessToken = null;
+
+/**
+ * Setear el access token desde AuthContext (llamado por el provider).
+ * Este módulo lo usa para inyectar el header Authorization.
+ */
+export function setAccessToken(token) {
+  _accessToken = token;
+}
+
+export function getAccessToken() {
+  return _accessToken;
+}
+
 // Función principal de API con soporte offline
 export async function apiFetch(url, opts = {}) {
   // Si no hay URL base, intentar descubrirla
@@ -106,58 +121,48 @@ export async function apiFetch(url, opts = {}) {
     (process.env.REACT_APP_API_URL && process.env.REACT_APP_API_URL.trim()) || '';
   const resolvedUrl = API_BASE && !/^https?:\/\//i.test(url) ? 
     `${API_BASE.replace(/\/$/, '')}/${url.replace(/^\//, '')}` : url;
-  const token = localStorage.getItem('token');
   
-  // Construir headers a partir de opts.headers y añadir Authorization si procede.
+  // Construir headers: usar token de memoria o el que venga en opts.headers
   const headers = Object.assign({}, opts.headers || {});
-  if (token && !headers.Authorization && !headers.authorization) {
-    headers['Authorization'] = `Bearer ${token}`;
+  if (_accessToken && !headers.Authorization && !headers.authorization) {
+    headers['Authorization'] = `Bearer ${_accessToken}`;
   }
 
-  // No sobrescribir los headers ya construidos cuando se mezclen las opciones.
   const final = Object.assign({}, opts);
-  if (!final.credentials) final.credentials = 'include';
+  if (!final.credentials) final.credentials = 'include'; // Enviar cookies httpOnly
   final.headers = headers;
 
   try {
     const res = await fetch(resolvedUrl, final);
     
-    // Manejar respuesta 401 (sesión expirada) - intentar refresh primero
-    if (res.status === 401) {
-      const hadToken = !!((() => { try { return localStorage.getItem('token'); } catch(e) { return null; } })());
-      const refreshToken = localStorage.getItem('refreshToken');
-
-      // Intentar refresh si tenemos refreshToken y no estamos ya en el endpoint de refresh
-      if (hadToken && refreshToken && !resolvedUrl.includes('/auth/refresh-token')) {
-        try {
-          const refreshRes = await fetch(
-            `${API_BASE.replace(/\/$/, '')}/api/auth/refresh-token`,
-            {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ refreshToken })
-            }
-          );
-          if (refreshRes.ok) {
-            const refreshData = await refreshRes.json();
-            const newToken = refreshData.token || refreshData.accessToken;
-            const newRefresh = refreshData.refreshToken;
-            if (newToken) {
-              localStorage.setItem('token', newToken);
-              if (newRefresh) localStorage.setItem('refreshToken', newRefresh);
-              // Reintentar la petición original con el nuevo token
-              final.headers['Authorization'] = `Bearer ${newToken}`;
-              return await fetch(resolvedUrl, final);
-            }
+    // Manejar respuesta 401 — intentar refresh via httpOnly cookie
+    if (res.status === 401 && !resolvedUrl.includes('/auth/refresh-token')) {
+      try {
+        const refreshRes = await fetch(
+          `${API_BASE.replace(/\/$/, '')}/api/auth/refresh-token`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include' // Cookie se envía automáticamente
           }
-        } catch (refreshErr) {
-          // Refresh falló, continuar al logout
+        );
+        if (refreshRes.ok) {
+          const refreshData = await refreshRes.json();
+          const newToken = refreshData.token;
+          if (newToken) {
+            _accessToken = newToken;
+            // Reintentar la petición original con el nuevo token
+            final.headers['Authorization'] = `Bearer ${newToken}`;
+            return await fetch(resolvedUrl, final);
+          }
         }
+      } catch {
+        // Refresh falló
       }
 
-      try { localStorage.removeItem('token'); } catch (e) {}
-      try { localStorage.removeItem('refreshToken'); } catch (e) {}
-      if (hadToken && typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
+      // Sesión expirada — notificar al frontend
+      _accessToken = null;
+      if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
         const pathname = window.location.pathname;
         const safePath = pathname.startsWith('/login') ? '/' : pathname + window.location.search;
         window.dispatchEvent(new CustomEvent('sessionExpired', { detail: { next: encodeURIComponent(safePath) } }));
@@ -167,19 +172,20 @@ export async function apiFetch(url, opts = {}) {
       throw err;
     }
 
-    // Cachear respuestas exitosas GET automáticamente
+    // Cachear respuestas exitosas GET automáticamente (offline cache limitado a 50 entradas)
     if (res.ok && (!opts.method || opts.method === 'GET')) {
       try {
         const responseData = await res.clone().json();
-        const cacheKey = `api-${url.replace(/[^a-zA-Z0-9]/g, '-')}`;
+        const cacheKey = `crm-cache-api-${url.replace(/[^a-zA-Z0-9]/g, '-')}`;
         const cacheData = {
           data: responseData,
-          expiry: Date.now() + (5 * 60 * 1000), // 5 minutos
+          expiry: Date.now() + (5 * 60 * 1000),
           timestamp: new Date().toISOString(),
           url: resolvedUrl
         };
-        localStorage.setItem(`crm-cache-${cacheKey}`, JSON.stringify(cacheData));
-      } catch (error) {
+        localStorage.setItem(cacheKey, JSON.stringify(cacheData));
+        _evictOldCacheEntries();
+      } catch {
         // Ignorar errores de caché
       }
     }
@@ -188,18 +194,13 @@ export async function apiFetch(url, opts = {}) {
   } catch (error) {
     // Si falla la request y es GET, intentar servir desde cache
     if (!opts.method || opts.method === 'GET') {
-      const cacheKey = `api-${url.replace(/[^a-zA-Z0-9]/g, '-')}`;
-      const cached = localStorage.getItem(`crm-cache-${cacheKey}`);
+      const cacheKey = `crm-cache-api-${url.replace(/[^a-zA-Z0-9]/g, '-')}`;
+      const cached = localStorage.getItem(cacheKey);
       
       if (cached) {
         try {
           const parsed = JSON.parse(cached);
           if (parsed.expiry > Date.now()) {
-            // Incrementar contador de cache hits
-            const hits = parseInt(localStorage.getItem('cache-hits') || '0') + 1;
-            localStorage.setItem('cache-hits', hits.toString());
-            
-            // Crear respuesta mock desde cache
             return new Response(JSON.stringify(parsed.data), {
               status: 200,
               headers: { 
@@ -209,18 +210,40 @@ export async function apiFetch(url, opts = {}) {
               }
             });
           }
-        } catch (parseError) {
+        } catch {
           // Ignorar errores de parseo
         }
       }
     }
 
-    // Incrementar contador de cache misses
-    const misses = parseInt(localStorage.getItem('cache-misses') || '0') + 1;
-    localStorage.setItem('cache-misses', misses.toString());
-
     throw error;
   }
+}
+
+// Limitar cache a máximo 50 entradas para no llenar localStorage
+function _evictOldCacheEntries() {
+  try {
+    const MAX_CACHE_ENTRIES = 50;
+    const cacheKeys = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && key.startsWith('crm-cache-')) {
+        cacheKeys.push(key);
+      }
+    }
+    if (cacheKeys.length > MAX_CACHE_ENTRIES) {
+      // Eliminar las entradas más antiguas
+      const entries = cacheKeys.map(key => {
+        try {
+          const data = JSON.parse(localStorage.getItem(key));
+          return { key, timestamp: data.expiry || 0 };
+        } catch { return { key, timestamp: 0 }; }
+      }).sort((a, b) => a.timestamp - b.timestamp);
+      
+      const toRemove = entries.slice(0, entries.length - MAX_CACHE_ENTRIES);
+      toRemove.forEach(e => localStorage.removeItem(e.key));
+    }
+  } catch { /* no-op */ }
 }
 
 // Función para limpiar reservas fantasma

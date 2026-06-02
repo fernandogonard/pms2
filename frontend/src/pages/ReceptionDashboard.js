@@ -1,6 +1,6 @@
 // pages/ReceptionDashboard.js
 // Dashboard de recepcionista — tabbed layout con resumen del día, reservas, cobros y habitaciones
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import ReceptionLayout from '../layouts/ReceptionLayout';
 import ReceptionReservations from '../components/ReceptionReservations';
 import RoomStatusBoard from '../components/RoomStatusBoard';
@@ -9,6 +9,7 @@ import CleaningManager from '../components/CleaningManager';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { apiFetch } from '../utils/api';
+import logo from '../assets/images/logo.png';
 
 // ─── Resumen del día ────────────────────────────────────────────────────────
 const DailySummary = ({ onGoTo }) => {
@@ -24,8 +25,8 @@ const DailySummary = ({ onGoTo }) => {
         apiFetch('/api/rooms'),
         apiFetch('/api/reservations'),
       ]);
-      const rooms        = await rRes.json().then(d => Array.isArray(d) ? d : []);
-      const reservations = await resRes.json().then(d => Array.isArray(d) ? d : []);
+      const rooms        = await rRes.json().then(d => Array.isArray(d) ? d : (d?.data || []));
+      const reservations = await resRes.json().then(d => Array.isArray(d) ? d : (d?.data || []));
 
       const checkinHoy        = reservations.filter(r => r.checkIn?.slice(0,10) === today && r.status === 'reservada');
       const checkoutPendiente = reservations.filter(r => r.status === 'checkin' && r.checkOut?.slice(0,10) <= today);
@@ -369,9 +370,9 @@ const ReceptionDashboard = () => {
           {/* Fila superior: logo + usuario */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 20px 0' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <span style={{ fontSize: 22 }}>🏨</span>
+              <img src={logo} alt="Hotel DIVA" style={{ width: 36, height: 36, borderRadius: '50%', objectFit: 'cover' }} />
               <div>
-                <div style={{ fontWeight: 700, fontSize: 15, color: '#fff', lineHeight: 1.1 }}>MiHotel CRM</div>
+                <div style={{ fontWeight: 700, fontSize: 15, color: '#fff', lineHeight: 1.1 }}>Hotel DIVA</div>
                 <div style={{ fontSize: 11, color: '#6b7280' }}>Recepción</div>
               </div>
             </div>

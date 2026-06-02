@@ -30,7 +30,7 @@ const ReceptionReservations = () => {
       const reservationsData = await reservationsRes.json();
 
       setData({
-        reservations: Array.isArray(reservationsData) ? reservationsData : [],
+        reservations: Array.isArray(reservationsData) ? reservationsData : (reservationsData?.data || []),
         rooms: Array.isArray(roomsData) ? roomsData : [],
         users: [],
       });

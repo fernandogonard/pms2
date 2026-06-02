@@ -69,8 +69,8 @@ router.post('/login',
   authController.login
 );
 
-// Renovar token
-router.post('/refresh-token', authController.refreshToken);
+// Renovar token (rate limited, no necesita protect: usa refresh cookie)
+router.post('/refresh-token', loginLimiter, authController.refreshToken);
 
 // Obtener usuario actual (requiere autenticación)
 router.get('/me', protect, authController.getCurrentUser);
@@ -84,5 +84,9 @@ router.post('/change-password',
 
 // Logout (requiere autenticación)
 router.post('/logout', protect, authController.logout);
+
+// Recuperación de contraseña (público — rate limited)
+router.post('/forgot-password', loginLimiter, authController.forgotPassword);
+router.post('/reset-password/:token', loginLimiter, authController.resetPassword);
 
 module.exports = router;

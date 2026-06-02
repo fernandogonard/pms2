@@ -36,7 +36,7 @@ const RoomTable = () => {
       // Filtrar solo reservas con check-in
       const activeCheckins = Array.isArray(reservationsData) 
         ? reservationsData.filter(r => r.status === 'checkin') 
-        : [];
+        : (reservationsData?.data || []).filter(r => r.status === 'checkin');
       setReservations(activeCheckins);
     } catch (e) {
       setError('No se pudieron cargar las habitaciones.');

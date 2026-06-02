@@ -15,6 +15,28 @@ class AuthService {
 
     // Token blacklist en memoria como cache rápido + MongoDB como persistencia
     this._tokenBlacklistCache = new Set();
+
+    // Limpiar tokens expirados del cache cada 30 minutos
+    this._blacklistCleanupInterval = setInterval(() => {
+      this._cleanExpiredTokensFromCache();
+    }, 30 * 60 * 1000);
+  }
+
+  /**
+   * Limpia tokens expirados de la blacklist en memoria.
+   */
+  _cleanExpiredTokensFromCache() {
+    const now = Math.floor(Date.now() / 1000);
+    for (const token of this._tokenBlacklistCache) {
+      try {
+        const decoded = jwt.decode(token);
+        if (decoded && decoded.exp && decoded.exp < now) {
+          this._tokenBlacklistCache.delete(token);
+        }
+      } catch {
+        this._tokenBlacklistCache.delete(token);
+      }
+    }
   }
 
   /**
@@ -64,7 +86,7 @@ class AuthService {
     }
     
     logger.debug(`[AuthService] Cache miss para usuario ${userId}, consultando DB`);
-    const user = await User.findById(userId).lean(); // .lean() para mejor rendimiento
+    const user = await User.findById(userId).lean(); // password ya excluido por select: false
     
     if (user) {
       this.userCache.set(userKey, {
@@ -76,13 +98,11 @@ class AuthService {
     return user;
   }
   
-  // Generar token JWT
+  // Generar token JWT (access token — solo userId y role, sin PII)
   generateToken(user) {
     const payload = {
       userId: user._id,
-      email: user.email,
-      role: user.role,
-      name: user.name
+      role: user.role
     };
 
     return jwt.sign(payload, process.env.JWT_SECRET, {
@@ -90,24 +110,34 @@ class AuthService {
     });
   }
 
-  // Generar refresh token (válido por más tiempo)
+  // Generar refresh token (secret separado para aislamiento)
   generateRefreshToken(user) {
     const payload = {
       userId: user._id,
       type: 'refresh'
     };
 
-    return jwt.sign(payload, process.env.JWT_SECRET, {
+    return jwt.sign(payload, process.env.JWT_REFRESH_SECRET, {
       expiresIn: '7d'
     });
   }
 
-  // Verificar token JWT
+  // Verificar access token
   verifyToken(token) {
     try {
       return jwt.verify(token, process.env.JWT_SECRET);
     } catch (error) {
       logger.warn('Token verification failed', { error: error.message });
+      return null;
+    }
+  }
+
+  // Verificar refresh token (usa secret separado)
+  verifyRefreshToken(token) {
+    try {
+      return jwt.verify(token, process.env.JWT_REFRESH_SECRET);
+    } catch (error) {
+      logger.warn('Refresh token verification failed', { error: error.message });
       return null;
     }
   }
@@ -124,9 +154,13 @@ class AuthService {
   }
 
   // Registrar nuevo usuario
-  async register(userData) {
+  // NOTA: isAdmin=true solo debe pasarse desde endpoints protegidos por authorize('admin')
+  async register(userData, { isAdmin = false } = {}) {
     try {
-      const { name, email, password, role = 'cliente' } = userData;
+      const { name, email, password } = userData;
+
+      // Forzar rol 'cliente' en registro público. Solo admins pueden asignar otros roles.
+      const role = isAdmin && userData.role ? userData.role : 'cliente';
 
       // Verificar si el usuario ya existe
       const existingUser = await User.findOne({ email: email.toLowerCase() });
@@ -245,9 +279,9 @@ class AuthService {
   }
 
   // Renovar token usando refresh token
-  async refreshToken(refreshToken) {
+  async refreshToken(refreshTokenValue) {
     try {
-      const decoded = this.verifyToken(refreshToken);
+      const decoded = this.verifyRefreshToken(refreshTokenValue);
       if (!decoded || decoded.type !== 'refresh') {
         return {
           success: false,

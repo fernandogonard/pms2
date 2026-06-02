@@ -1,8 +1,9 @@
 // contexts/AuthContext.js
 // Contexto de autenticación para el frontend
+// SEGURIDAD: Access token solo en memoria (React state). Refresh token en httpOnly cookie.
 
-import React, { createContext, useContext, useReducer, useEffect } from 'react';
-import { apiFetch } from '../utils/api';
+import React, { createContext, useContext, useReducer, useEffect, useCallback, useRef } from 'react';
+import { apiFetch, setAccessToken } from '../utils/api';
 
 const AuthContext = createContext();
 
@@ -18,7 +19,6 @@ const authReducer = (state, action) => {
         isAuthenticated: true,
         user: action.payload.user,
         token: action.payload.token,
-        refreshToken: action.payload.refreshToken,
         loading: false,
         error: null
       };
@@ -29,7 +29,6 @@ const authReducer = (state, action) => {
         isAuthenticated: false,
         user: null,
         token: null,
-        refreshToken: null,
         loading: false,
         error: null
       };
@@ -56,8 +55,7 @@ const authReducer = (state, action) => {
     case 'TOKEN_REFRESHED':
       return {
         ...state,
-        token: action.payload.token,
-        refreshToken: action.payload.refreshToken
+        token: action.payload.token
       };
     
     default:
@@ -65,12 +63,11 @@ const authReducer = (state, action) => {
   }
 };
 
-// Estado inicial
+// Estado inicial — sin refreshToken en el estado (vive solo en httpOnly cookie)
 const initialState = {
   isAuthenticated: false,
   user: null,
   token: null,
-  refreshToken: null,
   loading: true,
   error: null
 };
@@ -87,182 +84,90 @@ export const useAuth = () => {
 // Proveedor de autenticación
 export const AuthProvider = ({ children }) => {
   const [state, dispatch] = useReducer(authReducer, initialState);
-  
-  // Flag para prevenir inicialización múltiple
-  const [isInitialized, setIsInitialized] = React.useState(false);
+  const initRef = useRef(false);
 
-  // Inicializar autenticación al cargar la app - solo una vez
+  // Inicializar autenticación al cargar la app
+  // El refresh token está en httpOnly cookie — llamar al backend para obtener access token
   useEffect(() => {
-    if (isInitialized) {
-      console.log('⚠️ [AuthContext] Evitando inicialización duplicada');
-      return;
-    }
-    
-    let isMounted = true;
+    if (initRef.current) return;
+    initRef.current = true;
+
     const initAuth = async () => {
-      if (isMounted && !isInitialized) {
-        console.log('🚀 [AuthContext] Primera inicialización');
-        setIsInitialized(true);
-        await initializeAuth();
+      try {
+        // Intentar obtener nuevo access token via cookie httpOnly
+        const response = await apiFetch('/api/auth/refresh-token', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include' // Envía la cookie automáticamente
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          if (data.success && data.token && data.user) {
+            setAccessToken(data.token);
+            dispatch({
+              type: 'LOGIN_SUCCESS',
+              payload: {
+                user: data.user,
+                token: data.token
+              }
+            });
+            return;
+          }
+        }
+        // No hay sesión activa
+        setAccessToken(null);
+        dispatch({ type: 'SET_LOADING', payload: false });
+      } catch {
+        // Error de red — no hay sesión
+        setAccessToken(null);
+        dispatch({ type: 'SET_LOADING', payload: false });
       }
     };
     initAuth();
-    return () => { isMounted = false; };
-  }, [isInitialized]);
-
-  // Inicializar estado de autenticación desde localStorage
-  const initializeAuth = async () => {
-    try {
-      console.log('🔍 [AuthContext] Inicializando autenticación...');
-      
-      const token = localStorage.getItem('token');
-      const refreshToken = localStorage.getItem('refreshToken');
-      const user = localStorage.getItem('user');
-
-      console.log('📦 [AuthContext] Datos en localStorage:', {
-        hasToken: !!token,
-        hasRefreshToken: !!refreshToken,
-        hasUser: !!user,
-        tokenLength: token ? token.length : 0
-      });
-
-      if (token && user) {
-        try {
-          const parsedUser = JSON.parse(user);
-          console.log('👤 [AuthContext] Usuario parseado:', {
-            email: parsedUser.email,
-            role: parsedUser.role,
-            name: parsedUser.name
-          });
-          
-          dispatch({
-            type: 'LOGIN_SUCCESS',
-            payload: {
-              user: parsedUser,
-              token,
-              refreshToken
-            }
-          });
-
-          console.log('✅ [AuthContext] Estado de autenticación restaurado');
-          
-          // NO verificar token inmediatamente - confiar en localStorage temporalmente
-          console.log('⏭️ [AuthContext] Saltando verificación inmediata de token para evitar duplicados');
-          
-        } catch (error) {
-          console.error('🚨 [AuthContext] Error parseando usuario:', error);
-          clearAuthData();
-        }
-      } else {
-        console.log('📭 [AuthContext] Sin datos de autenticación en localStorage');
-        dispatch({ type: 'SET_LOADING', payload: false });
-      }
-    } catch (error) {
-      console.error('🚨 [AuthContext] Error inicializando autenticación:', error);
-      clearAuthData();
-    }
-  };
-
-  // Manejar renovación de token
-  const handleRefreshToken = async (refreshToken) => {
-    try {
-      const response = await apiFetch('/api/auth/refresh-token', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ refreshToken })
-      });
-
-      const data = await response.json();
-
-      if (data.success) {
-        const { token: newToken, refreshToken: newRefreshToken, user } = data;
-        
-        // Actualizar localStorage
-        localStorage.setItem('token', newToken);
-        localStorage.setItem('refreshToken', newRefreshToken);
-        localStorage.setItem('user', JSON.stringify(user));
-
-        dispatch({
-          type: 'LOGIN_SUCCESS',
-          payload: {
-            user,
-            token: newToken,
-            refreshToken: newRefreshToken
-          }
-        });
-      } else {
-        clearAuthData();
-      }
-    } catch (error) {
-      console.error('Error renovando token:', error);
-      clearAuthData();
-    }
-  };
+  }, []);
 
   // Limpiar datos de autenticación
-  const clearAuthData = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('refreshToken');
-    localStorage.removeItem('user');
+  const clearAuthData = useCallback(() => {
+    setAccessToken(null);
+    // Limpiar restos de localStorage legacy (migración)
+    try {
+      localStorage.removeItem('token');
+      localStorage.removeItem('refreshToken');
+      localStorage.removeItem('user');
+    } catch { /* no-op */ }
     dispatch({ type: 'LOGOUT' });
-  };
+  }, []);
 
   // Login
-  const login = async (credentials) => {
+  const login = useCallback(async (credentials) => {
     try {
-      console.log('🔐 [AuthContext] Iniciando login para:', credentials.email);
-      
       dispatch({ type: 'SET_LOADING', payload: true });
       dispatch({ type: 'CLEAR_ERROR' });
 
       const response = await apiFetch('/api/auth/login', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include', // Recibir la httpOnly cookie del backend
         body: JSON.stringify(credentials)
-      });
-
-      console.log('📡 [AuthContext] Respuesta login:', {
-        status: response.status,
-        ok: response.ok,
-        statusText: response.statusText
       });
 
       if (response.ok) {
         const data = await response.json();
-        console.log('📄 [AuthContext] Datos login:', {
-          success: data.success,
-          hasUser: !!data.user,
-          hasToken: !!data.token,
-          userEmail: data.user?.email
-        });
 
         if (data.success) {
-          const { user, token, refreshToken } = data;
-          
-          console.log('✅ [AuthContext] Login exitoso para:', user.email);
-          
-          // Guardar en localStorage
-          localStorage.setItem('token', token);
-          localStorage.setItem('refreshToken', refreshToken);
-          localStorage.setItem('user', JSON.stringify(user));
+          const { user, token } = data;
 
+          setAccessToken(token);
           dispatch({
             type: 'LOGIN_SUCCESS',
-            payload: { user, token, refreshToken }
+            payload: { user, token }
           });
 
           return { success: true };
         } else {
           const errorMessage = data.message || 'Error en el login';
-          console.error('❌ [AuthContext] Login falló:', errorMessage);
-          dispatch({
-            type: 'SET_ERROR',
-            payload: errorMessage
-          });
+          dispatch({ type: 'SET_ERROR', payload: errorMessage });
           return { success: false, message: errorMessage };
         }
       } else {
@@ -270,140 +175,107 @@ export const AuthProvider = ({ children }) => {
         try {
           const data = await response.json();
           errorMessage = data.message || errorMessage;
-        } catch (e) {
-          console.log('No se pudo parsear respuesta de error');
-        }
+        } catch { /* no-op */ }
         
-        console.error('❌ [AuthContext] Login HTTP error:', response.status, errorMessage);
-        dispatch({
-          type: 'SET_ERROR',
-          payload: errorMessage
-        });
+        dispatch({ type: 'SET_ERROR', payload: errorMessage });
         return { success: false, message: errorMessage };
       }
     } catch (error) {
-      console.error('🚨 [AuthContext] Excepción en login:', error);
       const errorMessage = error.message || 'Error de conexión';
-      dispatch({
-        type: 'SET_ERROR',
-        payload: errorMessage
-      });
+      dispatch({ type: 'SET_ERROR', payload: errorMessage });
       return { success: false, message: errorMessage };
     }
-  };
+  }, []);
 
   // Registro
-  const register = async (userData) => {
+  const register = useCallback(async (userData) => {
     try {
       dispatch({ type: 'SET_LOADING', payload: true });
       dispatch({ type: 'CLEAR_ERROR' });
 
       const response = await apiFetch('/api/auth/register', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify(userData)
       });
 
       const data = await response.json();
 
       if (data.success) {
-        const { user, token, refreshToken } = data;
-        
-        // Guardar en localStorage
-        localStorage.setItem('token', token);
-        localStorage.setItem('refreshToken', refreshToken);
-        localStorage.setItem('user', JSON.stringify(user));
+        const { user, token } = data;
 
+        setAccessToken(token);
         dispatch({
           type: 'LOGIN_SUCCESS',
-          payload: { user, token, refreshToken }
+          payload: { user, token }
         });
 
         return { success: true };
       } else {
-        dispatch({
-          type: 'SET_ERROR',
-          payload: data.message || 'Error en el registro'
-        });
+        dispatch({ type: 'SET_ERROR', payload: data.message || 'Error en el registro' });
         return { success: false, message: data.message };
       }
     } catch (error) {
       const errorMessage = error.message || 'Error de conexión';
-      dispatch({
-        type: 'SET_ERROR',
-        payload: errorMessage
-      });
+      dispatch({ type: 'SET_ERROR', payload: errorMessage });
       return { success: false, message: errorMessage };
     }
-  };
+  }, []);
 
   // Logout
-  const logout = async () => {
+  const logout = useCallback(async () => {
     try {
-      // Intentar logout en el servidor
       if (state.token) {
         await apiFetch('/api/auth/logout', {
           method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${state.token}`
-          }
+          headers: { 'Authorization': `Bearer ${state.token}` },
+          credentials: 'include' // Backend limpia la cookie
         });
       }
-    } catch (error) {
-      console.error('Error en logout del servidor:', error);
-    } finally {
+    } catch { /* no-op */ } finally {
       clearAuthData();
     }
-  };
+  }, [state.token, clearAuthData]);
 
   // Cambiar contraseña
-  const changePassword = async (currentPassword, newPassword) => {
+  const changePassword = useCallback(async (currentPassword, newPassword) => {
     try {
       dispatch({ type: 'CLEAR_ERROR' });
 
       const response = await apiFetch('/api/auth/change-password', {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${state.token}`
-        },
+        headers: { 'Authorization': `Bearer ${state.token}` },
         body: JSON.stringify({ currentPassword, newPassword })
       });
 
       if (response.success) {
         return { success: true, message: response.message };
       } else {
-        dispatch({
-          type: 'SET_ERROR',
-          payload: response.message
-        });
+        dispatch({ type: 'SET_ERROR', payload: response.message });
         return { success: false, message: response.message };
       }
     } catch (error) {
       const errorMessage = error.message || 'Error cambiando contraseña';
-      dispatch({
-        type: 'SET_ERROR',
-        payload: errorMessage
-      });
+      dispatch({ type: 'SET_ERROR', payload: errorMessage });
       return { success: false, message: errorMessage };
     }
-  };
+  }, [state.token]);
 
   // Limpiar errores
-  const clearError = () => {
+  const clearError = useCallback(() => {
     dispatch({ type: 'CLEAR_ERROR' });
-  };
+  }, []);
 
   // Verificar si el usuario tiene un rol específico
-  const hasRole = (role) => {
+  const hasRole = useCallback((role) => {
     return state.user?.role === role;
-  };
+  }, [state.user]);
 
   // Verificar si el usuario tiene uno de varios roles
-  const hasAnyRole = (roles) => {
+  const hasAnyRole = useCallback((roles) => {
     return state.user && roles.includes(state.user.role);
-  };
+  }, [state.user]);
 
   const value = {
     ...state,

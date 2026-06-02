@@ -1,4 +1,4 @@
-const mongoose = require('mongoose');
+﻿const mongoose = require('mongoose');
 const fs = require('fs');
 const path = require('path');
 const dotenv = require('dotenv');
@@ -29,10 +29,7 @@ async function createBackup() {
     
     if (!isConnected) {
       console.log('🏨 Conectando a la base de datos...');
-      await mongoose.connect(MONGO_URI, {
-        useNewUrlParser: true,
-        useUnifiedTopology: true
-      });
+      await mongoose.connect(MONGO_URI);
       console.log('✅ Conectado a MongoDB');
     } else {
       console.log('✅ Usando conexión MongoDB existente');
@@ -54,7 +51,9 @@ async function createBackup() {
         collections: ['rooms', 'users', 'clients', 'reservations']
       },
       rooms: await Room.find({}).lean(),
-      users: await User.find({}).lean(),
+      // Excluir campos sensibles del backup — password hash, tokens de reset
+      // Nota: .lean() bypass select:false por eso se excluye explícitamente
+      users: await User.find({}).select('-password -passwordResetToken -passwordResetExpires').lean(),
       clients: await Client.find({}).lean(),
       reservations: await Reservation.find({}).lean()
     };
@@ -89,6 +88,16 @@ async function createBackup() {
         const fileDate = format(stats.mtime, 'dd/MM/yyyy HH:mm:ss');
         console.log(`${index + 1}. ${file} (${fileSizeMB} MB) - ${fileDate}`);
       });
+      // Retencion: mantener solo los ultimos 7 backups
+      const MAX_BACKUPS = 7;
+      if (backups.length > MAX_BACKUPS) {
+        const toDelete = backups.slice(MAX_BACKUPS);
+        toDelete.forEach(file => {
+          try { fs.unlinkSync(path.join(BACKUP_DIR, file)); } catch (_) {}
+          console.log('Backup antiguo eliminado: ' + file);
+        });
+      }
+
       
       return {
         success: true,

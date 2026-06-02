@@ -4,6 +4,10 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import './index.css';
 import App from './App';
+import { initMonitoring } from './utils/monitoring';
+
+// Inicializar monitoreo global (error handlers, Sentry si REACT_APP_SENTRY_DSN está configurado)
+initMonitoring();
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(

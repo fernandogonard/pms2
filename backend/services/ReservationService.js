@@ -30,54 +30,58 @@ class ReservationService {
 
   /**
    * Valida la disponibilidad de habitaciones para un tipo y rango de fechas.
+   * Usa UNA sola query de aggregation en lugar de N queries (1 por día).
    * Retorna { available: true } o { available: false, details: {...} }
    */
   static async validateAvailability({ tipo, cantidad, checkIn, checkOut }) {
     const cantidadSolicitada = cantidad || 1;
 
-    const habitacionesDelTipo = await Room.find({
-      type: tipo,
-      active: true,
-      status: { $nin: ['mantenimiento', 'limpieza'] }
-    }).lean();
+    // Normalizar fechas por si vienen como Date objects (de Joi)
+    const checkInStr = checkIn instanceof Date ? checkIn.toISOString().slice(0, 10) : checkIn;
+    const checkOutStr = checkOut instanceof Date ? checkOut.toISOString().slice(0, 10) : checkOut;
 
-    const totalHabitaciones = habitacionesDelTipo.length;
+    // 1. Contar habitaciones del tipo (1 query)
+    const totalHabitaciones = await Room.countDocuments({
+      type: tipo,
+      status: { $nin: ['mantenimiento', 'limpieza'] }
+    });
+
     if (totalHabitaciones === 0) {
       return { available: false, message: `No existen habitaciones del tipo "${tipo}".`, statusCode: 400 };
     }
 
-    const fechaInicio = new Date(checkIn + 'T00:00:00Z');
-    const fechaFin = new Date(checkOut + 'T00:00:00Z');
+    const fechaInicio = new Date(checkInStr + 'T00:00:00Z');
+    const fechaFin = new Date(checkOutStr + 'T00:00:00Z');
 
-    // Iterar día a día para verificar disponibilidad
-    const fechasReserva = [];
+    // 2. UNA sola query: obtener todas las reservas que solapan con el rango completo
+    const reservasSolapadas = await Reservation.find({
+      tipo,
+      status: { $nin: ['checkout', 'cancelada'] },
+      checkIn: { $lt: fechaFin },
+      checkOut: { $gt: fechaInicio }
+    }).select('checkIn checkOut room cantidad').lean();
+
+    // 3. Iterar días en memoria (no en DB) para encontrar el pico de ocupación
     for (let d = new Date(fechaInicio); d < fechaFin; d.setDate(d.getDate() + 1)) {
-      fechasReserva.push(d.toISOString().split('T')[0]);
-    }
-
-    for (const fecha of fechasReserva) {
-      const fechaObj = new Date(fecha + 'T00:00:00Z');
-      const fechaSiguiente = new Date(fechaObj);
-      fechaSiguiente.setDate(fechaSiguiente.getDate() + 1);
-
-      const reservasEnFecha = await Reservation.find({
-        tipo,
-        status: { $nin: ['checkout', 'cancelada'] },
-        checkIn: { $lt: fechaSiguiente },
-        checkOut: { $gt: fechaObj }
-      }).lean();
+      const diaActual = new Date(d);
+      const diaSiguiente = new Date(d);
+      diaSiguiente.setDate(diaSiguiente.getDate() + 1);
 
       let habitacionesOcupadas = 0;
-      reservasEnFecha.forEach(reserva => {
-        if (reserva.room && reserva.room.length > 0) {
-          habitacionesOcupadas += reserva.room.length;
-        } else {
-          habitacionesOcupadas += (reserva.cantidad || 1);
+      for (const reserva of reservasSolapadas) {
+        const rCheckIn = new Date(reserva.checkIn);
+        const rCheckOut = new Date(reserva.checkOut);
+        // ¿Esta reserva cubre este día?
+        if (rCheckIn < diaSiguiente && rCheckOut > diaActual) {
+          habitacionesOcupadas += (reserva.room && reserva.room.length > 0)
+            ? reserva.room.length
+            : (reserva.cantidad || 1);
         }
-      });
+      }
 
       const habitacionesDisponibles = totalHabitaciones - habitacionesOcupadas;
       if (cantidadSolicitada > habitacionesDisponibles) {
+        const fecha = diaActual.toISOString().split('T')[0];
         return {
           available: false,
           statusCode: 409,
@@ -103,6 +107,10 @@ class ReservationService {
   static async createReservation(data, options = {}) {
     const { session, userId, isStaff } = options;
     let { tipo, cantidad, checkIn, checkOut, nombre, apellido, dni, email, whatsapp } = data;
+
+    // Joi date().iso() convierte strings a Date objects — normalizar de vuelta a YYYY-MM-DD
+    if (checkIn instanceof Date) checkIn = checkIn.toISOString().slice(0, 10);
+    if (checkOut instanceof Date) checkOut = checkOut.toISOString().slice(0, 10);
 
     // Auto-completar datos para staff (reservas rápidas)
     if (isStaff) {

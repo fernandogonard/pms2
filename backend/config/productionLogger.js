@@ -96,13 +96,25 @@ const productionLoggerConfig = {
 
   // Logs de eventos de negocio críticos
   logBusinessEvent: (eventType, data, userId, severity = 'info') => {
-    logger.log(severity, `Business event: ${eventType}`, {
+    const msg = `Business event: ${eventType}`;
+    const meta = {
       eventType,
       data,
       userId,
       timestamp: new Date().toISOString(),
       event: 'BUSINESS_EVENT'
-    });
+    };
+    // Usar métodos concretos — logger.log(level, msg) no siempre está disponible
+    // dependiendo de cómo se instancie Winston o el shim de compatibilidad.
+    if (severity === 'warn') {
+      logger.warn(msg, meta);
+    } else if (severity === 'error') {
+      logger.error(msg, meta);
+    } else if (severity === 'debug') {
+      logger.debug(msg, meta);
+    } else {
+      logger.info(msg, meta);
+    }
   },
 
   // Logs de sesiones de usuario

@@ -48,15 +48,15 @@ module.exports = function(app) {
   
   // Middleware para establecer cabeceras de codificación en todas las respuestas
   app.use('*', (req, res, next) => {
-    // Solo agregar cabeceras si no es una solicitud de API o WS
-    if (!req.url.startsWith('/api') && !req.url.startsWith('/ws')) {
+    // Solo agregar cabeceras en rutas HTML puras (no archivos estáticos ni API/WS)
+    const isStatic = req.url.startsWith('/static/') || req.url.startsWith('/sockjs-node') ||
+      /\.(js|css|map|json|png|ico|svg|woff|woff2|ttf|eot)(\?|$)/.test(req.url);
+    if (!req.url.startsWith('/api') && !req.url.startsWith('/ws') && !isStatic) {
       res.set({
-        'Content-Type': 'text/html; charset=utf-8',
         'X-Content-Type-Options': 'nosniff',
         'X-Frame-Options': 'SAMEORIGIN',
         'X-XSS-Protection': '1; mode=block',
-        'Referrer-Policy': 'strict-origin-when-cross-origin',
-        'Charset': 'utf-8'
+        'Referrer-Policy': 'strict-origin-when-cross-origin'
       });
     }
     next();

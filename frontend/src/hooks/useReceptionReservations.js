@@ -65,7 +65,7 @@ export default function useReceptionReservations() {
       const usersData = await usersRes.json();
 
       const result = {
-        reservations: Array.isArray(reservationsData) ? reservationsData : [],
+        reservations: Array.isArray(reservationsData) ? reservationsData : (reservationsData?.data || []),
         rooms: Array.isArray(roomsData) ? roomsData : [],
         users: Array.isArray(usersData) ? usersData : [],
         timestamp: now

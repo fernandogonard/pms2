@@ -5,8 +5,12 @@ const express = require('express');
 const cors = require('cors');
 const morgan = require('morgan');
 const helmet = require('helmet');
+const cookieParser = require('cookie-parser');
+const compression = require('compression');
 const { setupGlobalErrorHandlers, startPeriodicMetricsLogging } = require('./config/productionLogger');
 const { rateLimiterMonitor, startRateLimitMetricsLogging } = require('./config/rateLimiterMonitor');
+const { csrfOriginVerification } = require('./middlewares/csrfProtection');
+const monitoring = require('./services/monitoringService');
 
 // 🔒 Seguridad avanzada
 const advancedSecurity = require('./middlewares/advancedSecurity');
@@ -23,12 +27,36 @@ startRateLimitMetricsLogging();
 // Configurar trust proxy para rate limiting
 app.set('trust proxy', 1);
 
-// 🔒 SEGURIDAD AVANZADA - Aplicar antes de parsear datos
+// �️ Compresión gzip/brotli — antes de todo para comprimir todas las respuestas
+app.use(compression());
+
+// �🔒 SEGURIDAD AVANZADA - Aplicar antes de parsear datos
 app.use(advancedSecurity.securityHeaders);
 app.use(advancedSecurity.sanitizeInput);
 
 // Middlewares globales
-app.use(express.json());
+app.use(cookieParser());
+
+// Permitir DELETE/PUT/PATCH con Content-Type: application/json y body vacío.
+// Algunos clientes envían cabecera JSON aunque no haya cuerpo, y express.json lanza SyntaxError.
+app.use((req, res, next) => {
+  const contentType = (req.headers['content-type'] || '').toLowerCase();
+  const contentLength = (req.headers['content-length'] || '').trim();
+  if (req.method && ['DELETE', 'PUT', 'PATCH'].includes(req.method.toUpperCase()) && contentType.includes('application/json')) {
+    if (!contentLength || contentLength === '0') {
+      req.body = {};
+      req.headers['content-length'] = '0';
+    }
+  }
+  next();
+});
+
+app.use(express.json({
+  verify: (req, _res, buf) => {
+    // Guardar body crudo para verificación de firma de webhooks (MP, etc.)
+    req.rawBody = buf.toString('utf8');
+  }
+}));
 // Middleware rápido para forzar cabeceras CORS en respuestas preflight
 app.use((req, res, next) => {
   if (req.method === 'OPTIONS') {
@@ -45,13 +73,17 @@ app.use((req, res, next) => {
 // Configurar CORS para permitir credentials y origen controlado
 const CORS_ORIGIN_RAW = process.env.CORS_ORIGIN || 'http://localhost:3000,https://localhost:3000';
 const CORS_ALLOW_ALL = CORS_ORIGIN_RAW.trim() === '*';
+// En producción nunca permitir wildcard con credentials
+if (CORS_ALLOW_ALL && process.env.NODE_ENV === 'production') {
+  console.warn('[SECURITY] CORS_ORIGIN=* no está permitido en producción con credentials. Usando origins explícitos.');
+}
 const allowedOrigins = CORS_ALLOW_ALL ? [] : CORS_ORIGIN_RAW.split(',').map(s => s.trim());
 const corsOptions = {
   origin: function(origin, callback) {
     // Permitir solicitudes sin origin (curl, Postman, etc.)
     if (!origin) return callback(null, true);
-    // Si CORS_ORIGIN=* aceptar cualquier origen
-    if (CORS_ALLOW_ALL) return callback(null, true);
+    // Si CORS_ORIGIN=* aceptar cualquier origen (solo en desarrollo)
+    if (CORS_ALLOW_ALL && process.env.NODE_ENV !== 'production') return callback(null, true);
     // Normalizar origin: quitar barra final si existe
     const originNorm = origin.replace(/\/$/, '');
     const allowed = allowedOrigins.indexOf(originNorm) !== -1;
@@ -99,7 +131,18 @@ app.use((req, res, next) => {
 app.use(newRequestLogger);
 app.use(rateLimiterMonitor.middleware());
 app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
-app.use(helmet());
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      connectSrc: ["'self'", process.env.FRONTEND_URL, 'wss:', 'ws:'].filter(Boolean),
+      scriptSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      imgSrc: ["'self'", 'data:', 'https:'],
+      fontSrc: ["'self'", 'https:', 'data:'],
+    }
+  }
+}));
 
 // 🔒 Sistema de rate limiting avanzado
 const { generalLimiter } = require('./config/rateLimiter');
@@ -107,7 +150,10 @@ app.use(generalLimiter);
 app.use(advancedSecurity.rateLimitByUser);
 app.use(advancedSecurity.anomalyDetection);
 
-// 📊 Documentación Swagger/OpenAPI
+// �️ CSRF: verificación de Origin para requests mutantes (defense-in-depth)
+app.use(csrfOriginVerification);
+
+// �📊 Documentación Swagger/OpenAPI
 const swaggerUi = require('swagger-ui-express');
 const swaggerSpec = require('./config/swagger');
 app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
@@ -172,6 +218,10 @@ app.use('/api/analytics', analyticsRoutes);
 const auditRoutes = require('./routes/auditRoutes');
 app.use('/api/audit', auditRoutes);
 
+// 💳 Rutas de pagos Mercado Pago
+const paymentRoutes = require('./routes/paymentRoutes');
+app.use('/api/payments', paymentRoutes);
+
 // Ruta de health check pública
 app.get('/', (req, res) => {
   res.json({
@@ -184,19 +234,29 @@ app.get('/', (req, res) => {
   });
 });
 
-// Health check dedicado con estado de DB (para Railway/monitoring)
+// Health check (para Railway/monitoring)
 app.get('/health', (req, res) => {
   const mongoose = require('mongoose');
   const dbState = mongoose.connection.readyState;
-  const dbStatus = { 0: 'disconnected', 1: 'connected', 2: 'connecting', 3: 'disconnecting' };
   const isHealthy = dbState === 1;
+  const mem = process.memoryUsage();
+  const pkg = require('./package.json');
   res.status(isHealthy ? 200 : 503).json({
     status: isHealthy ? 'healthy' : 'unhealthy',
-    uptime: process.uptime(),
-    database: dbStatus[dbState] || 'unknown',
+    version: pkg.version || '1.0.0',
+    environment: process.env.NODE_ENV || 'development',
+    uptime: Math.floor(process.uptime()),
+    db: { state: ['disconnected','connected','connecting','disconnecting'][dbState] || 'unknown' },
+    memory: {
+      rss: Math.round(mem.rss / 1024 / 1024) + 'MB',
+      heap: Math.round(mem.heapUsed / 1024 / 1024) + 'MB'
+    },
     timestamp: new Date().toISOString()
   });
 });
+
+// Inicializar monitoreo (Sentry si SENTRY_DSN está configurado, sino no-op)
+monitoring.init(app);
 
 // Middlewares de manejo de errores (deben ir al final)
 const { 
@@ -217,6 +277,9 @@ app.use(notFoundHandler);
 
 // 📝 Middleware de logging de errores
 app.use(errorLogger);
+
+// 📡 Middleware de monitoreo — captura excepciones antes del handler global
+app.use(monitoring.errorMiddleware());
 
 // Middleware global de manejo de errores - DEBE SER EL ÚLTIMO
 app.use(globalErrorHandler);

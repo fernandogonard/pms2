@@ -2,6 +2,7 @@
 // Error Boundary enterprise con telemetría y recuperación
 
 import React from 'react';
+import { captureException } from '../utils/monitoring';
 
 class ErrorBoundary extends React.Component {
   constructor(props) {
@@ -43,7 +44,11 @@ class ErrorBoundary extends React.Component {
       errorInfo: errorData.errorInfo
     });
 
-    // Enviar telemetría de error
+    // Enviar telemetría de error via monitoring centralizado
+    captureException(error, {
+      source: 'ErrorBoundary',
+      componentStack: errorInfo?.componentStack
+    });
     this.sendErrorTelemetry(errorData);
 
     // Log local para desarrollo

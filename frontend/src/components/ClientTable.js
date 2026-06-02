@@ -30,7 +30,7 @@ const ClientTable = () => {
     try {
       const res = await apiFetch(`${API_CLIENTS}?q=${encodeURIComponent(search)}`);
       const data = await res.json();
-      setClients(Array.isArray(data) ? data : []);
+      setClients(Array.isArray(data) ? data : (data?.data || []));
     } catch (e) {
       setError('No se pudieron cargar los clientes.');
     } finally {
@@ -70,11 +70,14 @@ const ClientTable = () => {
       });
       if (!res.ok) {
         const data = await res.json();
-        setError(data.message || 'Error al guardar cliente');
+        const validationDetail = Array.isArray(data?.errors) && data.errors[0]?.message
+          ? data.errors[0].message
+          : null;
+        setError(validationDetail || data.message || 'Error al guardar cliente');
         return;
       }
       setSuccess(editingId ? 'Cliente actualizado con éxito.' : 'Cliente creado con éxito.');
-      setForm({ nombre: '', apellido: '', email: '', whatsapp: '' });
+      setForm({ nombre: '', apellido: '', dni: '', email: '', whatsapp: '' });
       setEditingId(null);
       fetchClients();
     } catch (err) {

@@ -98,7 +98,7 @@ const ReservationTable = () => {
       const reservationsData = await reservationsRes.json();
       const roomsData = await roomsRes.json();
       const usersData = await usersRes.json();
-      setReservations(Array.isArray(reservationsData) ? reservationsData : []);
+      setReservations(Array.isArray(reservationsData) ? reservationsData : (reservationsData?.data || []));
       setRooms(Array.isArray(roomsData) ? roomsData : []);
       setUsers(Array.isArray(usersData) ? usersData : []);
       setLoading(false);

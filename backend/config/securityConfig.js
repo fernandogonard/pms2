@@ -16,7 +16,7 @@ const getSecurityHeaders = () => {
         defaultSrc: ["'self'"],
         scriptSrc: [
           "'self'",
-          "'unsafe-inline'", // Solo para desarrollo, remover en producción
+          ...(isProduction ? [] : ["'unsafe-inline'"]),
           "https://cdn.jsdelivr.net",
           "https://cdnjs.cloudflare.com",
           ...(isProduction ? [] : ["'unsafe-eval'"])

@@ -20,6 +20,10 @@ clientSchema.virtual('fullName').get(function() {
   return this.getFullName();
 });
 
+// Índices para búsqueda y rendimiento
+clientSchema.index({ nombre: 1, apellido: 1 });
+clientSchema.index({ createdAt: -1 });
+
 // Asegurar que los virtuales se incluyan en JSON
 clientSchema.set('toJSON', { virtuals: true });
 clientSchema.set('toObject', { virtuals: true });

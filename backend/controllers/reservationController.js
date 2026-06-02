@@ -102,8 +102,9 @@ const getPendingCheckouts = async (req, res) => {
 
 // Crear reserva — delega toda la lógica de negocio a ReservationService
 const createReservation = async (req, res) => {
+  const txSupported = req.app.get('txSupported');
   const session = await mongoose.startSession();
-  session.startTransaction();
+  if (txSupported) session.startTransaction();
   const startTime = Date.now();
   const { tipo, cantidad, checkIn, checkOut } = req.body;
   const lockKey = `reservation-type:${tipo || 'unknown'}`;
@@ -130,7 +131,7 @@ const createReservation = async (req, res) => {
       const isStaff = req.user?.role && ['admin', 'recepcionista'].includes(req.user.role);
 
       result = await ReservationService.createReservation(req.body, {
-        session,
+        session: txSupported ? session : undefined,
         userId: user,
         isStaff
       });
@@ -145,7 +146,7 @@ const createReservation = async (req, res) => {
         });
       }
 
-      await session.commitTransaction();
+      if (txSupported) await session.commitTransaction();
     });
 
     const duration = Date.now() - startTime;
@@ -158,9 +159,21 @@ const createReservation = async (req, res) => {
     );
     logger.performance.requestTime(req.method, req.originalUrl, duration, 201, user);
 
+    // Email confirmación — no bloquea la respuesta
+    setImmediate(async () => {
+      try {
+        const emailService = require('../services/emailService');
+        const Reservation = require('../models/Reservation');
+        const populated = await Reservation.findById(result._id).populate('client', 'nombre apellido email');
+        if (populated?.client?.email) {
+          await emailService.sendReservationConfirmation({ reservation: populated, client: populated.client });
+        }
+      } catch (e) { logger.warn('Error enviando email confirmación reserva:', e.message); }
+    });
+
     return res.status(201).json(result);
   } catch (error) {
-    await session.abortTransaction();
+    if (txSupported) await session.abortTransaction().catch(() => {});
 
     if (error && error.name === 'LockBusyError') {
       logger.warn('createReservation lock busy', { tipo, userId: user, ip: req.ip });
@@ -199,12 +212,37 @@ const getReservations = async (req, res) => {
       { role: req.user.role, ip: req.ip }
     );
 
-    const reservations = await Reservation.find()
-      .populate('room', 'number type floor')
-      .populate('client', 'nombre apellido email dni whatsapp')
-      .populate('user', 'name email role');
+    // Paginación + filtros
+    const page = Math.max(1, parseInt(req.query.page) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 50));
+    const skip = (page - 1) * limit;
 
-    // 📝 Log de performance para queries lentas
+    // Filtro por status
+    const filter = {};
+    if (req.query.status) {
+      filter.status = req.query.status;
+    }
+    // Filtro por rango de fechas
+    if (req.query.from) {
+      filter.checkIn = { ...filter.checkIn, $gte: new Date(req.query.from + 'T00:00:00Z') };
+    }
+    if (req.query.to) {
+      filter.checkOut = { ...filter.checkOut, $lte: new Date(req.query.to + 'T23:59:59Z') };
+    }
+
+    const [reservations, total] = await Promise.all([
+      Reservation.find(filter)
+        .populate('room', 'number type floor')
+        .populate('client', 'nombre apellido email dni whatsapp')
+        .populate('user', 'name email role')
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean(),
+      Reservation.countDocuments(filter)
+    ]);
+
+    // Log de performance para queries lentas
     const duration = Date.now() - startTime;
     if (duration > 1000) {
       logger.performance.slowOperation('GET_RESERVATIONS_QUERY', duration, {
@@ -215,9 +253,17 @@ const getReservations = async (req, res) => {
 
     logger.performance.requestTime(req.method, req.originalUrl, duration, 200, req.user.id);
 
-    res.json(reservations);
+    res.json({
+      success: true,
+      data: reservations,
+      pagination: {
+        page,
+        limit,
+        total,
+        pages: Math.ceil(total / limit)
+      }
+    });
   } catch (error) {
-    // 📝 Log de error
     const duration = Date.now() - startTime;
     logger.error('Error al obtener reservas', error, {
       userId: req.user.id,
@@ -228,7 +274,7 @@ const getReservations = async (req, res) => {
 
     logger.performance.requestTime(req.method, req.originalUrl, duration, 500, req.user.id);
 
-    res.status(500).json({ message: 'Error al obtener reservas.', error });
+    res.status(500).json({ success: false, message: 'Error al obtener reservas.' });
   }
 };
 
@@ -353,6 +399,7 @@ const assignRoomToReservation = async (req, res) => {
   const lockKeys = sortedRoomIds.map(id => `room:${id}`);
   const acquiredLocks = [];
   const session = await mongoose.startSession();
+  const txSupported = req.app.get('txSupported');
 
   try {
     // Adquirir locks para todas las habitaciones
@@ -369,19 +416,19 @@ const assignRoomToReservation = async (req, res) => {
       acquiredLocks.push({ key: lockKey, owner });
     }
 
-    // Iniciar transacción DESPUÉS de adquirir locks
-    session.startTransaction();
+    // Iniciar transacción DESPUÉS de adquirir locks (si el RS lo soporta)
+    if (txSupported) session.startTransaction();
 
     const reservation = await Reservation.findById(reservationId).session(session);
     if (!reservation) {
-      await session.abortTransaction();
+      if (txSupported) await session.abortTransaction().catch(() => {});
       return res.status(404).json({ message: 'Reserva no encontrada.' });
     }
 
     const requested = room.length;
     const allowed = reservation.cantidad || 1;
     if (requested > allowed) {
-      await session.abortTransaction();
+      if (txSupported) await session.abortTransaction().catch(() => {});
       return res.status(400).json({ message: `Se intentan asignar ${requested} habitaciones pero la reserva solicita ${allowed}.` });
     }
 
@@ -389,12 +436,12 @@ const assignRoomToReservation = async (req, res) => {
     for (const rId of room) {
       const rm = await Room.findById(rId).session(session);
       if (!rm) {
-        await session.abortTransaction();
+        if (txSupported) await session.abortTransaction().catch(() => {});
         return res.status(404).json({ message: `Habitación ${rId} no encontrada.` });
       }
 
       if (['mantenimiento', 'limpieza'].includes(rm.status)) {
-        await session.abortTransaction();
+        if (txSupported) await session.abortTransaction().catch(() => {});
         return res.status(400).json({ message: `La habitación ${rm.number} no está disponible para asignación (status ${rm.status}).` });
       }
 
@@ -407,7 +454,7 @@ const assignRoomToReservation = async (req, res) => {
         ]
       }).session(session);
       if (overlap) {
-        await session.abortTransaction();
+        if (txSupported) await session.abortTransaction().catch(() => {});
         return res.status(409).json({ message: `La habitación ${rm.number} ya está reservada en esas fechas.` });
       }
 
@@ -419,7 +466,7 @@ const assignRoomToReservation = async (req, res) => {
     const finalRoomIds = Array.from(new Set([...existingRooms, ...incomingRooms]));
 
     if (finalRoomIds.length > allowed) {
-      await session.abortTransaction();
+      if (txSupported) await session.abortTransaction().catch(() => {});
       return res.status(400).json({ message: `La asignación resultaría en ${finalRoomIds.length} habitaciones pero la reserva solicita ${allowed}.` });
     }
 
@@ -440,7 +487,7 @@ const assignRoomToReservation = async (req, res) => {
       }
     }
 
-    await session.commitTransaction();
+    if (txSupported) await session.commitTransaction();
 
     // Lectura final y WebSocket fuera de la transacción
     const updatedReservation = await Reservation.findById(reservationId).populate('room client');
@@ -519,13 +566,14 @@ const unassignRoomsFromReservation = async (req, res) => {
       acquiredLocks.push({ key: lockKey, owner });
     }
 
-    // Iniciar transacción DESPUÉS de adquirir locks
-    session.startTransaction();
+    // Iniciar transacción DESPUÉS de adquirir locks (si el RS lo soporta)
+    const txSupported2 = req.app.get('txSupported');
+    if (txSupported2) session.startTransaction();
 
     // Re-leer reserva DENTRO de la transacción para consistencia
     const reservation = await Reservation.findById(reservationId).populate('room').session(session);
     if (!reservation) {
-      await session.abortTransaction();
+      if (txSupported2) await session.abortTransaction().catch(() => {});
       return res.status(404).json({ message: 'Reserva no encontrada.' });
     }
 
@@ -559,7 +607,7 @@ const unassignRoomsFromReservation = async (req, res) => {
       }
     }
 
-    await session.commitTransaction();
+    if (txSupported2) await session.commitTransaction();
 
     // WebSocket y respuesta fuera de la transacción
     const wss = req.app.get('wss');
@@ -583,7 +631,7 @@ const unassignRoomsFromReservation = async (req, res) => {
     });
 
   } catch (error) {
-    await session.abortTransaction().catch(() => {});
+    if (txSupported2) await session.abortTransaction().catch(() => {});
     logger.error('unassignRoomsFromReservation error', error);
     res.status(500).json({ message: 'Error al desasignar habitaciones.', error: error.message });
   } finally {
@@ -811,15 +859,16 @@ function optimizarCombinacion(combinaciones) {
 // Check-in con asignación automática (ACID transacción + lock distribuido)
 const checkinReservation = async (req, res) => {
   const { id } = req.params;
+  const txSupported = req.app.get('txSupported');
   const session = await mongoose.startSession();
-  session.startTransaction();
+  if (txSupported) session.startTransaction();
 
   try {
     let reservation;
     await lockService.withLock(`reservation:${id}`, 10000, async () => {
-      logger.info(`🏨 Iniciando check-in transaccional para reserva ${id}`);
-      reservation = await processCheckin(id, { session });
-      await session.commitTransaction();
+      logger.info(`🏨 Iniciando check-in para reserva ${id}`);
+      reservation = await processCheckin(id, { session: txSupported ? session : undefined });
+      if (txSupported) await session.commitTransaction();
     });
 
     // Emitir evento WebSocket (fuera de la transacción)
@@ -858,18 +907,19 @@ const checkinReservation = async (req, res) => {
   }
 };
 
-// Check-out con liberación de habitaciones (ACID transacción + lock distribuido)
+// Check-out con liberación de habitaciones
 const checkoutReservation = async (req, res) => {
   const { id } = req.params;
+  const txSupported = req.app.get('txSupported');
   const session = await mongoose.startSession();
-  session.startTransaction();
+  if (txSupported) session.startTransaction();
 
   try {
     let reservation;
     await lockService.withLock(`reservation:${id}`, 10000, async () => {
-      logger.info(`🚪 Iniciando check-out transaccional para reserva ${id}`);
-      reservation = await processCheckout(id, { session });
-      await session.commitTransaction();
+      logger.info(`🚪 Iniciando check-out para reserva ${id}`);
+      reservation = await processCheckout(id, { session: txSupported ? session : undefined });
+      if (txSupported) await session.commitTransaction();
     });
 
     // Emitir evento WebSocket (fuera de la transacción)
@@ -881,6 +931,18 @@ const checkoutReservation = async (req, res) => {
         }
       });
     }
+
+    // Email agradecimiento checkout — no bloquea la respuesta
+    setImmediate(async () => {
+      try {
+        const emailService = require('../services/emailService');
+        const Reservation = require('../models/Reservation');
+        const populated = await Reservation.findById(id).populate('client', 'nombre apellido email');
+        if (populated?.client?.email) {
+          await emailService.sendCheckoutThankYou({ reservation: populated, client: populated.client });
+        }
+      } catch (e) { logger.warn('Error enviando email checkout:', e.message); }
+    });
 
     auditService.log({
       action: 'CHECKOUT_REALIZADO',
@@ -897,7 +959,7 @@ const checkoutReservation = async (req, res) => {
       reservation
     });
   } catch (error) {
-    await session.abortTransaction().catch(() => {});
+    if (txSupported) await session.abortTransaction().catch(() => {});
     if (error.name === 'LockBusyError') {
       return res.status(423).json({ message: 'Otra operación está procesando esta reserva. Intenta en unos segundos.' });
     }

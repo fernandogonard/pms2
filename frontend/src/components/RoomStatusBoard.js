@@ -376,7 +376,7 @@ const RoomStatusBoard = () => {
       const roomsData = await roomsRes.json();
       const resData   = await resRes.json();
       setRooms(Array.isArray(roomsData) ? roomsData : []);
-      setReservations(Array.isArray(resData) ? resData.filter(r => r.status === 'checkin') : []);
+      setReservations(Array.isArray(resData) ? resData.filter(r => r.status === 'checkin') : (resData?.data || []).filter(r => r.status === 'checkin'));
     } catch {
       setError('No se pudieron cargar los datos de habitaciones.');
     } finally {

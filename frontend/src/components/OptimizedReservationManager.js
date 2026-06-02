@@ -56,9 +56,9 @@ const OptimizedReservationManager = () => {
         setReservations(response.data.data.reservations);
         setPagination(response.data.data.pagination);
         
-        // Log de rendimiento
+        // Performance tracking (sin log a consola)
         if (response.data.data.performance) {
-          console.log(`⚡ Consulta ejecutada en: ${response.data.data.performance.queryTime}ms`);
+          // Se podría enviar a un servicio de telemetría
         }
       } else {
         setError('Error al cargar las reservas');

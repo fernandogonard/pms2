@@ -1,7 +1,7 @@
 // components/admin/AdminDashboardSection.js
 // Sección principal del dashboard con estadísticas y resumen — datos reales
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import AdminStats from '../AdminStats';
 import { apiFetch } from '../../utils/api';
 
@@ -22,7 +22,7 @@ const AdminDashboardSection = ({ onSectionChange }) => {
         const rData = await rRes.json();
         const resData = await resRes.json();
         setRooms(Array.isArray(rData) ? rData : []);
-        setReservations(Array.isArray(resData) ? resData : []);
+        setReservations(Array.isArray(resData) ? resData : (resData?.data || []));
       } catch (e) {
         console.error('Error cargando alertas:', e);
       } finally {
@@ -32,26 +32,26 @@ const AdminDashboardSection = ({ onSectionChange }) => {
     load();
   }, []);
 
-  // ── Alertas reales ──────────────────────────────────────────────────────────
-  const today = new Date().toISOString().slice(0, 10);
+  // ── Alertas reales (memoizadas) ────────────────────────────────────────────────────────────
+  const today = useMemo(() => new Date().toISOString().slice(0, 10), []);
 
-  const roomsInMaintenance = rooms.filter(r => r.status === 'mantenimiento');
-  const roomsInCleaning    = rooms.filter(r => r.status === 'limpieza');
+  const roomsInMaintenance = useMemo(() => rooms.filter(r => r.status === 'mantenimiento'), [rooms]);
+  const roomsInCleaning    = useMemo(() => rooms.filter(r => r.status === 'limpieza'), [rooms]);
 
-  const unpaidReservations = reservations.filter(r =>
+  const unpaidReservations = useMemo(() => reservations.filter(r =>
     r.payment && r.payment.status !== 'pagado' && r.status !== 'cancelada'
-  );
+  ), [reservations]);
 
-  const todayCheckins = reservations.filter(r =>
+  const todayCheckins = useMemo(() => reservations.filter(r =>
     r.checkIn && r.checkIn.slice(0, 10) === today && r.status === 'reservada'
-  );
-  const todayCheckouts = reservations.filter(r =>
+  ), [reservations, today]);
+  const todayCheckouts = useMemo(() => reservations.filter(r =>
     r.checkOut && r.checkOut.slice(0, 10) === today && r.status === 'checkin'
-  );
-  const todayActiveReservations = reservations.filter(r => {
+  ), [reservations, today]);
+  const todayActiveReservations = useMemo(() => reservations.filter(r => {
     if (!r.checkIn || !r.checkOut) return false;
     return r.checkIn.slice(0, 10) <= today && r.checkOut.slice(0, 10) >= today;
-  });
+  }), [reservations, today]);
 
   // Construir lista de alertas dinámicas
   const alerts = [];

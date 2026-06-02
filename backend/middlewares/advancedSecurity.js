@@ -46,32 +46,20 @@ const securityConfig = {
 
 // Middleware de sanitización avanzada
 const advancedSanitization = (req, res, next) => {
-  // Sanitizar NoSQL injection
-  mongoSanitize();
-  
-  // Limpiar XSS
-  xssClean();
-  
-  // Validaciones adicionales
-  if (req.body) {
-    // Remover propiedades peligrosas
-    delete req.body.__proto__;
-    delete req.body.constructor;
-    
-    // Limpiar strings recursivamente
+  // mongoSanitize y xssClean ya se aplican en sanitizeInput antes de este middleware.
+  // Aquí solo se realiza limpieza de strings propia.
+  if (req.body && typeof req.body === 'object') {
     const cleanObject = (obj) => {
-      for (let key in obj) {
+      for (const key of Object.keys(obj)) {
         if (typeof obj[key] === 'string') {
           obj[key] = obj[key].trim();
-        } else if (typeof obj[key] === 'object' && obj[key] !== null) {
+        } else if (typeof obj[key] === 'object' && obj[key] !== null && !Array.isArray(obj[key])) {
           cleanObject(obj[key]);
         }
       }
     };
-    
     cleanObject(req.body);
   }
-  
   next();
 };
 
@@ -85,6 +73,12 @@ const createUserBasedLimiter = (windowMs = 60 * 1000, maxRequests = 30) => {
 
     let attempt = userAttempts.get(identifier);
     if (!attempt || now > attempt.resetTime) {
+      // Limpiar entradas expiradas periódicamente para evitar memory leak
+      if (userAttempts.size > 10000) {
+        for (const [key, val] of userAttempts) {
+          if (now > val.resetTime) userAttempts.delete(key);
+        }
+      }
       attempt = { count: 0, resetTime: now + windowMs };
       userAttempts.set(identifier, attempt);
     }

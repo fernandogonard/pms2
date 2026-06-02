@@ -1,5 +1,5 @@
 // controllers/billingController.js
-// Controlador para gestiÃƒÂ³n de facturaciÃƒÂ³n y pagos
+// Controlador para gestión de facturación y pagos
 
 const Reservation = require('../models/Reservation');
 const RoomType = require('../models/RoomType');
@@ -8,7 +8,7 @@ const { logger } = require('../services/loggerService');
 const auditService = require('../services/auditService');
 
 /**
- * Obtener tipos de habitaciÃƒÂ³n con precios
+ * Obtener tipos de habitación con precios
  */
 const getRoomTypes = async (req, res) => {
   try {
@@ -29,17 +29,17 @@ const getRoomTypes = async (req, res) => {
     });
     
   } catch (error) {
-    logger.error('Error obteniendo tipos de habitaciÃƒÂ³n:', error);
+    logger.error('Error obteniendo tipos de habitación:', error);
     res.status(500).json({
       success: false,
-      message: 'Error obteniendo tipos de habitaciÃƒÂ³n',
+      message: 'Error obteniendo tipos de habitación',
       error: error.message
     });
   }
 };
 
 /**
- * Actualizar precio de tipo de habitaciÃƒÂ³n
+ * Actualizar precio de tipo de habitación
  */
 const updateRoomTypePrice = async (req, res) => {
   try {
@@ -50,7 +50,7 @@ const updateRoomTypePrice = async (req, res) => {
     if (basePrice && (basePrice <= 0 || isNaN(basePrice))) {
       return res.status(400).json({
         success: false,
-        message: 'El precio debe ser un nÃƒÂºmero mayor a 0'
+        message: 'El precio debe ser un número mayor a 0'
       });
     }
     
@@ -68,7 +68,7 @@ const updateRoomTypePrice = async (req, res) => {
     if (!roomType) {
       return res.status(404).json({
         success: false,
-        message: 'Tipo de habitaciÃƒÂ³n no encontrado'
+        message: 'Tipo de habitación no encontrado'
       });
     }
     
@@ -150,7 +150,7 @@ const processPayment = async (req, res) => {
     if (!validMethods.includes(method)) {
       return res.status(400).json({
         success: false,
-        message: `MÃƒÂ©todo de pago invÃƒÂ¡lido. MÃƒÂ©todos vÃƒÂ¡lidos: ${validMethods.join(', ')}`
+        message: `Método de pago inválido. Métodos válidos: ${validMethods.join(', ')}`
       });
     }
     
@@ -205,7 +205,7 @@ const processPayment = async (req, res) => {
 };
 
 /**
- * Obtener informaciÃƒÂ³n de facturaciÃƒÂ³n de una reserva
+ * Obtener información de facturación de una reserva
  */
 const getReservationBilling = async (req, res) => {
   try {
@@ -388,7 +388,7 @@ const getFinancialSummary = async (req, res) => {
   try {
     const { startDate, endDate } = req.query;
     
-    // Fechas por defecto: ÃƒÂºltimo mes
+    // Fechas por defecto: último mes
     const defaultEndDate = new Date();
     const defaultStartDate = new Date();
     defaultStartDate.setMonth(defaultStartDate.getMonth() - 1);

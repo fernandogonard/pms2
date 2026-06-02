@@ -1,15 +1,16 @@
 // AppRouter.js
 // Enrutador principal para el CRM hotelero con autenticación real
-import React, { useEffect, useState } from 'react';
+import React, { lazy, Suspense, useEffect, useState } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
-import AdminDashboard from './pages/AdminDashboard';
-import ReceptionDashboard from './pages/ReceptionDashboard';
 import Login from './pages/Login';
-import PublicHome from './pages/PublicHome';
-import HotelInfo from './pages/HotelInfo';
-import ReservationManagerDemo from './components/ReservationManagerDemo';
 import SessionExpiredBanner from './components/SessionExpiredBanner';
+
+// Lazy loading — code splitting por ruta
+const AdminDashboard = lazy(() => import('./pages/AdminDashboard'));
+const ReceptionDashboard = lazy(() => import('./pages/ReceptionDashboard'));
+const PublicHome = lazy(() => import('./pages/PublicHome'));
+const HotelInfo = lazy(() => import('./pages/HotelInfo'));
 
 // Componente de carga
 const LoadingSpinner = () => (
@@ -86,24 +87,25 @@ const AppRouterContent = () => {
       {sessionExpired && (
         <SessionExpiredBanner next={nextPath} onRedirect={handleRedirect} />
       )}
-      <Routes>
-        <Route path="/" element={<PublicHome />} />
-        <Route path="/hotel-info" element={<HotelInfo />} />
-        <Route path="/login" element={<Login />} />
-        <Route path="/demo-reservas" element={<ReservationManagerDemo />} />
-        <Route path="/admin" element={
-          <PrivateRoute role="admin">
-            <AdminDashboard />
-          </PrivateRoute>
-        } />
-        <Route path="/recepcion" element={
-          <PrivateRoute allowRoles={["admin", "recepcionista"]}>
-            <ReceptionDashboard />
-          </PrivateRoute>
-        } />
-        <Route path="/unauthorized" element={<Unauthorized />} />
-        <Route path="*" element={<NotFound />} />
-      </Routes>
+      <Suspense fallback={<LoadingSpinner />}>
+        <Routes>
+          <Route path="/" element={<PublicHome />} />
+          <Route path="/hotel-info" element={<HotelInfo />} />
+          <Route path="/login" element={<Login />} />
+          <Route path="/admin" element={
+            <PrivateRoute role="admin">
+              <AdminDashboard />
+            </PrivateRoute>
+          } />
+          <Route path="/recepcion" element={
+            <PrivateRoute allowRoles={["admin", "recepcionista"]}>
+              <ReceptionDashboard />
+            </PrivateRoute>
+          } />
+          <Route path="/unauthorized" element={<Unauthorized />} />
+          <Route path="*" element={<NotFound />} />
+        </Routes>
+      </Suspense>
     </>
   );
 };

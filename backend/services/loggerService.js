@@ -198,6 +198,14 @@ const loggerService = {
         userId,
         timestamp: new Date().toISOString()
       });
+    },
+
+    anomaly: (message, meta = {}) => {
+      securityLogger.warn(message, {
+        type: 'anomaly',
+        ...meta,
+        timestamp: new Date().toISOString()
+      });
     }
   },
 

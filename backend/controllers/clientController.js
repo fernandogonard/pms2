@@ -9,7 +9,23 @@ const { logger } = require('../services/loggerService');
 exports.createClient = async (req, res) => {
   const startTime = Date.now();
   try {
-    const { nombre, apellido, dni, email, whatsapp } = req.body;
+    const {
+      nombre: bodyNombre,
+      apellido: bodyApellido,
+      dni: bodyDni,
+      email,
+      whatsapp: bodyWhatsapp,
+      firstName,
+      lastName,
+      idNumber,
+      phone
+    } = req.body;
+
+    // Compatibilidad entre payload actual y formato legado
+    const nombre = bodyNombre || firstName;
+    const apellido = bodyApellido || lastName;
+    const dni = bodyDni || idNumber;
+    const whatsapp = bodyWhatsapp || phone;
     
     logger.audit.userAction(`Intento de creación de cliente`, {
       service: 'crm-hotelero',
@@ -60,23 +76,37 @@ exports.createClient = async (req, res) => {
   }
 };
 
-// Listar clientes con búsqueda avanzada
+// Listar clientes con búsqueda avanzada + paginación
 exports.listClients = async (req, res) => {
   try {
     const { q } = req.query;
+    const page = Math.max(1, parseInt(req.query.page) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 50));
+    const skip = (page - 1) * limit;
+
     let filter = {};
     if (q) {
+      const escaped = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       filter = {
         $or: [
-          { nombre: { $regex: q, $options: 'i' } },
-          { apellido: { $regex: q, $options: 'i' } },
-          { email: { $regex: q, $options: 'i' } },
-          { whatsapp: { $regex: q, $options: 'i' } }
+          { nombre: { $regex: escaped, $options: 'i' } },
+          { apellido: { $regex: escaped, $options: 'i' } },
+          { email: { $regex: escaped, $options: 'i' } },
+          { whatsapp: { $regex: escaped, $options: 'i' } }
         ]
       };
     }
-    const clients = await Client.find(filter).sort({ createdAt: -1 });
-    res.json(clients);
+
+    const [clients, total] = await Promise.all([
+      Client.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
+      Client.countDocuments(filter)
+    ]);
+
+    res.json({
+      success: true,
+      data: clients,
+      pagination: { page, limit, total, pages: Math.ceil(total / limit) }
+    });
   } catch (err) {
     res.status(500).json({ message: 'Error listando clientes', error: err.message });
   }
@@ -97,7 +127,23 @@ exports.getClient = async (req, res) => {
 // Actualizar cliente
 exports.updateClient = async (req, res) => {
   try {
-    const { nombre, apellido, dni, email, whatsapp } = req.body;
+    const {
+      nombre: bodyNombre,
+      apellido: bodyApellido,
+      dni: bodyDni,
+      email,
+      whatsapp: bodyWhatsapp,
+      firstName,
+      lastName,
+      idNumber,
+      phone
+    } = req.body;
+
+    const nombre = bodyNombre || firstName;
+    const apellido = bodyApellido || lastName;
+    const dni = bodyDni || idNumber;
+    const whatsapp = bodyWhatsapp || phone;
+
     const client = await Client.findByIdAndUpdate(
       req.params.id,
       { nombre, apellido, dni, email, whatsapp },

@@ -123,8 +123,9 @@ class RequestOptimizer {
       ...options
     };
 
-    // Añadir token de autorización si está disponible
-    const token = localStorage.getItem('token');
+    // Añadir token de autorización desde memoria (no localStorage)
+    const { getAccessToken } = require('./api');
+    const token = getAccessToken();
     if (token) {
       defaultOptions.headers['Authorization'] = `Bearer ${token}`;
     }

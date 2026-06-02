@@ -45,7 +45,7 @@ export const useCalendarData = (startDate, days = 14) => {
         const resResp = await apiFetch('/api/reservations', { signal: abortControllerRef.current.signal });
         if (resResp.ok) {
           const reservations = await resResp.json();
-          const activeRes = (Array.isArray(reservations) ? reservations : [])
+          const activeRes = (Array.isArray(reservations) ? reservations : (reservations?.data || []))
             .filter(r => r.status !== 'cancelada');
           for (const r of activeRes) {
             const roomIds = Array.isArray(r.room) ? r.room : (r.room ? [r.room] : []);

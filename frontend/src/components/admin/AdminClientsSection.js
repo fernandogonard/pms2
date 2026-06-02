@@ -15,11 +15,12 @@ const AdminClientsSection = () => {
     apiFetch('/api/clients')
       .then(r => r.json())
       .then(data => {
-        if (Array.isArray(data)) {
+        const clients = Array.isArray(data) ? data : (data?.data || []);
+        if (clients.length) {
           const ahora = new Date();
           const primerDiaMes = new Date(ahora.getFullYear(), ahora.getMonth(), 1);
-          const nuevos = data.filter(c => c.createdAt && new Date(c.createdAt) >= primerDiaMes).length;
-          setClientStats({ total: data.length, nuevos });
+          const nuevos = clients.filter(c => c.createdAt && new Date(c.createdAt) >= primerDiaMes).length;
+          setClientStats({ total: data?.pagination?.total || clients.length, nuevos });
         }
       })
       .catch(() => {});
