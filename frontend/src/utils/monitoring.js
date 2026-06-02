@@ -1,6 +1,6 @@
 // utils/monitoring.js
 // Monitoreo de errores en frontend — captura errores no controlados y fallos de red.
-// Activado SOLO si REACT_APP_SENTRY_DSN está configurado (Sentry) o siempre para logging local.
+// Sentry es opcional: solo activo si se instala @sentry/react y se configura REACT_APP_SENTRY_DSN.
 
 let Sentry = null;
 const IS_PRODUCTION = process.env.NODE_ENV === 'production';
@@ -10,30 +10,6 @@ const IS_PRODUCTION = process.env.NODE_ENV === 'production';
  * Llamar UNA VEZ al arrancar la app (index.js).
  */
 export function initMonitoring() {
-  // Si hay DSN de Sentry, intentar cargar @sentry/react
-  const dsn = process.env.REACT_APP_SENTRY_DSN;
-  if (dsn) {
-    try {
-      // Dynamic import no disponible fácil en CRA sync context;
-      // se asume @sentry/react instalado si se configura DSN
-      Sentry = require('@sentry/react');
-      Sentry.init({
-        dsn,
-        environment: process.env.NODE_ENV || 'development',
-        tracesSampleRate: 0.1,
-        beforeSend(event) {
-          // No enviar errores de red comunes (usuario offline, etc.)
-          if (event.exception?.values?.[0]?.value?.includes('Failed to fetch')) {
-            return null;
-          }
-          return event;
-        }
-      });
-    } catch {
-      // @sentry/react no instalado — continuar sin él
-    }
-  }
-
   // Captura global de errores no controlados
   window.addEventListener('error', (event) => {
     const { message, filename, lineno, colno } = event;
@@ -74,3 +50,4 @@ export function captureException(error, context = {}) {
     console.error('[Monitoring]', error, context);
   }
 }
+
