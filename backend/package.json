@@ -10,7 +10,9 @@
     "test:watch": "jest --watch --detectOpenHandles",
     "test:coverage": "jest --coverage --detectOpenHandles",
     "test:validation": "jest tests/validation.test.js --detectOpenHandles",
-    "test:logger": "jest tests/logger.test.js --detectOpenHandles"
+    "test:logger": "jest tests/logger.test.js --detectOpenHandles",
+    "seed:demo": "node scripts/seedDemo.js",
+    "seed:demo:reset": "node scripts/seedDemo.js --reset"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
