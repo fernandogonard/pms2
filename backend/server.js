@@ -66,7 +66,11 @@ const MONGO_OPTIONS = {
 
 mongoose.connect(MONGO_URI, MONGO_OPTIONS)
   .then(async () => {
-    logHelpers.system.dbConnected();
+    if (logHelpers.system && typeof logHelpers.system.dbConnected === 'function') {
+      logHelpers.system.dbConnected();
+    } else {
+      logger.info('MongoDB conectado exitosamente');
+    }
 
     // Detectar soporte de transacciones (replica set vs standalone)
     try {
@@ -258,7 +262,15 @@ mongoose.connect(MONGO_URI, MONGO_OPTIONS)
     logger.info(`✅ WebSocket activo en ws://0.0.0.0:${PORT}/ws`);
   })
   .catch((err) => {
-    logHelpers.system.dbError(err);
+    if (logHelpers.system && typeof logHelpers.system.dbError === 'function') {
+      logHelpers.system.dbError(err);
+    }
+    logger.error('Detalle de error MongoDB al conectar', {
+      name: err && err.name,
+      message: err && err.message,
+      code: err && err.code,
+      errno: err && err.errno
+    });
     logger.error('❌ No se pudo conectar a MongoDB. El servidor HTTP sigue activo pero las rutas de DB fallarán.');
   });
 
@@ -270,7 +282,12 @@ mongoose.connection.on('reconnected', () => {
   logger.info('MongoDB reconectado exitosamente.');
 });
 mongoose.connection.on('error', (err) => {
-  logger.error('Error de conexión MongoDB:', err.message);
+  logger.error('Error de conexión MongoDB', {
+    name: err && err.name,
+    message: err && err.message,
+    code: err && err.code,
+    errno: err && err.errno
+  });
 });
 
 // ─── Graceful shutdown ───────────────────────────────────────────────────────
