@@ -70,11 +70,28 @@ class AvailabilityEngine {
         return roomIds.some(rid => rid && rid.toString() === room._id.toString());
       });
 
+      const maintenanceStart = room.currentMaintenance?.startDate ? new Date(room.currentMaintenance.startDate) : null;
+      const maintenanceEnd = room.currentMaintenance?.estimatedEndDate ? new Date(room.currentMaintenance.estimatedEndDate) : null;
+
       const dates = [];
       for (let i = 0; i < days; i++) {
         const date = new Date(startUTC);
         date.setUTCDate(startUTC.getUTCDate() + i);
         const dateStr = date.toISOString().split('T')[0];
+        const isMaintenanceDay =
+          room.status === 'mantenimiento' &&
+          (!maintenanceStart || date >= maintenanceStart) &&
+          (!maintenanceEnd || date <= maintenanceEnd);
+
+        if (isMaintenanceDay) {
+          dates.push({
+            date: dateStr,
+            status: 'mantenimiento',
+            reservation: null
+          });
+          continue;
+        }
+
         const resOnDate = roomReservations.find(r =>
           new Date(r.checkIn) <= date && new Date(r.checkOut) > date
         );
