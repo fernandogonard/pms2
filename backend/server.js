@@ -2,12 +2,14 @@
 // Arranque del servidor y conexión a la base de datos
 
 const mongoose = require('mongoose');
+const bcrypt = require('bcryptjs');
 const dotenv = require('dotenv');
 const app = require('./app');
 const WebSocket = require('ws');
 const http = require('http');
 const { logger, logHelpers } = require('./config/logger');
 const { initScheduledJobs } = require('./scheduledJobs');
+const User = require('./models/User');
 
 dotenv.config({ path: './config/.env' });
 
@@ -38,6 +40,10 @@ if (missing.length > 0) {
 // Railway asigna PORT como variable de entorno — DEBE escucharse inmediatamente
 const PORT = process.env.PORT || 5000;
 const MONGO_URI = process.env.MONGO_URI || 'mongodb://localhost:27017/crm-hotelero';
+const AUTO_SEED_ADMIN = process.env.AUTO_SEED_ADMIN !== '0';
+const ADMIN_EMAIL = (process.env.SEED_ADMIN_EMAIL || 'admin@hotel.com').toLowerCase().trim();
+const ADMIN_PASSWORD = process.env.SEED_ADMIN_PASSWORD || 'admin123';
+const ADMIN_NAME = process.env.SEED_ADMIN_NAME || 'Admin';
 
 // ─── Crear servidor HTTP y WebSocket ANTES de conectar a MongoDB ──────────────
 // Railway verifica que el puerto responda dentro de segundos del arranque.
@@ -111,6 +117,33 @@ mongoose.connect(MONGO_URI, MONGO_OPTIONS)
       logger.info('✅ RoomTypes sincronizados con Room.price');
     } catch (seedErr) {
       logger.warn('⚠️  Auto-seed de RoomTypes falló (no crítico):', seedErr.message);
+    }
+
+    // Asegurar una cuenta admin funcional para acceso al CRM.
+    // Si ya existe, se actualiza la contraseña a un valor conocido para evitar bloqueos por hashes viejos.
+    if (AUTO_SEED_ADMIN) {
+      try {
+        const hashedPassword = await bcrypt.hash(ADMIN_PASSWORD, 12);
+        const existingAdmin = await User.findOne({ email: ADMIN_EMAIL });
+
+        if (existingAdmin) {
+          existingAdmin.name = ADMIN_NAME;
+          existingAdmin.role = 'admin';
+          existingAdmin.password = hashedPassword;
+          await existingAdmin.save();
+          logger.info('✅ Cuenta admin sincronizada con credenciales conocidas', { email: ADMIN_EMAIL });
+        } else {
+          await User.create({
+            name: ADMIN_NAME,
+            email: ADMIN_EMAIL,
+            password: hashedPassword,
+            role: 'admin'
+          });
+          logger.info('✅ Cuenta admin creada automáticamente', { email: ADMIN_EMAIL });
+        }
+      } catch (adminSeedErr) {
+        logger.warn('⚠️  No se pudo sincronizar la cuenta admin automática:', adminSeedErr.message);
+      }
     }
 
     // Iniciar tareas programadas (sincronización automática de estados)
