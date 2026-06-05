@@ -30,7 +30,7 @@ router.put('/:id',
   protect, 
   authorize('admin'), 
   validateParams('mongoId'), // 🔄 Validar ID de MongoDB
-  createValidationMiddleware('user'), // 🔄 Validar datos de usuario
+  createValidationMiddleware('userUpdate'), // 🔄 Validar datos de actualización de usuario
   userController.updateUser
 );
 router.delete('/:id', 

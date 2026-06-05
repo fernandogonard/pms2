@@ -97,10 +97,16 @@ exports.createUser = async (req, res) => {
 // Actualizar usuario (admin)
 exports.updateUser = async (req, res) => {
   try {
-    const { name, email, role } = req.body;
+    const { name, email, role, password } = req.body;
+    const updateData = { name, email, role };
+
+    if (typeof password === 'string' && password.trim().length > 0) {
+      updateData.password = await bcrypt.hash(password, 10);
+    }
+
     const user = await User.findByIdAndUpdate(
       req.params.id,
-      { name, email, role },
+      updateData,
       { new: true, runValidators: true, context: 'query' }
     ).select('-password');
     if (!user) return res.status(404).json({ message: 'Usuario no encontrado.' });

@@ -11,6 +11,14 @@ const schemas = {
     role: Joi.string().valid('admin', 'recepcionista', 'cliente').default('cliente')
   }),
 
+  // Usuario - actualización (password opcional)
+  userUpdate: Joi.object({
+    name: Joi.string().min(2).max(50).required(),
+    email: Joi.string().email().required(),
+    password: Joi.string().min(6).max(128).allow('').optional(),
+    role: Joi.string().valid('admin', 'recepcionista', 'cliente').required()
+  }),
+
   // Habitación
   room: Joi.object({
     number: Joi.number().integer().min(1).max(9999).required(),
