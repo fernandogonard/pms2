@@ -13,11 +13,11 @@ const schemas = {
 
   // Usuario - actualización (password opcional)
   userUpdate: Joi.object({
-    name: Joi.string().min(2).max(50).required(),
-    email: Joi.string().email().required(),
+    name: Joi.string().min(2).max(50).optional(),
+    email: Joi.string().email().optional(),
     password: Joi.string().min(6).max(128).allow('').optional(),
-    role: Joi.string().valid('admin', 'recepcionista', 'cliente').required()
-  }),
+    role: Joi.string().valid('admin', 'recepcionista', 'cliente').optional()
+  }).min(1),
 
   // Habitación
   room: Joi.object({

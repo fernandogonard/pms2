@@ -98,10 +98,26 @@ exports.createUser = async (req, res) => {
 exports.updateUser = async (req, res) => {
   try {
     const { name, email, role, password } = req.body;
-    const updateData = { name, email, role };
+    const updateData = {};
+
+    if (typeof name === 'string' && name.trim().length > 0) {
+      updateData.name = name.trim();
+    }
+
+    if (typeof email === 'string' && email.trim().length > 0) {
+      updateData.email = email.trim().toLowerCase();
+    }
+
+    if (typeof role === 'string' && role.trim().length > 0) {
+      updateData.role = role;
+    }
 
     if (typeof password === 'string' && password.trim().length > 0) {
       updateData.password = await bcrypt.hash(password, 10);
+    }
+
+    if (Object.keys(updateData).length === 0) {
+      return res.status(400).json({ message: 'No hay campos validos para actualizar.' });
     }
 
     const user = await User.findByIdAndUpdate(
