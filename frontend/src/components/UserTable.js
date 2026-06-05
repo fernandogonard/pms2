@@ -59,15 +59,39 @@ const UserTable = () => {
     try {
       const method = editingId ? 'PUT' : 'POST';
       const url = editingId ? `${API_USERS}/${editingId}` : API_USERS;
-      const body = { ...form };
+
+      const trimmedPassword = form.password.trim();
+      if (editingId && trimmedPassword.length > 0 && trimmedPassword.length < 6) {
+        setError('Si queres cambiar la contrasena, debe tener al menos 6 caracteres.');
+        setLoading(false);
+        return;
+      }
+
+      const body = {
+        name: form.name.trim(),
+        email: form.email.trim().toLowerCase(),
+        role: form.role
+      };
+
+      if (!editingId || trimmedPassword.length > 0) {
+        body.password = trimmedPassword;
+      }
+
       const res = await apiFetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body)
       });
       if (!res.ok) {
-        const data = await res.json();
-        setError(data.message || 'Error al guardar usuario');
+        const data = await res.json().catch(() => ({}));
+        if (Array.isArray(data.errors) && data.errors.length > 0) {
+          const details = data.errors
+            .map(err => `${err.field}: ${err.message}`)
+            .join(' | ');
+          setError(details);
+        } else {
+          setError(data.message || 'Error al guardar usuario');
+        }
         return;
       }
       setSuccess(editingId ? 'Usuario actualizado con éxito.' : 'Usuario creado con éxito.');
