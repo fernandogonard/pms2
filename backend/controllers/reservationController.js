@@ -569,6 +569,7 @@ const unassignRoomsFromReservation = async (req, res) => {
   let { rooms } = req.body;
   const acquiredLocks = [];
   const session = await mongoose.startSession();
+  const txSupported2 = req.app.get('txSupported');
 
   try {
     logger.info(`[API] unassignRoomsFromReservation called for reservation ${reservationId}`);
@@ -615,7 +616,6 @@ const unassignRoomsFromReservation = async (req, res) => {
     }
 
     // Iniciar transacción DESPUÉS de adquirir locks (si el RS lo soporta)
-    const txSupported2 = req.app.get('txSupported');
     if (txSupported2) session.startTransaction();
 
     // Re-leer reserva DENTRO de la transacción para consistencia
@@ -649,6 +649,8 @@ const unassignRoomsFromReservation = async (req, res) => {
           room.pendingHousekeepingAt = new Date();
         } else {
           room.status = 'disponible';
+          room.pendingHousekeeping = null;
+          room.pendingHousekeepingAt = null;
         }
         await room.save({ session });
         logger.info(`[API] Habitación ${room.number} → ${room.status}`);
