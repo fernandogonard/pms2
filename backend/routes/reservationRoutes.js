@@ -89,9 +89,6 @@ router.put('/:id/assign-room', adminLimiter, protect, authorize('admin', 'recepc
 // 🔧 Desasignar habitaciones de una reserva (solo admin/recepcionista)
 router.put('/:id/unassign-rooms', adminLimiter, protect, authorize('admin', 'recepcionista'), reservationController.unassignRoomsFromReservation);
 
-// 🚪 Realizar check-out de una reserva (solo admin/recepcionista)
-router.put('/:id/checkout', adminLimiter, protect, authorize('admin', 'recepcionista'), reservationController.checkoutReservation);
-
 // Eliminar reserva (solo admin/recepcionista o propietario)
 router.delete('/:id', reservationLimiter, protect, reservationController.deleteReservation);
 

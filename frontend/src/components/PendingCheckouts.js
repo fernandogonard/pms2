@@ -48,7 +48,7 @@ const PendingCheckouts = () => {
       setError('');
 
       const response = await apiFetch(`/api/reservations/${reservationId}/checkout`, {
-        method: 'PUT'
+        method: 'POST'
       });
 
       const data = await response.json();

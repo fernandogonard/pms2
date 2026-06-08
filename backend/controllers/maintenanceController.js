@@ -290,6 +290,7 @@ exports.checkMaintenanceImpact = ErrorHandlingService.asyncWrapper(async (req, r
       type: room.type
     },
     impact: {
+      currentState: room.status,
       currentlyOccupied: room.status === ROOM_STATES.OCUPADA,
       occupancyDetails: currentOccupancy,
       futureReservationsCount: futureReservations.length,
