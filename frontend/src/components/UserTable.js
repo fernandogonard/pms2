@@ -14,6 +14,8 @@ const UserTable = () => {
   const [editingId, setEditingId] = useState(null);
   const [success, setSuccess] = useState('');
   const { canFetch, sessionExpired, authLoading } = useSessionGuard();
+  const trimmedPassword = form.password.trim();
+  const hasWeakPassword = editingId && trimmedPassword.length > 0 && trimmedPassword.length < 6;
 
   // Cargar usuarios
   const fetchUsers = async () => {
@@ -60,8 +62,7 @@ const UserTable = () => {
       const method = editingId ? 'PUT' : 'POST';
       const url = editingId ? `${API_USERS}/${editingId}` : API_USERS;
 
-      const trimmedPassword = form.password.trim();
-      if (editingId && trimmedPassword.length > 0 && trimmedPassword.length < 6) {
+      if (hasWeakPassword) {
         setError('Si queres cambiar la contrasena, debe tener al menos 6 caracteres.');
         setLoading(false);
         return;
@@ -156,13 +157,35 @@ const UserTable = () => {
   <form onSubmit={handleSubmit} style={{ display: 'flex', gap: 8, marginBottom: 16, background: '#222', padding: 16, borderRadius: 12, alignItems: 'center' }}>
         <input type="text" placeholder="Nombre" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} required style={{ background: '#18191A', color: '#fff', border: '1px solid #444', borderRadius: 6, padding: 8 }} />
         <input type="email" placeholder="Email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} required style={{ background: '#18191A', color: '#fff', border: '1px solid #444', borderRadius: 6, padding: 8 }} />
-        <input type="password" placeholder="Contraseña" value={form.password} onChange={e => setForm({ ...form, password: e.target.value })} required={!editingId} style={{ background: '#18191A', color: '#fff', border: '1px solid #444', borderRadius: 6, padding: 8 }} />
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+          <input
+            type="password"
+            placeholder="Contraseña"
+            value={form.password}
+            onChange={e => setForm({ ...form, password: e.target.value })}
+            required={!editingId}
+            style={{
+              background: '#18191A',
+              color: '#fff',
+              border: hasWeakPassword ? '1px solid #ef4444' : '1px solid #444',
+              borderRadius: 6,
+              padding: 8
+            }}
+          />
+          {editingId && trimmedPassword.length > 0 && (
+            <span style={{ fontSize: 12, color: hasWeakPassword ? '#ef4444' : '#22c55e' }}>
+              {hasWeakPassword
+                ? 'La contrasena debe tener minimo 6 caracteres'
+                : 'Contrasena valida'}
+            </span>
+          )}
+        </div>
         <select value={form.role} onChange={e => setForm({ ...form, role: e.target.value })} style={{ background: '#18191A', color: '#fff', border: '1px solid #444', borderRadius: 6, padding: 8 }}>
           <option value="admin">Admin</option>
           <option value="recepcionista">Recepcionista</option>
           <option value="cliente">Cliente</option>
         </select>
-        <button type="submit" style={{ background: '#2563eb', color: '#fff', border: 'none', padding: '8px 16px', borderRadius: 6, fontWeight: 500, minWidth: 100 }} disabled={loading}>
+        <button type="submit" style={{ background: '#2563eb', color: '#fff', border: 'none', padding: '8px 16px', borderRadius: 6, fontWeight: 500, minWidth: 100, opacity: hasWeakPassword ? 0.7 : 1, cursor: hasWeakPassword ? 'not-allowed' : 'pointer' }} disabled={loading || hasWeakPassword}>
           {loading ? (
             <span>
               <span style={{ display: 'inline-block', width: 18, height: 18, border: '3px solid #222', borderTop: '3px solid #fff', borderRadius: '50%', animation: 'spin 1s linear infinite', verticalAlign: 'middle', marginRight: 8 }} />
