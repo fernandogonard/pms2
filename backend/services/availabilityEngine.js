@@ -72,6 +72,8 @@ class AvailabilityEngine {
 
       const maintenanceStart = room.currentMaintenance?.startDate ? new Date(room.currentMaintenance.startDate) : null;
       const maintenanceEnd = room.currentMaintenance?.estimatedEndDate ? new Date(room.currentMaintenance.estimatedEndDate) : null;
+      if (maintenanceStart) maintenanceStart.setUTCHours(0, 0, 0, 0);
+      if (maintenanceEnd) maintenanceEnd.setUTCHours(23, 59, 59, 999);
 
       const dates = [];
       for (let i = 0; i < days; i++) {

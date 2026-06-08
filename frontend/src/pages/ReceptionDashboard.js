@@ -346,9 +346,9 @@ const ReceptionDashboard = () => {
     { id: 'inicio',       label: 'Inicio',       icon: '🏠' },
     { id: 'reservas',     label: 'Reservas',     icon: '📅' },
     { id: 'cobros',       label: 'Cobros',       icon: '💳' },
+    { id: 'mantenimiento',label: 'Mantenimiento',icon: '🔧' },
     { id: 'habitaciones', label: 'Habitaciones', icon: '🛏️' },
     { id: 'limpieza',     label: 'Limpieza',     icon: '🧹' },
-    { id: 'mantenimiento',label: 'Mantenimiento',icon: '🔧' },
     { id: 'calendario',   label: 'Calendario',   icon: '📆' },
   ];
 
@@ -357,7 +357,27 @@ const ReceptionDashboard = () => {
       case 'inicio':       return <DailySummary onGoTo={setActiveTab} />;
       case 'reservas':     return <ReceptionReservations />;
       case 'cobros':       return <ReceptionPayments />;
-      case 'habitaciones': return <RoomStatusBoard />;
+      case 'habitaciones': return (
+        <div>
+          <div style={{ marginBottom: 14 }}>
+            <button
+              onClick={() => setActiveTab('mantenimiento')}
+              style={{
+                background: 'rgba(251,146,60,0.15)',
+                color: '#fb923c',
+                border: '1px solid rgba(251,146,60,0.35)',
+                borderRadius: 8,
+                padding: '8px 12px',
+                fontWeight: 700,
+                cursor: 'pointer'
+              }}
+            >
+              🔧 Ir a Mantenimiento y Relocalización
+            </button>
+          </div>
+          <RoomStatusBoard />
+        </div>
+      );
       case 'limpieza':     return <CleaningManager />;
       case 'mantenimiento': return <MaintenanceManager />;
       case 'calendario':   return <RoomCalendar />;
