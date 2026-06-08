@@ -286,10 +286,18 @@ const ReservationTable = () => {
       if (payloadRooms.length === 0) { setError('Seleccione al menos una habitación'); return; }
       const assignedRooms = Array.isArray(assignModal.reservation.room) ? assignModal.reservation.room : [];
       const replaceSingleRoom = (assignModal.reservation.cantidad || 1) === 1 && assignedRooms.length > 0;
+      const replacePartial = (assignModal.reservation.cantidad || 1) > 1 && assignedRooms.length > 0 && payloadRooms.length <= assignedRooms.length;
+      const replaceRoomIds = replacePartial
+        ? assignedRooms.slice(0, payloadRooms.length).map(r => r._id)
+        : [];
       const res = await apiFetch(`${API_RESERVATIONS}/${assignModal.reservation._id}/assign-room`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ room: payloadRooms, replace: replaceSingleRoom })
+        body: JSON.stringify({
+          room: payloadRooms,
+          replace: replaceSingleRoom || replacePartial,
+          replaceRoomIds
+        })
       });
       if (!res.ok) {
         const d = await res.json();

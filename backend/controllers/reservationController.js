@@ -390,6 +390,9 @@ const assignRoomToReservation = async (req, res) => {
   const reservationId = req.params.id;
   let { room } = req.body;
   const replace = req.body?.replace === true;
+  const requestedReplaceRoomIds = Array.isArray(req.body?.replaceRoomIds)
+    ? req.body.replaceRoomIds.map(id => id.toString())
+    : [];
   if (!room) {
     return res.status(400).json({ message: 'Debe indicar room (id) o array de ids en el body.' });
   }
@@ -464,9 +467,28 @@ const assignRoomToReservation = async (req, res) => {
 
     const existingRooms = Array.isArray(reservation.room) ? reservation.room.map(r => r.toString()) : (reservation.room ? [reservation.room.toString()] : []);
     const incomingRooms = room.map(r => r.toString());
-    const finalRoomIds = replace
-      ? Array.from(new Set(incomingRooms))
-      : Array.from(new Set([...existingRooms, ...incomingRooms]));
+    let finalRoomIds;
+    if (replace) {
+      if (requestedReplaceRoomIds.length > 0) {
+        const invalidReplaceIds = requestedReplaceRoomIds.filter(id => !existingRooms.includes(id));
+        if (invalidReplaceIds.length > 0) {
+          if (txSupported) await session.abortTransaction().catch(() => {});
+          return res.status(400).json({ message: 'Hay habitaciones a reemplazar que no pertenecen a la reserva.' });
+        }
+
+        if (requestedReplaceRoomIds.length !== incomingRooms.length) {
+          if (txSupported) await session.abortTransaction().catch(() => {});
+          return res.status(400).json({ message: 'La cantidad de habitaciones nuevas debe coincidir con las habitaciones a reemplazar.' });
+        }
+
+        const keepRooms = existingRooms.filter(id => !requestedReplaceRoomIds.includes(id));
+        finalRoomIds = Array.from(new Set([...keepRooms, ...incomingRooms]));
+      } else {
+        finalRoomIds = Array.from(new Set(incomingRooms));
+      }
+    } else {
+      finalRoomIds = Array.from(new Set([...existingRooms, ...incomingRooms]));
+    }
 
     const roomsToRelease = existingRooms.filter(id => !finalRoomIds.includes(id));
 
