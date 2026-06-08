@@ -25,6 +25,7 @@ class MaintenanceService {
   static async setRoomMaintenance(roomId, maintenanceData) {
     try {
       const timestamp = new Date().toISOString();
+      let relocationResult = null;
       logger.info(`[${timestamp}] Solicitud de mantenimiento para habitación ${roomId}`, {
         maintenanceData,
         action: 'MAINTENANCE_REQUEST'
@@ -88,7 +89,7 @@ class MaintenanceService {
             };
           } else {
             // RELOCALIZACIÓN DE HUÉSPEDES
-            const relocationResult = await this.relocateGuests(room, activeReservation, maintenanceData);
+            relocationResult = await this.relocateGuests(room, activeReservation, maintenanceData);
             
             if (!relocationResult.success) {
               return relocationResult;
@@ -166,6 +167,13 @@ class MaintenanceService {
         success: true,
         message: `Habitación #${room.number} en mantenimiento por "${maintenanceInfo.reason}"`,
         estimatedEndDate: maintenanceInfo.estimatedEndDate,
+        relocation: relocationResult && relocationResult.newRoomNumber
+          ? {
+              fromRoomNumber: room.number,
+              toRoomId: relocationResult.newRoomId,
+              toRoomNumber: relocationResult.newRoomNumber
+            }
+          : null,
         room
       };
     } catch (error) {
@@ -278,8 +286,53 @@ class MaintenanceService {
    */
   static async relocateGuests(originalRoom, reservation, maintenanceData) {
     try {
-      // Encontrar habitación alternativa
-      const alternativeRoom = await this.findAlternativeRoom(originalRoom);
+      let alternativeRoom = null;
+
+      // Si viene una habitación destino explícita, usarla y validarla.
+      if (maintenanceData.targetRoomId) {
+        const preferredRoom = await Room.findById(maintenanceData.targetRoomId);
+
+        if (!preferredRoom) {
+          return {
+            success: false,
+            message: 'La habitación destino seleccionada no existe.',
+            status: 'invalid_target_room',
+            room: originalRoom
+          };
+        }
+
+        if (preferredRoom._id.toString() === originalRoom._id.toString()) {
+          return {
+            success: false,
+            message: 'La habitación destino debe ser distinta de la habitación origen.',
+            status: 'invalid_target_room',
+            room: originalRoom
+          };
+        }
+
+        if (preferredRoom.status !== ROOM_STATES.DISPONIBLE) {
+          return {
+            success: false,
+            message: `La habitación #${preferredRoom.number} no está disponible para relocalización.`,
+            status: 'target_not_available',
+            room: originalRoom
+          };
+        }
+
+        if (preferredRoom.type !== originalRoom.type) {
+          return {
+            success: false,
+            message: `La habitación #${preferredRoom.number} no es similar: debe ser del tipo ${originalRoom.type}.`,
+            status: 'target_not_similar',
+            room: originalRoom
+          };
+        }
+
+        alternativeRoom = preferredRoom;
+      } else {
+        // Si no viene destino explícito, buscar alternativa automática.
+        alternativeRoom = await this.findAlternativeRoom(originalRoom);
+      }
       
       if (!alternativeRoom) {
         // No hay alternativa y se está forzando - situación crítica

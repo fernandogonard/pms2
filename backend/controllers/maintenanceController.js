@@ -19,6 +19,7 @@ exports.startMaintenance = ErrorHandlingService.asyncWrapper(async (req, res) =>
     estimatedDays: req.body.estimatedDays || 1,
     priority: req.body.priority || 'normal',
     forceIfOccupied: req.body.forceIfOccupied === true,
+    targetRoomId: req.body.targetRoomId || null,
     requestedBy: req.user ? req.user.id : 'sistema'
   };
 
@@ -137,6 +138,8 @@ exports.startMaintenance = ErrorHandlingService.asyncWrapper(async (req, res) =>
     success: true,
     message: result.message,
     estimatedEndDate: result.room.currentMaintenance?.estimatedEndDate,
+    relocation: result.relocation || null,
+    newRoomNumber: result.relocation?.toRoomNumber || null,
     room: {
       id: result.room._id,
       number: result.room.number,

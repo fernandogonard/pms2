@@ -125,12 +125,11 @@ const MaintenanceManager = () => {
         throw new Error(data.message || 'Error al iniciar mantenimiento');
       }
 
-      setSuccess(`Habitación #${selectedRoom.number} puesta en mantenimiento con éxito`);
-      
-      // Si hubo relocalización, mostrar detalles
-      if (data.relocation || data.relocatedGuests) {
-        setSuccess(success + `. Huésped relocalizado a habitación #${data.newRoomNumber || 'alternativa'}`);
-      }
+      const relocatedNumber = data?.relocation?.toRoomNumber || data?.newRoomNumber;
+      const finalMessage = relocatedNumber
+        ? `Habitación #${selectedRoom.number} puesta en mantenimiento con éxito. Huésped relocalizado a habitación #${relocatedNumber}`
+        : `Habitación #${selectedRoom.number} puesta en mantenimiento con éxito`;
+      setSuccess(finalMessage);
       
       // Recargar datos
       fetchRooms();
@@ -184,6 +183,7 @@ const MaintenanceManager = () => {
   // Mostrar modal para relocalizar huéspedes
   const openRelocateModal = (room) => {
     setSelectedRoom(room);
+    setTargetRoom('');
     setShowRelocateModal(true);
   };
 
@@ -204,11 +204,18 @@ const MaintenanceManager = () => {
         return;
       }
 
+      const targetRoomData = availableRooms.find(r => r._id === targetRoom);
+      if (!targetRoomData) {
+        setError('La habitación destino seleccionada ya no está disponible.');
+        return;
+      }
+
       // Usar la API de mantenimiento para forzar la relocalización
       const maintenanceData = {
-        reason: `Relocalización manual de huésped de habitación #${selectedRoom.number} a habitación #${targetRoom}`,
+        reason: `Relocalización manual de huésped de habitación #${selectedRoom.number} a habitación #${targetRoomData.number}`,
         estimatedDays: 1,
         forceIfOccupied: true,
+        targetRoomId: targetRoom,
         isTemporaryMaintenance: true // Flag especial para indicar que es solo para relocalizar
       };
 
@@ -224,7 +231,8 @@ const MaintenanceManager = () => {
         throw new Error(data.message || 'Error al relocalizar huésped');
       }
 
-      setSuccess(`Huésped relocalizado con éxito de habitación #${selectedRoom.number} a #${targetRoom}`);
+      const movedToNumber = data?.relocation?.toRoomNumber || data?.newRoomNumber || targetRoomData.number;
+      setSuccess(`Huésped relocalizado con éxito de habitación #${selectedRoom.number} a #${movedToNumber}`);
       
       // Cerrar modal y recargar datos
       setShowRelocateModal(false);
@@ -464,8 +472,10 @@ const MaintenanceManager = () => {
               required
             >
               <option value="">Seleccionar habitación destino...</option>
-              {availableRooms.map(room => (
-                <option key={room._id} value={room.number}>
+              {availableRooms
+                .filter(room => !selectedRoom || room.type === selectedRoom.type)
+                .map(room => (
+                <option key={room._id} value={room._id}>
                   #{room.number} - {room.type} - Piso {room.floor}
                 </option>
               ))}
