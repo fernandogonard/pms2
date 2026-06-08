@@ -6,6 +6,7 @@ import ReceptionReservations from '../components/ReceptionReservations';
 import RoomStatusBoard from '../components/RoomStatusBoard';
 import { RoomCalendar } from '../components/RoomCalendar';
 import CleaningManager from '../components/CleaningManager';
+import MaintenanceManager from '../components/MaintenanceManager';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { apiFetch } from '../utils/api';
@@ -347,6 +348,7 @@ const ReceptionDashboard = () => {
     { id: 'cobros',       label: 'Cobros',       icon: '💳' },
     { id: 'habitaciones', label: 'Habitaciones', icon: '🛏️' },
     { id: 'limpieza',     label: 'Limpieza',     icon: '🧹' },
+    { id: 'mantenimiento',label: 'Mantenimiento',icon: '🔧' },
     { id: 'calendario',   label: 'Calendario',   icon: '📆' },
   ];
 
@@ -357,6 +359,7 @@ const ReceptionDashboard = () => {
       case 'cobros':       return <ReceptionPayments />;
       case 'habitaciones': return <RoomStatusBoard />;
       case 'limpieza':     return <CleaningManager />;
+      case 'mantenimiento': return <MaintenanceManager />;
       case 'calendario':   return <RoomCalendar />;
       default:             return null;
     }
