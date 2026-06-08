@@ -95,6 +95,43 @@ export function startPortDiscovery() {
 
 // Token en memoria — seteado por AuthContext, NO en localStorage
 let _accessToken = null;
+let _refreshPromise = null;
+let _sessionExpiredDispatched = false;
+
+async function runRefreshTokenFlow(apiBase) {
+  if (!_refreshPromise) {
+    _refreshPromise = (async () => {
+      const refreshRes = await fetch(
+        `${apiBase.replace(/\/$/, '')}/api/auth/refresh-token`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include'
+        }
+      );
+
+      if (!refreshRes.ok) return null;
+
+      const refreshData = await refreshRes.json();
+      return refreshData.token || null;
+    })().finally(() => {
+      _refreshPromise = null;
+    });
+  }
+
+  return _refreshPromise;
+}
+
+function dispatchSessionExpiredOnce() {
+  if (_sessionExpiredDispatched) return;
+  _sessionExpiredDispatched = true;
+
+  if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
+    const pathname = window.location.pathname;
+    const safePath = pathname.startsWith('/login') ? '/' : pathname + window.location.search;
+    window.dispatchEvent(new CustomEvent('sessionExpired', { detail: { next: encodeURIComponent(safePath) } }));
+  }
+}
 
 /**
  * Setear el access token desde AuthContext (llamado por el provider).
@@ -102,6 +139,9 @@ let _accessToken = null;
  */
 export function setAccessToken(token) {
   _accessToken = token;
+  if (token) {
+    _sessionExpiredDispatched = false;
+  }
 }
 
 export function getAccessToken() {
@@ -138,23 +178,12 @@ export async function apiFetch(url, opts = {}) {
     // Manejar respuesta 401 — intentar refresh via httpOnly cookie
     if (res.status === 401 && !resolvedUrl.includes('/auth/refresh-token')) {
       try {
-        const refreshRes = await fetch(
-          `${API_BASE.replace(/\/$/, '')}/api/auth/refresh-token`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            credentials: 'include' // Cookie se envía automáticamente
-          }
-        );
-        if (refreshRes.ok) {
-          const refreshData = await refreshRes.json();
-          const newToken = refreshData.token;
-          if (newToken) {
-            _accessToken = newToken;
-            // Reintentar la petición original con el nuevo token
-            final.headers['Authorization'] = `Bearer ${newToken}`;
-            return await fetch(resolvedUrl, final);
-          }
+        const newToken = await runRefreshTokenFlow(API_BASE);
+        if (newToken) {
+          _accessToken = newToken;
+          // Reintentar la petición original con el nuevo token
+          final.headers['Authorization'] = `Bearer ${newToken}`;
+          return await fetch(resolvedUrl, final);
         }
       } catch {
         // Refresh falló
@@ -162,11 +191,7 @@ export async function apiFetch(url, opts = {}) {
 
       // Sesión expirada — notificar al frontend
       _accessToken = null;
-      if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
-        const pathname = window.location.pathname;
-        const safePath = pathname.startsWith('/login') ? '/' : pathname + window.location.search;
-        window.dispatchEvent(new CustomEvent('sessionExpired', { detail: { next: encodeURIComponent(safePath) } }));
-      }
+      dispatchSessionExpiredOnce();
       const err = new Error('Unauthorized');
       err.response = res;
       throw err;

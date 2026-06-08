@@ -7,6 +7,8 @@ const { logger } = require('../services/loggerService');
 const auditService = require('../services/auditService');
 const { setRefreshTokenCookie, clearRefreshTokenCookie } = require('../utils/cookieHelper');
 
+const ALLOW_REFRESH_TOKEN_IN_BODY = process.env.ALLOW_REFRESH_TOKEN_IN_BODY === 'true';
+
 // Registro de usuario
 exports.register = async (req, res) => {
   try {
@@ -103,8 +105,10 @@ exports.login = async (req, res) => {
 // Renovar token
 exports.refreshToken = async (req, res) => {
   try {
-    // Leer refresh token desde httpOnly cookie (prioridad) o body (retrocompatibilidad)
-    const refreshToken = req.cookies?.refreshToken || req.body?.refreshToken;
+    // En producción priorizar cookie httpOnly y evitar body salvo habilitación explícita.
+    const tokenFromCookie = req.cookies?.refreshToken;
+    const tokenFromBody = req.body?.refreshToken;
+    const refreshToken = tokenFromCookie || (ALLOW_REFRESH_TOKEN_IN_BODY ? tokenFromBody : null);
     
     if (!refreshToken) {
       return res.status(400).json({
