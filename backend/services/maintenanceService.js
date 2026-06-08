@@ -102,6 +102,13 @@ class MaintenanceService {
               action: 'GUEST_RELOCATED'
             });
           }
+        } else if (maintenanceData.forceIfOccupied) {
+          return {
+            success: false,
+            message: `La habitación #${room.number} figura ocupada pero no tiene reserva con check-in activa. Corrige el estado antes de reubicar o iniciar mantenimiento.`,
+            status: 'inconsistent_occupied_state',
+            room
+          };
         }
       }
 

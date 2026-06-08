@@ -64,6 +64,7 @@ class AvailabilityEngine {
     }).populate('user', 'name email').populate('client', 'nombre apellido email').lean();
 
     const status = rooms.map(room => {
+      const todayKey = new Date().toISOString().split('T')[0];
       const roomReservations = reservations.filter(r => {
         if (!r.room) return false;
         const roomIds = Array.isArray(r.room) ? r.room : [r.room];
@@ -97,9 +98,17 @@ class AvailabilityEngine {
         const resOnDate = roomReservations.find(r =>
           new Date(r.checkIn) <= date && new Date(r.checkOut) > date
         );
+
+        let resolvedStatus = 'available';
+        if (resOnDate) {
+          resolvedStatus = resOnDate.status;
+        } else if (dateStr === todayKey && room.status === 'ocupada') {
+          resolvedStatus = 'ocupada';
+        }
+
         dates.push({
           date: dateStr,
-          status: resOnDate ? resOnDate.status : 'available',
+          status: resolvedStatus,
           reservation: resOnDate ? {
             id: resOnDate._id,
             user: resOnDate.user ? resOnDate.user.name : (resOnDate.client?.nombre || 'Huésped'),
