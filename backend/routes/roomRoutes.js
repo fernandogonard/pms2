@@ -99,11 +99,11 @@ router.put('/:id/set-status', adminLimiter, protect, authorize('admin', 'recepci
 router.put('/:id/mark-clean', adminLimiter, protect, authorize('admin', 'recepcionista'), roomController.markRoomAsClean);
 router.put('/:id/complete-task', adminLimiter, protect, authorize('admin', 'recepcionista'), roomController.completeHousekeeping);
 
-// 🔧 GESTIÓN DE MANTENIMIENTO - Solo admin
-router.post('/:id/maintenance', adminLimiter, protect, authorize('admin'), maintenanceMiddleware.validateMaintenance, maintenanceController.startMaintenance);
-router.put('/:id/maintenance/complete', adminLimiter, protect, authorize('admin'), maintenanceController.completeMaintenance);
-router.get('/:id/maintenance/history', roomsLimiter, protect, authorize('admin'), maintenanceController.getMaintenanceHistory);
-router.get('/:id/maintenance/impact', roomsLimiter, protect, authorize('admin'), maintenanceController.checkMaintenanceImpact);
+// 🔧 GESTIÓN DE MANTENIMIENTO - Perfiles operativos (admin/recepcionista)
+router.post('/:id/maintenance', adminLimiter, protect, authorize('admin', 'recepcionista'), maintenanceMiddleware.validateMaintenance, maintenanceController.startMaintenance);
+router.put('/:id/maintenance/complete', adminLimiter, protect, authorize('admin', 'recepcionista'), maintenanceController.completeMaintenance);
+router.get('/:id/maintenance/history', roomsLimiter, protect, authorize('admin', 'recepcionista'), maintenanceController.getMaintenanceHistory);
+router.get('/:id/maintenance/impact', roomsLimiter, protect, authorize('admin', 'recepcionista'), maintenanceController.checkMaintenanceImpact);
 
 // 🔄 VALIDACIÓN DE ESTADOS
 router.get('/:id/allowed-states', roomsLimiter, protect, authorize('admin', 'recepcionista'), roomController.getRoomAllowedStates);

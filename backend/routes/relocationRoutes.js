@@ -8,6 +8,6 @@ const relocationController = require('../controllers/relocationController');
 
 // Ruta para relocalizar un huésped
 // POST /api/rooms/:id/relocate
-router.post('/rooms/:id/relocate', protect, authorize('admin', 'manager'), relocationController.relocateGuest);
+router.post('/rooms/:id/relocate', protect, authorize('admin', 'recepcionista', 'manager'), relocationController.relocateGuest);
 
 module.exports = router;
