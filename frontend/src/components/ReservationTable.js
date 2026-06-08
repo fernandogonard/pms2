@@ -284,10 +284,12 @@ const ReservationTable = () => {
       // si hay selectedRooms y su longitud > 0 usamos eso, sino usamos el roomId único
       const payloadRooms = selectedRooms.length > 0 ? selectedRooms : (roomId ? [roomId] : []);
       if (payloadRooms.length === 0) { setError('Seleccione al menos una habitación'); return; }
+      const assignedRooms = Array.isArray(assignModal.reservation.room) ? assignModal.reservation.room : [];
+      const replaceSingleRoom = (assignModal.reservation.cantidad || 1) === 1 && assignedRooms.length > 0;
       const res = await apiFetch(`${API_RESERVATIONS}/${assignModal.reservation._id}/assign-room`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ room: payloadRooms })
+        body: JSON.stringify({ room: payloadRooms, replace: replaceSingleRoom })
       });
       if (!res.ok) {
         const d = await res.json();
