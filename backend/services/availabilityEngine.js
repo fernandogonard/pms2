@@ -64,7 +64,6 @@ class AvailabilityEngine {
     }).populate('user', 'name email').populate('client', 'nombre apellido email').lean();
 
     const status = rooms.map(room => {
-      const todayKey = new Date().toISOString().split('T')[0];
       const roomReservations = reservations.filter(r => {
         if (!r.room) return false;
         const roomIds = Array.isArray(r.room) ? r.room : [r.room];
@@ -81,10 +80,15 @@ class AvailabilityEngine {
         const date = new Date(startUTC);
         date.setUTCDate(startUTC.getUTCDate() + i);
         const dateStr = date.toISOString().split('T')[0];
-        const isMaintenanceDay =
-          room.status === 'mantenimiento' &&
-          (!maintenanceStart || date >= maintenanceStart) &&
+        const isWithinMaintenanceWindow =
+          maintenanceStart &&
+          date >= maintenanceStart &&
           (!maintenanceEnd || date <= maintenanceEnd);
+
+        // Si existe una ventana de mantenimiento activa, debe prevalecer en calendario.
+        const isMaintenanceDay =
+          Boolean(isWithinMaintenanceWindow) ||
+          (room.status === 'mantenimiento' && !maintenanceStart && !maintenanceEnd);
 
         if (isMaintenanceDay) {
           dates.push({
@@ -99,12 +103,7 @@ class AvailabilityEngine {
           new Date(r.checkIn) <= date && new Date(r.checkOut) > date
         );
 
-        let resolvedStatus = 'available';
-        if (resOnDate) {
-          resolvedStatus = resOnDate.status;
-        } else if (dateStr === todayKey && room.status === 'ocupada') {
-          resolvedStatus = 'ocupada';
-        }
+        const resolvedStatus = resOnDate ? resOnDate.status : 'available';
 
         dates.push({
           date: dateStr,
