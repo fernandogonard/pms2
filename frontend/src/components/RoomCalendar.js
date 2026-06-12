@@ -5,17 +5,22 @@ import { useCalendarData } from '../hooks/useCalendarData';
 import { useWebSocket } from '../hooks/useWebSocket';
 
 const STATUS_CONFIG = {
-  available:          { bg: '#22c55e', label: 'Libre',         icon: '✓', textColor: '#fff' },
-  disponible:         { bg: '#22c55e', label: 'Libre',         icon: '✓', textColor: '#fff' },
-  ocupada:            { bg: '#ef4444', label: 'Ocupada',       icon: '●', textColor: '#fff' },
-  reservada:          { bg: '#3b82f6', label: 'Reservada',     icon: '◉', textColor: '#fff' },  // Azul para distinguir
-  confirmada:         { bg: '#06b6d4', label: 'Confirmada',    icon: '✔', textColor: '#fff' },
-  checkout:           { bg: '#a855f7', label: 'Checkout',      icon: '↗', textColor: '#fff' },
-  checkout_hoy:       { bg: '#f97316', label: 'Checkout Hoy',  icon: '📅', textColor: '#fff' },
-  checkin:            { bg: '#06b6d4', label: 'Check-in',      icon: '↘', textColor: '#fff' },
-  mantenimiento:      { bg: '#eab308', label: 'Mantenimiento', icon: '🔧', textColor: '#000' },
-  fuera_de_servicio:  { bg: '#6b7280', label: 'Fuera de servicio', icon: '✕', textColor: '#fff' },
-  limpieza:           { bg: '#8b5cf6', label: 'Limpieza',      icon: '🧹', textColor: '#fff' },
+  // 9 ESTADOS DISTINTOS CON COLORES CLAROS Y DIFERENCIADOS
+  available:          { bg: '#10b981', label: 'Libre',              icon: '✓',  textColor: '#fff' },   // Verde brillante
+  disponible:         { bg: '#10b981', label: 'Libre',              icon: '✓',  textColor: '#fff' },   // Verde (alias)
+  
+  reservada:          { bg: '#3b82f6', label: 'Reservada',          icon: '◉',  textColor: '#fff' },   // Azul
+  confirmada:         { bg: '#0ea5e9', label: 'Confirmada',         icon: '✔',  textColor: '#fff' },   // Cyan/Turquesa
+  
+  checkin:            { bg: '#06b6d4', label: 'Check-in',           icon: '↘',  textColor: '#fff' },   // Turquesa oscuro
+  ocupada:            { bg: '#dc2626', label: 'Ocupada',            icon: '●',  textColor: '#fff' },   // Rojo intenso
+  
+  limpieza:           { bg: '#8b5cf6', label: 'Limpieza',           icon: '🧹', textColor: '#fff' },   // Púrpura
+  checkout:           { bg: '#a855f7', label: 'Checkout',           icon: '↗',  textColor: '#fff' },   // Púrpura claro
+  checkout_hoy:       { bg: '#f97316', label: 'Checkout Hoy',       icon: '📅', textColor: '#fff' },   // Naranja
+  
+  mantenimiento:      { bg: '#eab308', label: 'Mantenimiento',      icon: '🔧', textColor: '#000' },   // Amarillo
+  fuera_de_servicio:  { bg: '#6b7280', label: 'Fuera de servicio',  icon: '✕',  textColor: '#fff' },   // Gris
 };
 
 const getStatusStyle = (status) => STATUS_CONFIG[status] || { bg: '#374151', label: status || '?', icon: '?', textColor: '#fff' };
