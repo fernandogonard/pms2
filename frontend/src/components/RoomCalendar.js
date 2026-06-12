@@ -8,8 +8,8 @@ const STATUS_CONFIG = {
   available:          { bg: '#22c55e', label: 'Libre',         icon: '✓', textColor: '#fff' },
   disponible:         { bg: '#22c55e', label: 'Libre',         icon: '✓', textColor: '#fff' },
   ocupada:            { bg: '#ef4444', label: 'Ocupada',       icon: '●', textColor: '#fff' },
-  reservada:          { bg: '#f59e42', label: 'Reservada',     icon: '◉', textColor: '#fff' },
-  confirmada:         { bg: '#3b82f6', label: 'Confirmada',    icon: '✔', textColor: '#fff' },
+  reservada:          { bg: '#3b82f6', label: 'Reservada',     icon: '◉', textColor: '#fff' },  // Azul para distinguir
+  confirmada:         { bg: '#06b6d4', label: 'Confirmada',    icon: '✔', textColor: '#fff' },
   checkout:           { bg: '#a855f7', label: 'Checkout',      icon: '↗', textColor: '#fff' },
   checkout_hoy:       { bg: '#f97316', label: 'Checkout Hoy',  icon: '📅', textColor: '#fff' },
   checkin:            { bg: '#06b6d4', label: 'Check-in',      icon: '↘', textColor: '#fff' },
@@ -69,25 +69,53 @@ const CellPopover = ({ info, position }) => {
           📅 {dateLabel}
         </div>
 
+        {/* INFO DE MANTENIMIENTO */}
+        {status === 'mantenimiento' && dayData?.maintenanceInfo && (
+          <div style={{ background: 'rgba(234,179,8,0.15)', border: '1px solid rgba(234,179,8,0.3)', borderRadius: 6, padding: '8px 10px', marginBottom: 6 }}>
+            <div style={{ fontWeight: 600, color: '#f59e0b', fontSize: 13, marginBottom: 4 }}>
+              🔧 MANTENIMIENTO
+            </div>
+            <div style={{ color: '#fbbf24', fontSize: 12 }}>{dayData.maintenanceInfo.reason}</div>
+            <div style={{ color: '#94a3b8', fontSize: 11, marginTop: 3 }}>
+              📆 {dayData.maintenanceInfo.startDate?.split('T')[0]} → {dayData.maintenanceInfo.endDate?.split('T')[0]}
+            </div>
+          </div>
+        )}
+
         {/* Datos de reserva REGULAR */}
-        {res && res.guest && (
+        {res && res.guestName && (
           <div style={{ background: '#0f172a', borderRadius: 6, padding: '8px 10px', marginBottom: 6 }}>
             <div style={{ fontWeight: 600, color: '#e2e8f0', fontSize: 13, marginBottom: 2 }}>
-              👤 {res.guest}
+              👤 {res.guestName}
             </div>
-            {res.dni && <div style={{ color: '#94a3b8' }}>DNI: {res.dni}</div>}
-            {res.email && <div style={{ color: '#94a3b8' }}>✉️ {res.email}</div>}
-            {res.phone && <div style={{ color: '#94a3b8' }}>📱 {res.phone}</div>}
+            {res.email && <div style={{ color: '#94a3b8', fontSize: 11 }}>✉️ {res.email}</div>}
             {res.checkIn && res.checkOut && (
               <div style={{ color: '#60a5fa', marginTop: 4, fontSize: 11 }}>
-                🗓️ {res.checkIn} → {res.checkOut}
+                🗓️ {res.checkIn.split('T')[0]} → {res.checkOut.split('T')[0]}
+              </div>
+            )}
+            {res.status && (
+              <div style={{ color: '#a8e6cf', marginTop: 3, fontSize: 11, fontWeight: 500 }}>
+                Estado: {res.status === 'checkin' ? '🟢 Ocupada' : res.status === 'confirmada' ? '🔵 Confirmada' : '⭕ ' + res.status}
               </div>
             )}
           </div>
         )}
 
+        {/* ESTADO RESERVADA (próxima a ocuparse) */}
+        {status === 'reservada' && !res && (
+          <div style={{ background: '#1f2937', borderRadius: 6, padding: '8px 10px', marginBottom: 6 }}>
+            <div style={{ fontWeight: 600, color: '#fbbf24', fontSize: 13, marginBottom: 2 }}>
+              ⏰ Próximo check-in
+            </div>
+            <div style={{ color: '#cbd5e1', fontSize: 11 }}>
+              Se ocupará en los próximos días. Habitación reservada.
+            </div>
+          </div>
+        )}
+
         {/* DATOS DE CHECKOUT HOY */}
-        {checkout && (
+        {(checkout && dayData?.checkoutToday) && (
           <div style={{ background: 'rgba(249,115,22,0.15)', border: '1px solid rgba(249,115,22,0.3)', borderRadius: 6, padding: '8px 10px', marginBottom: 6 }}>
             <div style={{ fontWeight: 600, color: '#f97316', fontSize: 13, marginBottom: 4 }}>
               📅 CHECKOUT HOY
@@ -111,8 +139,30 @@ const CellPopover = ({ info, position }) => {
           </div>
         )}
 
+        {/* Estado LIMPIEZA */}
+        {status === 'limpieza' && dayData?.housekeepingAssignment && (
+          <div style={{ background: 'rgba(139,92,246,0.15)', border: '1px solid rgba(139,92,246,0.3)', borderRadius: 6, padding: '8px 10px', marginBottom: 6 }}>
+            <div style={{ fontWeight: 600, color: '#a78bfa', fontSize: 13, marginBottom: 2 }}>
+              🧹 EN LIMPIEZA
+            </div>
+            <div style={{ color: '#cbd5e1', fontSize: 11 }}>
+              Tipo: {dayData.housekeepingAssignment.housekeepingType === 'repaso' ? 'Repaso (20 min)' :
+                     dayData.housekeepingAssignment.housekeepingType === 'limpieza_profunda' ? 'Limpieza profunda (40 min)' :
+                     'Checkout limpieza (40 min)'}
+            </div>
+            <div style={{ color: '#94a3b8', fontSize: 10, marginTop: 2 }}>
+              Por: {dayData.housekeepingAssignment.assignedTo || 'Sin asignar'}
+            </div>
+            <div style={{ color: '#cbd5e1', fontSize: 10, marginTop: 2 }}>
+              Estado: {dayData.housekeepingAssignment.status === 'asignada' ? '📌 Asignada' :
+                       dayData.housekeepingAssignment.status === 'en_progreso' ? '🟠 En progreso' :
+                       '✅ Completada'}
+            </div>
+          </div>
+        )}
+
         {/* Limpieza */}
-        {(room.pendingHousekeeping || room.lastCleaning) && (
+        {(room.pendingHousekeeping || room.lastCleaning) && status !== 'limpieza' && (
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', fontSize: 11 }}>
             {room.pendingHousekeeping && (
               <span style={{ color: '#a78bfa', background: '#1e1b4b', padding: '2px 8px', borderRadius: 4 }}>

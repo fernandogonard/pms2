@@ -81,26 +81,29 @@ class AvailabilityEngine {
         const date = new Date(startUTC);
         date.setUTCDate(startUTC.getUTCDate() + i);
         const dateStr = date.toISOString().split('T')[0];
+        
+        // Mantenimiento: SOLO si está dentro de la ventana con fechas válidas
+        // NO marcar indefinidamente si solo tiene status='mantenimiento' sin fechas
         const isWithinMaintenanceWindow =
           maintenanceStart &&
+          maintenanceEnd &&
           date >= maintenanceStart &&
-          (!maintenanceEnd || date <= maintenanceEnd);
+          date <= maintenanceEnd;
 
-        // Si existe una ventana de mantenimiento activa, debe prevalecer en calendario.
-        const isMaintenanceDay =
-          Boolean(isWithinMaintenanceWindow) ||
-          (room.status === 'mantenimiento' && !maintenanceStart && !maintenanceEnd);
-
-        if (isMaintenanceDay) {
+        // Si existe una ventana de mantenimiento VÁLIDA (con fechas), usa ese status
+        if (isWithinMaintenanceWindow) {
           const dayEntry = {
             date: dateStr,
             status: 'mantenimiento',
-            reservation: null
+            reservation: null,
+            maintenanceInfo: {
+              reason: room.currentMaintenance?.reason || 'Mantenimiento programado',
+              startDate: room.currentMaintenance?.startDate,
+              endDate: room.currentMaintenance?.estimatedEndDate
+            }
           };
           if (debugRoomNumber && room.number === debugRoomNumber) {
-            dayEntry.debugReason = isWithinMaintenanceWindow
-              ? 'maintenance_window'
-              : 'room_status_mantenimiento_without_window';
+            dayEntry.debugReason = 'maintenance_window_active';
           }
           dates.push(dayEntry);
           continue;
@@ -110,31 +113,39 @@ class AvailabilityEngine {
           new Date(r.checkIn) <= date && new Date(r.checkOut) > date
         );
 
-        // Resolver estado: si hay reserva, usar su status; si no, usar el status actual de la room
-        // Prioridad: limpieza > mantenimiento > checkout_hoy > ocupada > disponible > fuera_de_servicio
+        // Resolver estado con lógica clara:
+        // Prioridad: limpieza > checkout_hoy > ocupada > reservada (próxima) > disponible > fuera_de_servicio
         let resolvedStatus = 'available';
+        let reservationStatus = null;
         
         if (room.status === 'limpieza') {
           resolvedStatus = 'limpieza';
         } else if (room.status === 'fuera_de_servicio') {
           resolvedStatus = 'fuera_de_servicio';
-        } else if (room.checkoutToday && dateStr === startDate.split('T')[0]) {
+        } else if (room.checkoutToday && dateStr === new Date().toISOString().split('T')[0]) {
           resolvedStatus = 'checkout_hoy';
         } else if (resOnDate) {
-          resolvedStatus = resOnDate.status || 'ocupada';
-        } else if (room.status === 'ocupada') {
-          resolvedStatus = 'ocupada';
+          // Si hay reserva, mostrar su estado (checkin, checkout, confirmada, etc)
+          reservationStatus = resOnDate.status;
+          resolvedStatus = resOnDate.status === 'checkin' ? 'ocupada' : resOnDate.status;
+        } else if (roomReservations.some(r => new Date(r.checkIn) > date && new Date(r.checkIn) <= date.getTime() + 86400000)) {
+          // Si hay una reserva que comienza mañana o próximamente, marcar como "reservada"
+          resolvedStatus = 'reservada';
         } else if (room.status === 'disponible') {
-          resolvedStatus = 'disponible';
+          resolvedStatus = 'available';
         }
 
         const dayEntry = {
           date: dateStr,
           status: resolvedStatus,
+          reservationStatus: reservationStatus,
           reservation: resOnDate ? {
             id: resOnDate._id,
-            user: resOnDate.user ? resOnDate.user.name : (resOnDate.client?.nombre || 'Huésped'),
-            email: resOnDate.client?.email || ''
+            guestName: resOnDate.user ? resOnDate.user.name : (resOnDate.client?.nombre || 'Huésped'),
+            email: resOnDate.client?.email || '',
+            checkIn: resOnDate.checkIn,
+            checkOut: resOnDate.checkOut,
+            status: resOnDate.status
           } : null,
           // Agregar checkout info si existe
           checkoutToday: room.checkoutToday && dateStr === new Date().toISOString().split('T')[0],
