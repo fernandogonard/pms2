@@ -109,9 +109,13 @@ class AvailabilityEngine {
           continue;
         }
 
-        const resOnDate = roomReservations.find(r =>
-          new Date(r.checkIn) <= date && new Date(r.checkOut) > date
-        );
+        // Comparar por STRING de fecha (YYYY-MM-DD) para evitar conflictos de timezone
+        const resOnDate = roomReservations.find(r => {
+          const resCheckInStr = new Date(r.checkIn).toISOString().split('T')[0];
+          const resCheckOutStr = new Date(r.checkOut).toISOString().split('T')[0];
+          // Ocupada si: checkIn <= hoy < checkOut
+          return resCheckInStr <= dateStr && resCheckOutStr > dateStr;
+        });
 
         // Verificar si la limpieza está en este día específico
         // La limpieza solo se muestra si está dentro de startTime y endTime
@@ -119,10 +123,11 @@ class AvailabilityEngine {
         const cleaningEnd = room.housekeepingAssignment?.endTime ? new Date(room.housekeepingAssignment.endTime) : null;
         
         // Para limpieza: solo mostrar si está en este día y dentro de horario
-        const isCleaningToday = cleaningStart && cleaningEnd && 
-          new Date(dateStr) >= new Date(cleaningStart.toISOString().split('T')[0]) &&
-          new Date(dateStr) < new Date(cleaningEnd.toISOString().split('T')[0]) ||
-          (cleaningStart && cleaningEnd && dateStr === cleaningStart.toISOString().split('T')[0]);
+        const cleaningStartStr = cleaningStart ? cleaningStart.toISOString().split('T')[0] : null;
+        const cleaningEndStr = cleaningEnd ? cleaningEnd.toISOString().split('T')[0] : null;
+        const isCleaningToday = cleaningStartStr && cleaningEndStr && 
+          dateStr >= cleaningStartStr && dateStr < cleaningEndStr ||
+          (cleaningStartStr && cleaningEndStr && dateStr === cleaningStartStr);
 
         // Resolver estado con lógica clara:
         // Prioridad: limpieza (SOLO si está en progreso HOY) > checkout_hoy > ocupada > reservada (próxima) > disponible > fuera_de_servicio
@@ -140,8 +145,12 @@ class AvailabilityEngine {
           // Si hay reserva, mostrar su estado (checkin, checkout, confirmada, etc)
           reservationStatus = resOnDate.status;
           resolvedStatus = resOnDate.status === 'checkin' ? 'ocupada' : resOnDate.status;
-        } else if (roomReservations.some(r => new Date(r.checkIn) > date && new Date(r.checkIn) <= date.getTime() + 86400000)) {
-          // Si hay una reserva que comienza mañana o próximamente, marcar como "reservada"
+        } else if (roomReservations.some(r => {
+          const resCheckInStr = new Date(r.checkIn).toISOString().split('T')[0];
+          // Si hay reserva que comienza después de hoy (próxima) → reservada
+          return resCheckInStr > dateStr && resCheckInStr <= new Date(dateStr).toISOString().split('T')[0];
+        })) {
+          // Si hay una reserva que comienza próximamente, marcar como "reservada"
           resolvedStatus = 'reservada';
         } else if (room.status === 'disponible') {
           resolvedStatus = 'available';
