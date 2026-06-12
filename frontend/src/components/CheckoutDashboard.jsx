@@ -21,8 +21,8 @@ const CheckoutDashboard = () => {
   // Cargar checkouts del día
   useEffect(() => {
     loadCheckouts();
-    // Recargar cada 30 segundos
-    const interval = setInterval(loadCheckouts, 30000);
+    // Recargar cada 15 segundos para mostrar cambios en tiempo real
+    const interval = setInterval(loadCheckouts, 15000);
     return () => clearInterval(interval);
   }, []);
 

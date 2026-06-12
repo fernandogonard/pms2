@@ -110,7 +110,23 @@ class AvailabilityEngine {
           new Date(r.checkIn) <= date && new Date(r.checkOut) > date
         );
 
-        const resolvedStatus = resOnDate ? resOnDate.status : 'available';
+        // Resolver estado: si hay reserva, usar su status; si no, usar el status actual de la room
+        // Prioridad: limpieza > mantenimiento > checkout_hoy > ocupada > disponible > fuera_de_servicio
+        let resolvedStatus = 'available';
+        
+        if (room.status === 'limpieza') {
+          resolvedStatus = 'limpieza';
+        } else if (room.status === 'fuera_de_servicio') {
+          resolvedStatus = 'fuera_de_servicio';
+        } else if (room.checkoutToday && dateStr === startDate.split('T')[0]) {
+          resolvedStatus = 'checkout_hoy';
+        } else if (resOnDate) {
+          resolvedStatus = resOnDate.status || 'ocupada';
+        } else if (room.status === 'ocupada') {
+          resolvedStatus = 'ocupada';
+        } else if (room.status === 'disponible') {
+          resolvedStatus = 'disponible';
+        }
 
         const dayEntry = {
           date: dateStr,
@@ -119,7 +135,11 @@ class AvailabilityEngine {
             id: resOnDate._id,
             user: resOnDate.user ? resOnDate.user.name : (resOnDate.client?.nombre || 'Huésped'),
             email: resOnDate.client?.email || ''
-          } : null
+          } : null,
+          // Agregar checkout info si existe
+          checkoutToday: room.checkoutToday && dateStr === new Date().toISOString().split('T')[0],
+          checkoutInfo: room.checkoutInfo,
+          housekeepingAssignment: room.housekeepingAssignment
         };
 
         if (debugRoomNumber && room.number === debugRoomNumber) {

@@ -1,6 +1,6 @@
 // components/RoomCalendar.js
 // Calendario visual de ocupación — popover al hover con datos de reserva/limpieza/mantenimiento
-import React, { useMemo, useState, useCallback, useRef } from 'react';
+import React, { useMemo, useState, useCallback, useRef, useEffect } from 'react';
 import { useCalendarData } from '../hooks/useCalendarData';
 import { useWebSocket } from '../hooks/useWebSocket';
 
@@ -158,9 +158,18 @@ export const RoomCalendar = ({ startDate: startDateProp, days = 14 }) => {
   const [popover, setPopover] = useState(null);
   const popoverTimeout = useRef(null);
 
+  // Auto-refetch cada 15 segundos para actualizar estado en tiempo real
+  useEffect(() => {
+    const interval = setInterval(() => {
+      refetch();
+    }, 15000);
+    
+    return () => clearInterval(interval);
+  }, [refetch]);
+
   useWebSocket({
     onMessage: (payload) => {
-      if (payload.type?.startsWith('reservation_') || payload.type?.startsWith('room_')) {
+      if (payload.type?.startsWith('reservation_') || payload.type?.startsWith('room_') || payload.type === 'cleaning_updated') {
         refetch();
       }
     },

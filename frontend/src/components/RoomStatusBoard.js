@@ -608,7 +608,12 @@ const RoomStatusBoard = () => {
     }
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { 
+    load(); 
+    // Auto-refresh cada 15 segundos para mostrar cambios en tiempo real
+    const interval = setInterval(load, 15000);
+    return () => clearInterval(interval);
+  }, [load]);
 
   // Cruzar habitación con su reserva activa
   const getReservationForRoom = room => reservations.find(res => {

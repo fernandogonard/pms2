@@ -64,8 +64,8 @@ const RoomTable = () => {
 
   useEffect(() => {
     fetchRoomsAndReservations();
-    // Actualizar cada 60s como respaldo (WebSocket gestionado desde wsClient global)
-    const interval = setInterval(fetchRoomsAndReservations, 60000);
+    // Actualizar cada 15s para mostrar cambios en tiempo real (limpieza, checkouts, etc.)
+    const interval = setInterval(fetchRoomsAndReservations, 15000);
     return () => clearInterval(interval);
   }, []);
 
