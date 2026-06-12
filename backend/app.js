@@ -2,6 +2,7 @@
 // Configuración principal de Express para el CRM hotelero
 
 const express = require('express');
+const path = require('path');
 const cors = require('cors');
 const morgan = require('morgan');
 const helmet = require('helmet');
@@ -253,6 +254,48 @@ app.get('/health', (req, res) => {
     },
     timestamp: new Date().toISOString()
   });
+});
+
+// 📋 Endpoint de manifest.json SIN autenticación (para PWA)
+// Fallback si Vercel no sirve el archivo estático correctamente
+app.get('/manifest.json', (req, res) => {
+  res.setHeader('Content-Type', 'application/manifest+json');
+  res.setHeader('Cache-Control', 'public, max-age=3600');
+  res.json({
+    "short_name": "Hotel DIVA",
+    "name": "Hotel DIVA - Sistema de Gestión Hotelera",
+    "icons": [
+      {
+        "src": "/favicon.ico",
+        "sizes": "64x64 32x32 24x24 16x16",
+        "type": "image/x-icon"
+      },
+      {
+        "src": "/icons/icon-192x192.png",
+        "sizes": "192x192",
+        "type": "image/png"
+      },
+      {
+        "src": "/icons/icon-512x512.png",
+        "sizes": "512x512",
+        "type": "image/png",
+        "purpose": "any maskable"
+      }
+    ],
+    "id": "/",
+    "start_url": "/",
+    "display": "standalone",
+    "theme_color": "#0088cc",
+    "background_color": "#121212",
+    "description": "Sistema de gestión hotelera para Hotel DIVA",
+    "orientation": "any"
+  });
+});
+
+// Endpoint de robots.txt SIN autenticación
+app.get('/robots.txt', (req, res) => {
+  res.setHeader('Content-Type', 'text/plain');
+  res.send('User-agent: *\nDisallow: /api/\nAllow: /\n');
 });
 
 // Inicializar monitoreo (Sentry si SENTRY_DSN está configurado, sino no-op)
