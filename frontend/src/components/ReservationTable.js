@@ -702,14 +702,28 @@ const ReservationTable = () => {
         const extrasTotal = (extras||[]).reduce((s,e)=>s+(e.amount||0),0);
         const balance = total - paid;
 
+        const refreshViewPaymentsModal = async () => {
+          const res = await apiFetch(`/api/billing/reservations/${_id}`);
+          const data = await res.json();
+          if (!data.success) throw new Error(data.message || 'Error al refrescar comprobante');
+          setViewPaymentsModal(prev => ({
+            ...prev,
+            paymentHistory: data.data?.paymentHistory || [],
+            paid: data.data?.payment?.amountPaid || 0,
+            total: data.data?.pricing?.total || 0,
+            extras: data.data?.extras || [],
+            editingIndex: null,
+            editAmount: ''
+          }));
+        };
+
         const handleDeletePayment = async (idx) => {
           if (!window.confirm(`¿Eliminar este pago de ${fmt(paymentHistory[idx]?.amount)}?`)) return;
           try {
             const res = await apiFetch(`/api/billing/reservations/${_id}/payment/${idx}`, { method: 'DELETE' });
             const data = await res.json();
             if (data.success) {
-              const r = data.data;
-              setViewPaymentsModal(prev => ({ ...prev, paymentHistory: r.paymentHistory || [], paid: r.payment?.amountPaid || 0, editingIndex: null }));
+              await refreshViewPaymentsModal();
               fetchData();
             } else {
               alert(data.message || 'Error al eliminar pago');
@@ -728,13 +742,59 @@ const ReservationTable = () => {
             });
             const data = await res.json();
             if (data.success) {
-              const r = data.data;
-              setViewPaymentsModal(prev => ({ ...prev, paymentHistory: r.paymentHistory || [], paid: r.payment?.amountPaid || 0, editingIndex: null, editAmount: '' }));
+              await refreshViewPaymentsModal();
               fetchData();
             } else {
               alert(data.message || 'Error al editar pago');
             }
           } catch (err) { alert('Error de red al editar pago'); }
+        };
+
+        const handleAddPayment = async () => {
+          const amountText = window.prompt('Monto a agregar:', balance > 0 ? String(Math.round(balance)) : '');
+          if (amountText === null) return;
+          const amount = parseFloat(amountText);
+          if (!amount || amount <= 0) { alert('Ingresá un monto válido'); return; }
+          const method = window.prompt('Método de pago: efectivo, tarjeta, debito, transferencia, cheque', 'efectivo') || 'efectivo';
+          const notes = window.prompt('Nota del pago (opcional):', '') || '';
+          try {
+            const res = await apiFetch(`/api/billing/reservations/${_id}/payment`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ amount, method, notes })
+            });
+            const data = await res.json();
+            if (!data.success) {
+              alert(data.message || 'Error al agregar pago');
+              return;
+            }
+            await refreshViewPaymentsModal();
+            fetchData();
+          } catch (err) { alert('Error de red al agregar pago'); }
+        };
+
+        const handleAddCharge = async () => {
+          const description = window.prompt('Descripción del cargo:', 'Ajuste manual');
+          if (!description) return;
+          const amountText = window.prompt('Monto del cargo:', '');
+          if (amountText === null) return;
+          const amount = parseFloat(amountText);
+          if (!amount || amount <= 0) { alert('Ingresá un monto válido'); return; }
+          const category = window.prompt('Categoría: minibar, lavanderia, room_service, telefono, spa, parking, otro', 'otro') || 'otro';
+          try {
+            const res = await apiFetch(`/api/billing/reservations/${_id}/charge`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ description, amount, category })
+            });
+            const data = await res.json();
+            if (!data.success) {
+              alert(data.message || 'Error al agregar cargo');
+              return;
+            }
+            await refreshViewPaymentsModal();
+            fetchData();
+          } catch (err) { alert('Error de red al agregar cargo'); }
         };
 
         return (
@@ -755,6 +815,10 @@ const ReservationTable = () => {
                     <><span style={{ color:'#9ca3af' }}>{balance > 0 ? 'Saldo pendiente:' : 'Cobrado de más:'}</span>
                     <span style={{ color: balance > 0 ? '#fbbf24' : '#f87171', fontWeight:700 }}>{fmt(Math.abs(balance))}</span></>
                   )}
+                </div>
+                <div style={{ display:'flex', gap:8, marginBottom:16, flexWrap:'wrap' }}>
+                  <button onClick={handleAddPayment} style={{ background:'#0099ff', color:'#fff', border:'none', borderRadius:7, padding:'7px 12px', cursor:'pointer', fontWeight:700, fontSize:12 }}>💳 Agregar pago</button>
+                  <button onClick={handleAddCharge} style={{ background:'#7c3aed', color:'#fff', border:'none', borderRadius:7, padding:'7px 12px', cursor:'pointer', fontWeight:700, fontSize:12 }}>➕ Agregar cargo</button>
                 </div>
                 {paymentHistory.length === 0 ? (
                   <div style={{ color:'#6b7280', textAlign:'center', padding:20 }}>Sin pagos registrados</div>

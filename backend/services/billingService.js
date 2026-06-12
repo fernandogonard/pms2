@@ -323,8 +323,8 @@ class BillingService {
       const reservation = await Reservation.findById(reservationId)
         .populate('client', 'nombre apellido');
       if (!reservation) throw new Error('Reserva no encontrada');
-      if (!['reservada', 'checkin'].includes(reservation.status)) {
-        throw new Error('Solo se pueden agregar cargos a reservas activas o en check-in');
+      if (!['reservada', 'checkin', 'checkout'].includes(reservation.status)) {
+        throw new Error('Solo se pueden agregar cargos a reservas activas, en check-in o checkout');
       }
       if (!amount || amount <= 0) throw new Error('El monto debe ser mayor a 0');
 

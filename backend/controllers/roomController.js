@@ -831,13 +831,16 @@ exports.updateRoomCalendar = async (reservation) => {
 
 exports.getRoomStatus = async (req, res) => {
   try {
-    const { start = new Date().toISOString().split('T')[0], days = 14 } = req.query;
+    const { start = new Date().toISOString().split('T')[0], days = 14, debugRoom } = req.query;
     // Validar formato de fecha
     if (!/^\d{4}-\d{2}-\d{2}$/.test(start)) {
       return res.status(400).json({ error: 'Formato de fecha inválido. Usar YYYY-MM-DD' });
     }
     const daysInt = Math.min(Math.max(1, parseInt(days) || 14), 90);
-    const status = await AvailabilityEngine.getRoomStatus(start, daysInt);
+    const debugRoomNumber = Number.parseInt(debugRoom, 10);
+    const status = await AvailabilityEngine.getRoomStatus(start, daysInt, {
+      debugRoomNumber: Number.isNaN(debugRoomNumber) ? null : debugRoomNumber
+    });
     res.json(status);
   } catch (error) {
     logger.error('Error en getRoomStatus', { error: error.message });

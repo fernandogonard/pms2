@@ -41,6 +41,8 @@ export const useCalendarData = (startDate, days = 14) => {
 
       // Traer reservas activas para enriquecer el calendario
       let resMap = {}; // { roomId_date: reservationInfo }
+      let checkoutMap = {}; // { roomId: checkoutInfo }
+      
       try {
         const resResp = await apiFetch('/api/reservations', { signal: abortControllerRef.current.signal });
         if (resResp.ok) {
@@ -72,6 +74,28 @@ export const useCalendarData = (startDate, days = 14) => {
         }
       } catch { /* silenciar — reservas son enriquecimiento opcional */ }
 
+      // Traer checkouts de hoy para enriquecer calendario
+      try {
+        const checkoutResp = await apiFetch('/api/cleaning/checkouts/today', { signal: abortControllerRef.current.signal });
+        if (checkoutResp.ok) {
+          const checkoutData = await checkoutResp.json();
+          const checkouts = Array.isArray(checkoutData?.data) ? checkoutData.data : [];
+          for (const checkout of checkouts) {
+            if (checkout._id) {
+              checkoutMap[checkout._id] = {
+                guestName: checkout.checkoutInfo?.guestName || '',
+                checkoutDate: checkout.checkoutInfo?.checkoutDate || '',
+                isPaid: checkout.checkoutInfo?.isPaid || false,
+                amountPaid: checkout.checkoutInfo?.amountPaid || 0,
+                totalAmount: checkout.checkoutInfo?.totalAmount || 0,
+                housekeepingType: checkout.housekeepingAssignment?.housekeepingType || '',
+                cleaningStatus: checkout.housekeepingAssignment?.status || 'no_asignada'
+              };
+            }
+          }
+        }
+      } catch { /* silenciar — checkouts son enriquecimiento opcional */ }
+
       // Normalizar: Railway devuelve {rooms:[{..., calendar:{date:status}}], dateRange, assignments, summary}
       // /calendar-status devuelve [{roomId, roomNumber, roomType, dates:[{date, status, reservation}]}]
       let items = result;
@@ -83,7 +107,7 @@ export const useCalendarData = (startDate, days = 14) => {
       }
       const normalized = Array.isArray(items) ? items.map(item => {
         // Formato calendar-status: ya tiene roomId + dates array
-        if (item.roomId && Array.isArray(item.dates)) return item;
+        if (item.roomId && Array.isArray(item.dates)) return { ...item, checkoutInfo: checkoutMap[item.roomId] };
 
         // Formato Railway /status: {_id, number, type, calendar:{date:status}}
         // o formato alterno:       {_id, number, type, states:{date:status}}
@@ -100,6 +124,8 @@ export const useCalendarData = (startDate, days = 14) => {
             lastCleaning: item.lastCleaning,
             pendingHousekeeping: item.pendingHousekeeping,
             currentMaintenance: item.currentMaintenance,
+            checkoutInfo: checkoutMap[roomId],
+            checkoutToday: item.checkoutToday,
             dates: Object.entries(statesObj).map(([date, status]) => {
               let finalStatus = status === 'disponible' ? 'available' : status;
               // Fix: si la room tiene mantenimiento con fin estimado, no marcar días posteriores
@@ -121,7 +147,8 @@ export const useCalendarData = (startDate, days = 14) => {
           roomNumber: item.number || item.roomNumber || '?',
           roomType: item.type || item.roomType || 'unknown',
           roomStatus: item.status,
-          dates: []
+          dates: [],
+          checkoutInfo: checkoutMap[item._id || item.id]
         };
       }) : [];
 

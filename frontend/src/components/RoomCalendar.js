@@ -11,6 +11,7 @@ const STATUS_CONFIG = {
   reservada:          { bg: '#f59e42', label: 'Reservada',     icon: '◉', textColor: '#fff' },
   confirmada:         { bg: '#3b82f6', label: 'Confirmada',    icon: '✔', textColor: '#fff' },
   checkout:           { bg: '#a855f7', label: 'Checkout',      icon: '↗', textColor: '#fff' },
+  checkout_hoy:       { bg: '#f97316', label: 'Checkout Hoy',  icon: '📅', textColor: '#fff' },
   checkin:            { bg: '#06b6d4', label: 'Check-in',      icon: '↘', textColor: '#fff' },
   mantenimiento:      { bg: '#eab308', label: 'Mantenimiento', icon: '🔧', textColor: '#000' },
   fuera_de_servicio:  { bg: '#6b7280', label: 'Fuera de servicio', icon: '✕', textColor: '#fff' },
@@ -27,6 +28,7 @@ const CellPopover = ({ info, position }) => {
   const { room, date, status, dayData } = info;
   const cfg = getStatusStyle(status);
   const res = dayData?.reservation;
+  const checkout = room.checkoutInfo;
   const d = new Date(date + 'T12:00:00');
   const dateLabel = d.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' });
 
@@ -67,7 +69,7 @@ const CellPopover = ({ info, position }) => {
           📅 {dateLabel}
         </div>
 
-        {/* Datos de reserva */}
+        {/* Datos de reserva REGULAR */}
         {res && res.guest && (
           <div style={{ background: '#0f172a', borderRadius: 6, padding: '8px 10px', marginBottom: 6 }}>
             <div style={{ fontWeight: 600, color: '#e2e8f0', fontSize: 13, marginBottom: 2 }}>
@@ -79,6 +81,31 @@ const CellPopover = ({ info, position }) => {
             {res.checkIn && res.checkOut && (
               <div style={{ color: '#60a5fa', marginTop: 4, fontSize: 11 }}>
                 🗓️ {res.checkIn} → {res.checkOut}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* DATOS DE CHECKOUT HOY */}
+        {checkout && (
+          <div style={{ background: 'rgba(249,115,22,0.15)', border: '1px solid rgba(249,115,22,0.3)', borderRadius: 6, padding: '8px 10px', marginBottom: 6 }}>
+            <div style={{ fontWeight: 600, color: '#f97316', fontSize: 13, marginBottom: 4 }}>
+              📅 CHECKOUT HOY
+            </div>
+            <div style={{ color: '#fbbf24' }}>👤 {checkout.guestName || 'Huésped'}</div>
+            {checkout.isPaid ? (
+              <div style={{ color: '#22c55e', fontSize: 11, marginTop: 2 }}>✅ Pagado: ${checkout.amountPaid}</div>
+            ) : (
+              <div style={{ color: '#ef4444', fontSize: 11, marginTop: 2, fontWeight: 600 }}>
+                ⚠️ PAGO PENDIENTE: ${checkout.totalAmount - checkout.amountPaid}
+              </div>
+            )}
+            {checkout.cleaningStatus && (
+              <div style={{ fontSize: 11, color: '#cbd5e1', marginTop: 4 }}>
+                🧹 Limpieza: {checkout.cleaningStatus === 'no_asignada' ? '❌ Sin asignar' :
+                              checkout.cleaningStatus === 'asignada' ? '📌 Asignada' :
+                              checkout.cleaningStatus === 'en_progreso' ? '🧹 En progreso' :
+                              '✨ Completada'}
               </div>
             )}
           </div>
@@ -247,13 +274,23 @@ export const RoomCalendar = ({ startDate: startDateProp, days = 14 }) => {
                 {dates.map((date) => {
                   const dayData = (room.dates || []).find(d => d.date === date);
                   const status = dayData ? dayData.status : 'available';
-                  const cfg = getStatusStyle(status);
+                  
+                  // Si es checkout hoy y la fecha es hoy, mostrar checkout_hoy
+                  let finalStatus = status;
+                  let guestName = dayData?.reservation?.guest || null;
+                  
+                  if (room.checkoutToday && date === today) {
+                    finalStatus = 'checkout_hoy';
+                    guestName = room.checkoutInfo?.guestName || guestName;
+                  }
+                  
+                  const cfg = getStatusStyle(finalStatus);
                   const isToday = date === today;
                   return (
                     <td
                       key={date}
-                      onClick={() => setSelectedRoom({ ...room, selectedDate: date, selectedStatus: status, dayData })}
-                      onMouseEnter={(e) => handleCellEnter(e, room, date, status, dayData)}
+                      onClick={() => setSelectedRoom({ ...room, selectedDate: date, selectedStatus: finalStatus, dayData })}
+                      onMouseEnter={(e) => handleCellEnter(e, room, date, finalStatus, dayData)}
                       onMouseLeave={handleCellLeave}
                       style={{
                         background: cfg.bg,
@@ -268,9 +305,9 @@ export const RoomCalendar = ({ startDate: startDateProp, days = 14 }) => {
                       }}
                     >
                       <div style={{ fontSize: 14, lineHeight: 1 }}>{cfg.icon}</div>
-                      {dayData?.reservation?.guest && (
+                      {guestName && (
                         <div style={{ fontSize: 9, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 50, margin: '0 auto' }}>
-                          {dayData.reservation.guest.split(' ')[0]}
+                          {guestName.split(' ')[0]}
                         </div>
                       )}
                     </td>

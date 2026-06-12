@@ -44,8 +44,9 @@ class AvailabilityEngine {
    * Obtiene estado día-a-día de habitaciones (formato legacy).
    * Usado por: roomController.getRoomStatus
    */
-  async getRoomStatus(startDate, days = 14) {
-    const cacheKey = `status-${startDate}-${days}`;
+  async getRoomStatus(startDate, days = 14, options = {}) {
+    const debugRoomNumber = Number.isInteger(options.debugRoomNumber) ? options.debugRoomNumber : null;
+    const cacheKey = `status-${startDate}-${days}-${debugRoomNumber || 'all'}`;
     const cached = this.cache.get(cacheKey);
     if (cached && Date.now() - cached.timestamp < this.cacheTimeout) {
       return cached.data;
@@ -91,11 +92,17 @@ class AvailabilityEngine {
           (room.status === 'mantenimiento' && !maintenanceStart && !maintenanceEnd);
 
         if (isMaintenanceDay) {
-          dates.push({
+          const dayEntry = {
             date: dateStr,
             status: 'mantenimiento',
             reservation: null
-          });
+          };
+          if (debugRoomNumber && room.number === debugRoomNumber) {
+            dayEntry.debugReason = isWithinMaintenanceWindow
+              ? 'maintenance_window'
+              : 'room_status_mantenimiento_without_window';
+          }
+          dates.push(dayEntry);
           continue;
         }
 
@@ -105,7 +112,7 @@ class AvailabilityEngine {
 
         const resolvedStatus = resOnDate ? resOnDate.status : 'available';
 
-        dates.push({
+        const dayEntry = {
           date: dateStr,
           status: resolvedStatus,
           reservation: resOnDate ? {
@@ -113,7 +120,15 @@ class AvailabilityEngine {
             user: resOnDate.user ? resOnDate.user.name : (resOnDate.client?.nombre || 'Huésped'),
             email: resOnDate.client?.email || ''
           } : null
-        });
+        };
+
+        if (debugRoomNumber && room.number === debugRoomNumber) {
+          dayEntry.debugReason = resOnDate
+            ? `reservation_${resOnDate.status || 'unknown'}`
+            : 'available_default';
+        }
+
+        dates.push(dayEntry);
       }
       return {
         roomId: room._id,

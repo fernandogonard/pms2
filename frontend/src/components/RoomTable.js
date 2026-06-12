@@ -19,20 +19,37 @@ const RoomTable = () => {
   const fetchRoomsAndReservations = async () => {
     try {
       setLoading(true);
-      const [roomsRes, reservationsRes] = await Promise.all([
+      const [roomsRes, reservationsRes, checkoutsRes] = await Promise.all([
         apiFetch(API_ROOMS, {
           headers: {
             'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
             'Expires': '0'
           }
         }),
-        apiFetch(API_RESERVATIONS)
+        apiFetch(API_RESERVATIONS),
+        apiFetch('/api/cleaning/checkouts/today').catch(() => ({ ok: false })) // Si falla, continuar
       ]);
       
       const roomsData = await roomsRes.json();
+      let checkoutRooms = [];
+      
+      // Cargar checkouts si la llamada fue exitosa
+      if (checkoutsRes.ok) {
+        const checkoutData = await checkoutsRes.json();
+        checkoutRooms = Array.isArray(checkoutData?.data) ? checkoutData.data : [];
+      }
+      
       const reservationsData = await reservationsRes.json();
       
-      setRooms(Array.isArray(roomsData) ? roomsData : []);
+      // Enriquecer habitaciones con info de checkout si aplica
+      const enrichedRooms = Array.isArray(roomsData) 
+        ? roomsData.map(room => {
+            const checkoutRoom = checkoutRooms.find(cr => cr._id === room._id);
+            return checkoutRoom ? { ...room, ...checkoutRoom } : room;
+          })
+        : [];
+      
+      setRooms(enrichedRooms);
       // Filtrar solo reservas con check-in
       const activeCheckins = Array.isArray(reservationsData) 
         ? reservationsData.filter(r => r.status === 'checkin') 
@@ -217,13 +234,15 @@ const RoomTable = () => {
                   : res.room === room._id || res.room?._id === room._id
               );
               
-              const realStatus = hasActiveCheckin ? 'ocupada' : room.status;
+              const isCheckoutToday = room.checkoutToday === true;
+              const realStatus = hasActiveCheckin ? 'ocupada' : isCheckoutToday ? 'checkout_hoy' : room.status;
               
               // Estilo condicional según estado
               let statusStyle = { color: '#22c55e', fontWeight: 600 }; // verde para disponible
               if (realStatus === 'ocupada') statusStyle = { color: '#ef4444', fontWeight: 600 }; // rojo para ocupada
               if (realStatus === 'limpieza') statusStyle = { color: '#eab308', fontWeight: 600 }; // amarillo para limpieza
               if (realStatus === 'mantenimiento') statusStyle = { color: '#3b82f6', fontWeight: 600 }; // azul para mantenimiento
+              if (realStatus === 'checkout_hoy') statusStyle = { color: '#f97316', fontWeight: 600 }; // naranja para checkout
               
               return (
                 <tr key={room._id} style={{ background: '#222', color: '#fff', borderBottom: '1px solid #333' }}>
@@ -234,11 +253,21 @@ const RoomTable = () => {
                   <td style={{ padding: 10 }}>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                       <span style={statusStyle}>
-                        {room.status === 'disponible' ? '✅ Disponible' :
-                         room.status === 'ocupada' ? '🔴 Ocupada' :
-                         room.status === 'limpieza' ? '🧹 Limpieza' :
+                        {realStatus === 'disponible' ? '✅ Disponible' :
+                         realStatus === 'ocupada' ? '🔴 Ocupada' :
+                         realStatus === 'limpieza' ? '🧹 Limpieza' :
+                         realStatus === 'checkout_hoy' ? '📅 Checkout Hoy' :
                          '🔧 Mantenimiento'}
                       </span>
+                      {isCheckoutToday && room.checkoutInfo && (
+                        <span style={{
+                          fontSize: 10, fontWeight: 600, padding: '3px 6px', borderRadius: 4,
+                          background: 'rgba(249,115,22,0.15)', color: '#f97316'
+                        }}>
+                          👤 {room.checkoutInfo.guestName || 'Huésped'}
+                          {room.checkoutInfo.isPaid ? ' ✅' : ' ⚠️ Sin pago'}
+                        </span>
+                      )}
                       {room.pendingHousekeeping && (
                         <span style={{
                           fontSize: 11, fontWeight: 700, padding: '2px 6px', borderRadius: 4,
@@ -267,7 +296,7 @@ const RoomTable = () => {
                         </button>
                       )}
                       {/* Botones de cambio rápido de estado */}
-                      {(room.status === 'ocupada' || room.status === 'disponible') && (
+                      {(room.status === 'ocupada' || room.status === 'disponible' || realStatus === 'checkout_hoy') && (
                         <button
                           onClick={() => handleSetStatus(room._id, 'limpieza', room.number)}
                           style={{ background: '#92400e', color: '#fde68a', border: 'none', borderRadius: 6, padding: '6px 10px', fontWeight: 600, fontSize: 12 }}

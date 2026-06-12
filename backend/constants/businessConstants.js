@@ -56,7 +56,18 @@ const BUSINESS_CONFIG = {
   NAME_MIN_LENGTH: 2,
   NAME_MAX_LENGTH: 50,
   PASSWORD_MIN_LENGTH: 6,
-  PASSWORD_MAX_LENGTH: 100
+  PASSWORD_MAX_LENGTH: 100,
+  
+  // ─── HORARIOS Y TIEMPOS ────────────────────────────────────────────────
+  CHECKOUT_TIME: '10:00',       // Hora de checkout (10 AM)
+  CHECKOUT_ALERT_TIME: '07:00', // Mostrar alerta desde las 7 AM
+  
+  // Tiempos de limpieza en minutos
+  CLEANING_TIMES: {
+    repaso: 20,                 // Repaso rápido
+    limpieza_profunda: 25,      // Cada 3 noches (cambio sábanas incluido)
+    limpieza_checkout: 40       // Post-checkout completa
+  }
 };
 
 // Monedas soportadas
@@ -67,6 +78,34 @@ const CURRENCIES = {
 };
 
 const VALID_CURRENCIES = Object.values(CURRENCIES);
+
+// ─── CONFIGURACIÓN DE VISUALIZACIÓN DE LIMPIEZA ────────────────────────────────
+const HOUSEKEEPING_CONFIG = {
+  repaso: {
+    label: '🧹 Repaso rápido',
+    color: '#60a5fa',           // Azul claro
+    bgColor: 'rgba(96,165,250,0.15)',
+    borderColor: '#60a5fa60',
+    duration: 20,
+    description: 'Cambio de sábanas y limpieza diaria'
+  },
+  limpieza_profunda: {
+    label: '🧼 Limpieza profunda',
+    color: '#a78bfa',           // Púrpura
+    bgColor: 'rgba(167,139,250,0.15)',
+    borderColor: '#a78bfa60',
+    duration: 25,
+    description: 'Limpieza completa cada 3 noches'
+  },
+  limpieza_checkout: {
+    label: '🏃 Checkout limpieza',
+    color: '#f97316',           // Naranja
+    bgColor: 'rgba(249,115,22,0.15)',
+    borderColor: '#f9731660',
+    duration: 40,
+    description: 'Limpieza completa post-checkout'
+  }
+};
 
 module.exports = {
   // Tipos y estados
@@ -82,5 +121,6 @@ module.exports = {
   VALID_CURRENCIES,
   
   // Configuraciones
-  BUSINESS_CONFIG
+  BUSINESS_CONFIG,
+  HOUSEKEEPING_CONFIG
 };

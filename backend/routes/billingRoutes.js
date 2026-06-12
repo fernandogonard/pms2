@@ -40,10 +40,10 @@ router.post('/reservations/:id/payment', protect, authorize('admin', 'recepcioni
 router.post('/reservations/:id/charge', protect, authorize('admin', 'recepcionista'), addCharge);
 
 // DELETE /api/billing/reservations/:id/payment/:paymentIndex - Eliminar un pago del historial
-router.delete('/reservations/:id/payment/:paymentIndex', protect, authorize('admin'), deletePayment);
+router.delete('/reservations/:id/payment/:paymentIndex', protect, authorize('admin', 'recepcionista'), deletePayment);
 
 // PUT /api/billing/reservations/:id/payment/:paymentIndex - Editar monto de un pago
-router.put('/reservations/:id/payment/:paymentIndex', protect, authorize('admin'), editPayment);
+router.put('/reservations/:id/payment/:paymentIndex', protect, authorize('admin', 'recepcionista'), editPayment);
 
 // GET /api/billing/reservations/:id - Obtener información de facturación de reserva
 router.get('/reservations/:id', protect, getReservationBilling);

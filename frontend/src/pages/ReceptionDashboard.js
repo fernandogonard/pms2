@@ -5,6 +5,7 @@ import ReceptionLayout from '../layouts/ReceptionLayout';
 import ReceptionReservations from '../components/ReceptionReservations';
 import RoomStatusBoard from '../components/RoomStatusBoard';
 import { RoomCalendar } from '../components/RoomCalendar';
+import CheckoutDashboard from '../components/CheckoutDashboard';
 import CleaningManager from '../components/CleaningManager';
 import MaintenanceManager from '../components/MaintenanceManager';
 import { useAuth } from '../contexts/AuthContext';
@@ -346,6 +347,7 @@ const ReceptionDashboard = () => {
     { id: 'inicio',       label: 'Inicio',       icon: '🏠' },
     { id: 'reservas',     label: 'Reservas',     icon: '📅' },
     { id: 'cobros',       label: 'Cobros',       icon: '💳' },
+    { id: 'checkouts',    label: 'Checkouts',    icon: '📅' },
     { id: 'mantenimiento',label: 'Mantenimiento',icon: '🔧' },
     { id: 'habitaciones', label: 'Habitaciones', icon: '🛏️' },
     { id: 'limpieza',     label: 'Limpieza',     icon: '🧹' },
@@ -357,6 +359,7 @@ const ReceptionDashboard = () => {
       case 'inicio':       return <DailySummary onGoTo={setActiveTab} />;
       case 'reservas':     return <ReceptionReservations />;
       case 'cobros':       return <ReceptionPayments />;
+      case 'checkouts':    return <CheckoutDashboard />;
       case 'habitaciones': return (
         <div>
           <div style={{ marginBottom: 14 }}>

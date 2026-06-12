@@ -11,6 +11,7 @@ const AdminDashboard = lazy(() => import('./pages/AdminDashboard'));
 const ReceptionDashboard = lazy(() => import('./pages/ReceptionDashboard'));
 const PublicHome = lazy(() => import('./pages/PublicHome'));
 const HotelInfo = lazy(() => import('./pages/HotelInfo'));
+const CheckoutDashboard = lazy(() => import('./components/CheckoutDashboard'));
 
 // Componente de carga
 const LoadingSpinner = () => (
@@ -100,6 +101,11 @@ const AppRouterContent = () => {
           <Route path="/recepcion" element={
             <PrivateRoute allowRoles={["admin", "recepcionista"]}>
               <ReceptionDashboard />
+            </PrivateRoute>
+          } />
+          <Route path="/cleaning/checkouts" element={
+            <PrivateRoute allowRoles={["admin", "recepcionista", "limpieza"]}>
+              <CheckoutDashboard />
             </PrivateRoute>
           } />
           <Route path="/unauthorized" element={<Unauthorized />} />

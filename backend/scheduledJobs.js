@@ -7,6 +7,7 @@ const { logger } = require('./config/logger');
 const Room = require('./models/Room');
 const Reservation = require('./models/Reservation');
 const Client = require('./models/Client');
+const CheckoutService = require('./services/CheckoutService');
 
 /**
  * Inicializa todas las tareas programadas del sistema
@@ -14,6 +15,8 @@ const Client = require('./models/Client');
  * - Sincronización de estados de habitaciones (cada 30 minutos)
  * - Limpieza de reservas antiguas (cada domingo a las 3am)
  * - Optimización de índices de la BD (día 1 de cada mes a las 2am)
+ * - NUEVO: Marcado de checkouts a las 7 AM
+ * - NUEVO: Limpieza de flags de checkout a las 23:30 PM
  */
 function initScheduledJobs() {
   logger.info('🚀 Iniciando sistema de tareas programadas...');
@@ -178,6 +181,36 @@ function initScheduledJobs() {
     }
   });
 
+  // ─── NUEVAS TAREAS: GESTIÓN DE CHECKOUTS ───────────────────────────────────
+
+  // TAREA 8: MARCAR CHECKOUTS HOY — 7:00 AM todos los días
+  // A las 7 AM, busca todas las reservas con checkout hoy y las marca con checkoutToday=true
+  // Así la UI puede mostrar anticipadamente las habitaciones que se irán hoy
+  // Requisito del usuario: "a las 7 am del dia del check out ya deveria mostrarce"
+  cron.schedule('0 7 * * *', async () => {
+    try {
+      logger.info('🌅 [CHECKOUT] Iniciando marcado de checkouts para hoy (7 AM)...');
+      const result = await CheckoutService.markRoomsWithCheckoutToday();
+      logger.info(`✅ [CHECKOUT] ${result.marked} habitaciones marcadas con checkout hoy`);
+    } catch (error) {
+      logger.error('❌ [CHECKOUT] Error marcando checkouts del día:', error);
+    }
+  });
+
+  // TAREA 9: LIMPIAR FLAGS DE CHECKOUT — 23:30 PM todos los días
+  // Al final del día, limpia el flag checkoutToday para preparar el siguiente día
+  cron.schedule('30 23 * * *', async () => {
+    try {
+      logger.info('🌙 [CHECKOUT] Limpiando flags de checkout (23:30)...');
+      const result = await CheckoutService.clearCheckoutTodayFlag();
+      logger.info(`✅ [CHECKOUT] ${result.cleared} flags de checkout limpiados`);
+    } catch (error) {
+      logger.error('❌ [CHECKOUT] Error limpiando flags de checkout:', error);
+    }
+  });
+
+  // ─── RESUMEN DE TAREAS ───────────────────────────────────────────────────────
+
   // Imprimir resumen de tareas programadas
   logger.info('📋 Sistema de tareas programadas iniciado correctamente');
   logger.info('📋 Resumen de tareas:');
@@ -188,6 +221,8 @@ function initScheduledJobs() {
   logger.info('  • Repaso diario: 9:00 AM (habitaciones ocupadas)');
   logger.info('  • Limpieza profunda (3 noches): 9:05 AM (checkins c/ múltiplo de 3)');
   logger.info('  • Recordatorio check-in: 10:00 AM (reservas de mañana)');
+  logger.info('  • 🆕 [CHECKOUT] Marcar checkouts: 7:00 AM (visibilidad anticipada)');
+  logger.info('  • 🆕 [CHECKOUT] Limpiar flags: 23:30 PM (preparar siguiente día)');
 }
 
 module.exports = {

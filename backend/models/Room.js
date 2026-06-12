@@ -108,6 +108,42 @@ const roomSchema = new mongoose.Schema({
   pendingHousekeepingAt: {
     type: Date,
     default: null
+  },
+
+  // ─── DATOS DE CHECKOUT PRÓXIMO ─────────────────────────────────────────────
+  checkoutToday: {
+    type: Boolean,
+    default: false,
+    index: true
+  },
+  checkoutInfo: {
+    reservationId: mongoose.Schema.Types.ObjectId,
+    guestName: String,
+    checkoutTime: Date,        // Hora exacta del checkout (10:00 AM del día)
+    checkoutDate: String,      // YYYY-MM-DD
+    nightsStayed: Number,
+    totalAmount: Number,
+    amountPaid: Number,
+    isPaid: Boolean,
+    daysOverdue: Number        // Si ya pasó la hora
+  },
+
+  // ─── ASIGNACIÓN DE LIMPIEZA ─────────────────────────────────────────────
+  housekeepingAssignment: {
+    assignedTo: String,        // Nombre de limpiador o ID
+    assignedAt: Date,
+    estimatedDurationMinutes: {
+      type: Number,
+      default: null             // 20 para repaso, 40 para checkout
+    },
+    startTime: Date,
+    endTime: Date,
+    status: {
+      type: String,
+      enum: ['no_asignada', 'asignada', 'en_progreso', 'completada', 'cancelada'],
+      default: 'no_asignada'
+    },
+    notes: String
   }
 }, { timestamps: true });
 
