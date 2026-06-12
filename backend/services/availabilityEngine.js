@@ -113,12 +113,24 @@ class AvailabilityEngine {
           new Date(r.checkIn) <= date && new Date(r.checkOut) > date
         );
 
+        // Verificar si la limpieza está en este día específico
+        // La limpieza solo se muestra si está dentro de startTime y endTime
+        const cleaningStart = room.housekeepingAssignment?.startTime ? new Date(room.housekeepingAssignment.startTime) : null;
+        const cleaningEnd = room.housekeepingAssignment?.endTime ? new Date(room.housekeepingAssignment.endTime) : null;
+        
+        // Para limpieza: solo mostrar si está en este día y dentro de horario
+        const isCleaningToday = cleaningStart && cleaningEnd && 
+          new Date(dateStr) >= new Date(cleaningStart.toISOString().split('T')[0]) &&
+          new Date(dateStr) < new Date(cleaningEnd.toISOString().split('T')[0]) ||
+          (cleaningStart && cleaningEnd && dateStr === cleaningStart.toISOString().split('T')[0]);
+
         // Resolver estado con lógica clara:
-        // Prioridad: limpieza > checkout_hoy > ocupada > reservada (próxima) > disponible > fuera_de_servicio
+        // Prioridad: limpieza (SOLO si está en progreso HOY) > checkout_hoy > ocupada > reservada (próxima) > disponible > fuera_de_servicio
         let resolvedStatus = 'available';
         let reservationStatus = null;
         
-        if (room.status === 'limpieza') {
+        if (isCleaningToday && room.housekeepingAssignment?.status === 'en_progreso') {
+          // SOLO mostrar limpieza si está en progreso y es el día de limpieza
           resolvedStatus = 'limpieza';
         } else if (room.status === 'fuera_de_servicio') {
           resolvedStatus = 'fuera_de_servicio';
