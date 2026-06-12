@@ -87,6 +87,7 @@ router.get('/status', roomsLimiter, protect, roomController.getRoomsStatus); // 
 // 🔒 Rutas estáticas ANTES de /:id para evitar conflictos de Express
 router.get('/cleaning', roomsLimiter, protect, authorize('admin', 'recepcionista'), roomController.getRoomsInCleaning);
 router.get('/maintenance', roomsLimiter, protect, authorize('admin', 'recepcionista'), maintenanceController.getRoomsInMaintenance);
+router.get('/debug/:roomNumber', protect, authorize('admin'), roomController.debugRoomStatus);
 router.get('/:id', 
   roomsLimiter, 
   protect, 

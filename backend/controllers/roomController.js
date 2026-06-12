@@ -829,6 +829,58 @@ exports.updateRoomCalendar = async (reservation) => {
   }
 };
 
+// DEBUG ENDPOINT - ver estado exacto de una habitación
+exports.debugRoomStatus = async (req, res) => {
+  try {
+    const { roomNumber } = req.params;
+    const today = new Date().toISOString().split('T')[0];
+    
+    const room = await Room.findOne({ number: parseInt(roomNumber) });
+    if (!room) return res.status(404).json({ error: 'Habitación no encontrada' });
+    
+    // Buscar reservas activas
+    const startDate = new Date(today);
+    startDate.setUTCHours(0, 0, 0, 0);
+    const endDate = new Date(startDate);
+    endDate.setUTCDate(endDate.getUTCDate() + 14);
+    
+    const reservations = await Reservation.find({
+      room: room._id,
+      status: { $ne: 'cancelada' },
+      checkIn: { $lt: endDate },
+      checkOut: { $gt: startDate }
+    }).lean();
+    
+    // Mostrar info de debug
+    res.json({
+      room: {
+        number: room.number,
+        status: room.status,
+        _id: room._id
+      },
+      today: today,
+      reservations: reservations.map(r => ({
+        checkIn: r.checkIn,
+        checkInStr: new Date(r.checkIn).toISOString().split('T')[0],
+        checkOut: r.checkOut,
+        checkOutStr: new Date(r.checkOut).toISOString().split('T')[0],
+        status: r.status
+      })),
+      analysis: {
+        todayStr: today,
+        shouldBeOccupied: reservations.some(r => {
+          const checkInStr = new Date(r.checkIn).toISOString().split('T')[0];
+          const checkOutStr = new Date(r.checkOut).toISOString().split('T')[0];
+          return checkInStr <= today && checkOutStr > today;
+        })
+      }
+    });
+  } catch (error) {
+    logger.error('Error en debugRoomStatus', { error: error.message });
+    res.status(500).json({ error: error.message });
+  }
+};
+
 exports.getRoomStatus = async (req, res) => {
   try {
     const { start = new Date().toISOString().split('T')[0], days = 14, debugRoom } = req.query;
