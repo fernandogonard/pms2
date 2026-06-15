@@ -11,6 +11,26 @@ class AvailabilityEngine {
   constructor() {
     this.cache = new Map();
     this.cacheTimeout = 10000; // 10s
+    this.statusPriority = {
+      fuera_de_servicio: 100,
+      mantenimiento: 90,
+      conflicto: 85,
+      checkout_hoy: 80,
+      limpieza: 70,
+      checkin: 60,
+      ocupada: 50,
+      reservada: 40,
+      available: 10
+    };
+  }
+
+  resolveStatus(candidates = []) {
+    if (!Array.isArray(candidates) || candidates.length === 0) return 'available';
+    return candidates.sort((a, b) => {
+      const pa = this.statusPriority[a] || 0;
+      const pb = this.statusPriority[b] || 0;
+      return pb - pa;
+    })[0];
   }
 
   /**
@@ -81,41 +101,42 @@ class AvailabilityEngine {
         const date = new Date(startUTC);
         date.setUTCDate(startUTC.getUTCDate() + i);
         const dateStr = date.toISOString().split('T')[0];
-        
-        // Mantenimiento: SOLO si está dentro de la ventana con fechas válidas
-        // NO marcar indefinidamente si solo tiene status='mantenimiento' sin fechas
+        const candidates = [];
+
+        if (room.status === 'fuera_de_servicio') {
+          candidates.push('fuera_de_servicio');
+        }
+
         const isWithinMaintenanceWindow =
           maintenanceStart &&
           maintenanceEnd &&
           date >= maintenanceStart &&
           date <= maintenanceEnd;
 
-        // Si existe una ventana de mantenimiento VÁLIDA (con fechas), usa ese status
         if (isWithinMaintenanceWindow) {
-          const dayEntry = {
-            date: dateStr,
-            status: 'mantenimiento',
-            reservation: null,
-            maintenanceInfo: {
-              reason: room.currentMaintenance?.reason || 'Mantenimiento programado',
-              startDate: room.currentMaintenance?.startDate,
-              endDate: room.currentMaintenance?.estimatedEndDate
-            }
-          };
-          if (debugRoomNumber && room.number === debugRoomNumber) {
-            dayEntry.debugReason = 'maintenance_window_active';
-          }
-          dates.push(dayEntry);
-          continue;
+          candidates.push('mantenimiento');
         }
 
-        // Comparar por STRING de fecha (YYYY-MM-DD) para evitar conflictos de timezone
-        const resOnDate = roomReservations.find(r => {
+        const reservationsToday = roomReservations.filter(r => {
           const resCheckInStr = new Date(r.checkIn).toISOString().split('T')[0];
           const resCheckOutStr = new Date(r.checkOut).toISOString().split('T')[0];
-          // Ocupada si: checkIn <= hoy < checkOut
           return resCheckInStr <= dateStr && resCheckOutStr > dateStr;
         });
+
+        const checkinsToday = roomReservations.filter(r =>
+          new Date(r.checkIn).toISOString().split('T')[0] === dateStr
+        );
+
+        const checkoutsToday = roomReservations.filter(r =>
+          new Date(r.checkOut).toISOString().split('T')[0] === dateStr
+        );
+
+        const hasConflict = reservationsToday.length > 1;
+        if (hasConflict) {
+          candidates.push('conflicto');
+        }
+
+        const resOnDate = reservationsToday[0] || null;
 
         // Verificar si la limpieza está en este día específico
         // La limpieza solo se muestra si está dentro de startTime y endTime
@@ -129,32 +150,30 @@ class AvailabilityEngine {
           dateStr >= cleaningStartStr && dateStr < cleaningEndStr ||
           (cleaningStartStr && cleaningEndStr && dateStr === cleaningStartStr);
 
-        // Resolver estado con lógica clara:
-        // Prioridad: limpieza (SOLO si está en progreso HOY) > checkout_hoy > ocupada > reservada (próxima) > disponible > fuera_de_servicio
-        let resolvedStatus = 'available';
-        let reservationStatus = null;
-        
         if (isCleaningToday && room.housekeepingAssignment?.status === 'en_progreso') {
-          // SOLO mostrar limpieza si está en progreso y es el día de limpieza
-          resolvedStatus = 'limpieza';
-        } else if (room.status === 'fuera_de_servicio') {
-          resolvedStatus = 'fuera_de_servicio';
-        } else if (room.checkoutToday && dateStr === new Date().toISOString().split('T')[0]) {
-          resolvedStatus = 'checkout_hoy';
-        } else if (resOnDate) {
-          // Si hay reserva, mostrar su estado (checkin, checkout, confirmada, etc)
-          reservationStatus = resOnDate.status;
-          resolvedStatus = resOnDate.status === 'checkin' ? 'ocupada' : resOnDate.status;
-        } else if (roomReservations.some(r => {
-          const resCheckInStr = new Date(r.checkIn).toISOString().split('T')[0];
-          // Si hay reserva que comienza después de hoy (próxima) → reservada
-          return resCheckInStr > dateStr && resCheckInStr <= new Date(dateStr).toISOString().split('T')[0];
-        })) {
-          // Si hay una reserva que comienza próximamente, marcar como "reservada"
-          resolvedStatus = 'reservada';
-        } else if (room.status === 'disponible') {
-          resolvedStatus = 'available';
+          candidates.push('limpieza');
         }
+
+        if (checkoutsToday.length > 0) {
+          candidates.push('checkout_hoy');
+        }
+
+        if (checkinsToday.length > 0) {
+          candidates.push('checkin');
+        }
+
+        const hasCheckedInGuest = reservationsToday.some(r => r.status === 'checkin');
+        if (hasCheckedInGuest) {
+          candidates.push('ocupada');
+        }
+
+        const hasReservedWindow = reservationsToday.some(r => r.status === 'reservada' || r.status === 'confirmada');
+        if (hasReservedWindow) {
+          candidates.push('reservada');
+        }
+
+        const resolvedStatus = this.resolveStatus(candidates);
+        const reservationStatus = resOnDate ? resOnDate.status : null;
 
         const dayEntry = {
           date: dateStr,
@@ -168,16 +187,34 @@ class AvailabilityEngine {
             checkOut: resOnDate.checkOut,
             status: resOnDate.status
           } : null,
+          conflicts: hasConflict
+            ? reservationsToday.map(r => ({
+                id: r._id,
+                status: r.status,
+                checkIn: r.checkIn,
+                checkOut: r.checkOut
+              }))
+            : [],
           // Agregar checkout info si existe
           checkoutToday: room.checkoutToday && dateStr === new Date().toISOString().split('T')[0],
           checkoutInfo: room.checkoutInfo,
+          maintenanceInfo: isWithinMaintenanceWindow ? {
+            reason: room.currentMaintenance?.reason || 'Mantenimiento programado',
+            startDate: room.currentMaintenance?.startDate,
+            endDate: room.currentMaintenance?.estimatedEndDate
+          } : null,
           housekeepingAssignment: room.housekeepingAssignment
         };
 
         if (debugRoomNumber && room.number === debugRoomNumber) {
-          dayEntry.debugReason = resOnDate
-            ? `reservation_${resOnDate.status || 'unknown'}`
-            : 'available_default';
+          dayEntry.debugReason =
+            resolvedStatus === 'conflicto' ? 'overbooking_conflict' :
+            resolvedStatus === 'mantenimiento' ? 'maintenance_window_active' :
+            resolvedStatus === 'checkout_hoy' ? 'checkout_today' :
+            resolvedStatus === 'checkin' ? 'checkin_today' :
+            resolvedStatus === 'limpieza' ? 'housekeeping_in_progress' :
+            resOnDate ? `reservation_${resOnDate.status || 'unknown'}` :
+            'available_default';
         }
 
         dates.push(dayEntry);

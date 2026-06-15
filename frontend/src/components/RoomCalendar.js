@@ -20,6 +20,7 @@ const STATUS_CONFIG = {
   checkout_hoy:       { bg: '#f97316', label: 'Checkout Hoy',       icon: '📅', textColor: '#fff' },   // Naranja
   
   mantenimiento:      { bg: '#eab308', label: 'Mantenimiento',      icon: '🔧', textColor: '#000' },   // Amarillo
+  conflicto:          { bg: '#ef4444', label: 'Conflicto',           icon: '⚠',  textColor: '#fff' },   // Rojo alerta
   fuera_de_servicio:  { bg: '#6b7280', label: 'Fuera de servicio',  icon: '✕',  textColor: '#fff' },   // Gris
 };
 
@@ -83,6 +84,18 @@ const CellPopover = ({ info, position }) => {
             <div style={{ color: '#fbbf24', fontSize: 12 }}>{dayData.maintenanceInfo.reason}</div>
             <div style={{ color: '#94a3b8', fontSize: 11, marginTop: 3 }}>
               📆 {dayData.maintenanceInfo.startDate?.split('T')[0]} → {dayData.maintenanceInfo.endDate?.split('T')[0]}
+            </div>
+          </div>
+        )}
+
+        {/* CONFLICTO / OVERBOOKING */}
+        {status === 'conflicto' && (
+          <div style={{ background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: 6, padding: '8px 10px', marginBottom: 6 }}>
+            <div style={{ fontWeight: 700, color: '#fca5a5', fontSize: 13, marginBottom: 4 }}>
+              ⚠ Conflicto de ocupación
+            </div>
+            <div style={{ color: '#fecaca', fontSize: 11 }}>
+              Hay más de una reserva activa para esta habitación en esta fecha.
             </div>
           </div>
         )}
