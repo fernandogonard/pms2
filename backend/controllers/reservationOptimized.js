@@ -274,6 +274,34 @@ exports.getReservationStats = async (req, res) => {
           checkin: {
             $sum: { $cond: [{ $eq: ['$status', 'checkin'] }, 1, 0] }
           },
+          checkinConHabitacion: {
+            $sum: {
+              $cond: [
+                {
+                  $and: [
+                    { $eq: ['$status', 'checkin'] },
+                    { $gt: [{ $size: { $ifNull: ['$room', []] } }, 0] }
+                  ]
+                },
+                1,
+                0
+              ]
+            }
+          },
+          checkinSinHabitacion: {
+            $sum: {
+              $cond: [
+                {
+                  $and: [
+                    { $eq: ['$status', 'checkin'] },
+                    { $eq: [{ $size: { $ifNull: ['$room', []] } }, 0] }
+                  ]
+                },
+                1,
+                0
+              ]
+            }
+          },
           checkout: {
             $sum: { $cond: [{ $eq: ['$status', 'checkout'] }, 1, 0] }
           },
@@ -331,6 +359,8 @@ exports.getReservationStats = async (req, res) => {
           totalReservations: 0,
           reservadas: 0,
           checkin: 0,
+          checkinConHabitacion: 0,
+          checkinSinHabitacion: 0,
           checkout: 0,
           canceladas: 0,
           ocupadasHoy: 0

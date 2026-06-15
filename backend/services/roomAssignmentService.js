@@ -124,6 +124,14 @@ async function processCheckin(reservationId, options = {}) {
       await assignRoomsToReservation(reservation, { session });
     }
 
+    // Regla PMS: no se permite check-in sin habitación real asignada.
+    if (!reservation.room || reservation.room.length === 0) {
+      throw new Error(
+        `No hay habitaciones disponibles para completar el check-in de la reserva ${reservation._id}. ` +
+        'Asigne habitación manualmente y vuelva a intentar.'
+      );
+    }
+
     // 🔄 Validar transición de estado antes del check-in
     const transitionValidation = validateReservationStateTransition(reservation.status, 'checkin');
     if (!transitionValidation.valid) {

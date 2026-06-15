@@ -59,8 +59,8 @@ const AdminReservationsSection = () => {
         <div style={statCardStyle}>
           <div style={statIconStyle}>✅</div>
           <div>
-            <div style={statValueStyle}>{stats.checkin}</div>
-            <div style={statLabelStyle}>Check-ins Activos</div>
+            <div style={statValueStyle}>{stats.checkinConHabitacion ?? stats.checkin}</div>
+            <div style={statLabelStyle}>Check-ins con Habitación</div>
           </div>
         </div>
         <div style={statCardStyle}>
@@ -78,6 +78,12 @@ const AdminReservationsSection = () => {
           </div>
         </div>
       </div>
+
+      {(stats.checkinSinHabitacion || 0) > 0 && (
+        <div style={warningStyle}>
+          ⚠️ Hay {stats.checkinSinHabitacion} check-in(s) sin habitación asignada. Esas reservas no pueden reflejarse como ocupación real en el calendario.
+        </div>
+      )}
 
       {/* Tabla de reservas */}
       <div style={tableContainerStyle}>
@@ -183,6 +189,17 @@ const tableContainerStyle = {
   borderRadius: '12px',
   border: '1px solid rgba(255, 255, 255, 0.1)',
   overflow: 'hidden'
+};
+
+const warningStyle = {
+  marginBottom: '16px',
+  padding: '12px 14px',
+  borderRadius: '10px',
+  border: '1px solid rgba(245, 158, 11, 0.55)',
+  background: 'rgba(245, 158, 11, 0.12)',
+  color: '#fbbf24',
+  fontSize: '13px',
+  fontWeight: '600'
 };
 
 export default AdminReservationsSection;
