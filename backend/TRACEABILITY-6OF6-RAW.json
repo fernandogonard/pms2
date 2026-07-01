@@ -1,0 +1,485 @@
+{
+  "generatedAt": "2026-06-16T14:00:23.485Z",
+  "steps": [
+    {
+      "step": "seedRoomsForTraceability",
+      "roomA": "6a3156f702092475cd5d934e",
+      "roomB": "6a3156f702092475cd5d9351",
+      "numbers": [
+        306,
+        307
+      ]
+    },
+    {
+      "step": "login",
+      "status": 200,
+      "requestIdSent": "ccb26f7a-e612-43c7-867a-3ffe62f2cd37",
+      "requestIdRecv": "ccb26f7a-e612-43c7-867a-3ffe62f2cd37"
+    },
+    {
+      "step": "createReservation",
+      "status": 201,
+      "requestIdSent": "26f91c38-313d-4fff-a7f8-e6c952f38a1a",
+      "requestIdRecv": "26f91c38-313d-4fff-a7f8-e6c952f38a1a",
+      "reservationId": "6a3156f75faf0df0035c4bb9",
+      "createBody": {
+        "pricing": {
+          "pricePerNight": 15000,
+          "totalNights": 1,
+          "subtotal": 15000,
+          "taxes": 3150,
+          "total": 18150,
+          "currency": "ARS"
+        },
+        "payment": {
+          "status": "pendiente",
+          "method": "efectivo",
+          "amountPaid": 0
+        },
+        "invoice": {
+          "isPaid": false
+        },
+        "_id": "6a3156f75faf0df0035c4bb9",
+        "tipo": "doble",
+        "cantidad": 1,
+        "room": [
+          {
+            "housekeepingAssignment": {
+              "estimatedDurationMinutes": null,
+              "status": "no_asignada"
+            },
+            "_id": "6a3156f702092475cd5d934e",
+            "number": 306,
+            "floor": 99,
+            "type": "doble",
+            "price": 9999,
+            "status": "disponible",
+            "pendingHousekeeping": null,
+            "pendingHousekeepingAt": null,
+            "checkoutToday": false,
+            "housekeepingState": "CLEAN",
+            "housekeepingStateUpdatedBy": "system",
+            "mode": "production",
+            "maintenanceHistory": [],
+            "housekeepingStateUpdatedAt": "2026-06-16T14:00:23.530Z",
+            "createdAt": "2026-06-16T14:00:23.534Z",
+            "updatedAt": "2026-06-16T14:00:23.534Z",
+            "__v": 0
+          }
+        ],
+        "client": {
+          "_id": "6a3156f75faf0df0035c4bb3",
+          "nombre": "Trace",
+          "apellido": "Final",
+          "dni": "TF-1781618423486",
+          "email": "tf1781618423486@hotel.com",
+          "whatsapp": "2230000000",
+          "createdAt": "2026-06-16T14:00:23.864Z",
+          "__v": 0,
+          "fullName": "Trace Final",
+          "id": "6a3156f75faf0df0035c4bb3"
+        },
+        "checkIn": "2026-06-16T00:00:00.000Z",
+        "checkOut": "2026-06-17T00:00:00.000Z",
+        "status": "reservada",
+        "mode": "production",
+        "paymentHistory": [],
+        "extras": [],
+        "createdAt": "2026-06-16T14:00:23.875Z",
+        "__v": 1,
+        "id": "6a3156f75faf0df0035c4bb9"
+      }
+    },
+    {
+      "step": "updateReservation",
+      "status": 200,
+      "requestIdSent": "202b91e7-7291-4ffa-afed-6ee7791acd67",
+      "requestIdRecv": "202b91e7-7291-4ffa-afed-6ee7791acd67",
+      "updateBody": {
+        "pricing": {
+          "pricePerNight": 15000,
+          "totalNights": 1,
+          "subtotal": 15000,
+          "taxes": 3150,
+          "total": 18150,
+          "currency": "ARS"
+        },
+        "payment": {
+          "status": "pendiente",
+          "method": "efectivo",
+          "amountPaid": 0
+        },
+        "invoice": {
+          "isPaid": false
+        },
+        "_id": "6a3156f75faf0df0035c4bb9",
+        "tipo": "doble",
+        "cantidad": 1,
+        "room": [
+          {
+            "housekeepingAssignment": {
+              "estimatedDurationMinutes": null,
+              "status": "no_asignada"
+            },
+            "_id": "6a3156f702092475cd5d934e",
+            "number": 306,
+            "floor": 99,
+            "type": "doble",
+            "price": 9999,
+            "status": "disponible",
+            "pendingHousekeeping": null,
+            "pendingHousekeepingAt": null,
+            "checkoutToday": false,
+            "housekeepingState": "CLEAN",
+            "housekeepingStateUpdatedBy": "system",
+            "mode": "production",
+            "maintenanceHistory": [],
+            "housekeepingStateUpdatedAt": "2026-06-16T14:00:23.530Z",
+            "createdAt": "2026-06-16T14:00:23.534Z",
+            "updatedAt": "2026-06-16T14:00:23.534Z",
+            "__v": 0
+          }
+        ],
+        "client": {
+          "_id": "6a3156f75faf0df0035c4bb3",
+          "nombre": "Trace",
+          "apellido": "Final",
+          "dni": "TF-1781618423486",
+          "email": "tf1781618423486@hotel.com",
+          "whatsapp": "2230000000",
+          "createdAt": "2026-06-16T14:00:23.864Z",
+          "__v": 0,
+          "fullName": "Trace Final",
+          "id": "6a3156f75faf0df0035c4bb3"
+        },
+        "checkIn": "2026-06-16T00:00:00.000Z",
+        "checkOut": "2026-06-17T00:00:00.000Z",
+        "status": "reservada",
+        "mode": "production",
+        "paymentHistory": [],
+        "extras": [],
+        "createdAt": "2026-06-16T14:00:23.875Z",
+        "__v": 1,
+        "id": "6a3156f75faf0df0035c4bb9"
+      }
+    },
+    {
+      "step": "checkin",
+      "status": 200,
+      "requestIdSent": "d48d8454-a232-4164-b6ff-bd1d6df35a8f",
+      "requestIdRecv": "d48d8454-a232-4164-b6ff-bd1d6df35a8f",
+      "checkinBody": {
+        "message": "Check-in procesado exitosamente",
+        "reservation": {
+          "pricing": {
+            "pricePerNight": 15000,
+            "totalNights": 1,
+            "subtotal": 15000,
+            "taxes": 3150,
+            "total": 18150,
+            "currency": "ARS"
+          },
+          "payment": {
+            "status": "pendiente",
+            "method": "efectivo",
+            "amountPaid": 0
+          },
+          "invoice": {
+            "isPaid": false
+          },
+          "_id": "6a3156f75faf0df0035c4bb9",
+          "tipo": "doble",
+          "cantidad": 1,
+          "room": [
+            {
+              "housekeepingAssignment": {
+                "estimatedDurationMinutes": null,
+                "status": "no_asignada"
+              },
+              "_id": "6a3156f702092475cd5d934e",
+              "number": 306,
+              "floor": 99,
+              "type": "doble",
+              "price": 9999,
+              "status": "ocupada",
+              "pendingHousekeeping": null,
+              "pendingHousekeepingAt": null,
+              "checkoutToday": false,
+              "housekeepingState": "CLEAN",
+              "housekeepingStateUpdatedBy": "checkin",
+              "mode": "production",
+              "maintenanceHistory": [],
+              "housekeepingStateUpdatedAt": "2026-06-16T14:00:24.006Z",
+              "createdAt": "2026-06-16T14:00:23.534Z",
+              "updatedAt": "2026-06-16T14:00:24.006Z",
+              "__v": 0
+            }
+          ],
+          "client": {
+            "_id": "6a3156f75faf0df0035c4bb3",
+            "nombre": "Trace",
+            "apellido": "Final",
+            "dni": "TF-1781618423486",
+            "email": "tf1781618423486@hotel.com",
+            "whatsapp": "2230000000",
+            "createdAt": "2026-06-16T14:00:23.864Z",
+            "__v": 0,
+            "fullName": "Trace Final",
+            "id": "6a3156f75faf0df0035c4bb3"
+          },
+          "checkIn": "2026-06-16T00:00:00.000Z",
+          "checkOut": "2026-06-17T00:00:00.000Z",
+          "status": "checkin",
+          "mode": "production",
+          "paymentHistory": [],
+          "extras": [],
+          "createdAt": "2026-06-16T14:00:23.875Z",
+          "__v": 1,
+          "id": "6a3156f75faf0df0035c4bb9"
+        }
+      }
+    },
+    {
+      "step": "roomChange",
+      "status": 200,
+      "requestIdSent": "b44a7723-2a31-410a-83f2-11fb10311b8a",
+      "requestIdRecv": "b44a7723-2a31-410a-83f2-11fb10311b8a",
+      "fromRoomId": "6a3156f702092475cd5d934e",
+      "toRoomId": "6a3156f702092475cd5d9351",
+      "roomChangeBody": {
+        "pricing": {
+          "pricePerNight": 15000,
+          "totalNights": 1,
+          "subtotal": 15000,
+          "taxes": 3150,
+          "total": 18150,
+          "currency": "ARS"
+        },
+        "payment": {
+          "status": "pendiente",
+          "method": "efectivo",
+          "amountPaid": 0
+        },
+        "invoice": {
+          "isPaid": false
+        },
+        "_id": "6a3156f75faf0df0035c4bb9",
+        "tipo": "doble",
+        "cantidad": 1,
+        "room": [
+          {
+            "housekeepingAssignment": {
+              "estimatedDurationMinutes": null,
+              "status": "no_asignada"
+            },
+            "_id": "6a3156f702092475cd5d9351",
+            "number": 307,
+            "floor": 99,
+            "type": "doble",
+            "price": 9999,
+            "status": "ocupada",
+            "pendingHousekeeping": null,
+            "pendingHousekeepingAt": null,
+            "checkoutToday": false,
+            "housekeepingState": "CLEAN",
+            "housekeepingStateUpdatedBy": "system",
+            "mode": "production",
+            "maintenanceHistory": [],
+            "housekeepingStateUpdatedAt": "2026-06-16T14:00:23.539Z",
+            "createdAt": "2026-06-16T14:00:23.539Z",
+            "updatedAt": "2026-06-16T14:00:24.062Z",
+            "__v": 0
+          }
+        ],
+        "client": {
+          "_id": "6a3156f75faf0df0035c4bb3",
+          "nombre": "Trace",
+          "apellido": "Final",
+          "dni": "TF-1781618423486",
+          "email": "tf1781618423486@hotel.com",
+          "whatsapp": "2230000000",
+          "createdAt": "2026-06-16T14:00:23.864Z",
+          "__v": 0,
+          "fullName": "Trace Final",
+          "id": "6a3156f75faf0df0035c4bb3"
+        },
+        "checkIn": "2026-06-16T00:00:00.000Z",
+        "checkOut": "2026-06-17T00:00:00.000Z",
+        "status": "checkin",
+        "mode": "production",
+        "paymentHistory": [],
+        "extras": [],
+        "createdAt": "2026-06-16T14:00:23.875Z",
+        "__v": 2,
+        "id": "6a3156f75faf0df0035c4bb9"
+      }
+    },
+    {
+      "step": "checkout",
+      "status": 200,
+      "requestIdSent": "c2b73d4b-5534-4d9d-846b-af4869454852",
+      "requestIdRecv": "c2b73d4b-5534-4d9d-846b-af4869454852",
+      "checkoutBody": {
+        "message": "Check-out procesado exitosamente",
+        "reservation": {
+          "pricing": {
+            "pricePerNight": 15000,
+            "totalNights": 1,
+            "subtotal": 15000,
+            "taxes": 3150,
+            "total": 18150,
+            "currency": "ARS"
+          },
+          "payment": {
+            "status": "pendiente",
+            "method": "efectivo",
+            "amountPaid": 0
+          },
+          "invoice": {
+            "isPaid": false
+          },
+          "_id": "6a3156f75faf0df0035c4bb9",
+          "tipo": "doble",
+          "cantidad": 1,
+          "room": [
+            {
+              "housekeepingAssignment": {
+                "estimatedDurationMinutes": null,
+                "status": "no_asignada"
+              },
+              "_id": "6a3156f702092475cd5d9351",
+              "number": 307,
+              "floor": 99,
+              "type": "doble",
+              "price": 9999,
+              "status": "limpieza",
+              "pendingHousekeeping": "limpieza_checkout",
+              "pendingHousekeepingAt": "2026-06-16T14:00:24.093Z",
+              "checkoutToday": false,
+              "housekeepingState": "DIRTY",
+              "housekeepingStateUpdatedBy": "checkout",
+              "mode": "production",
+              "maintenanceHistory": [],
+              "housekeepingStateUpdatedAt": "2026-06-16T14:00:24.093Z",
+              "createdAt": "2026-06-16T14:00:23.539Z",
+              "updatedAt": "2026-06-16T14:00:24.094Z",
+              "__v": 0
+            }
+          ],
+          "client": {
+            "_id": "6a3156f75faf0df0035c4bb3",
+            "nombre": "Trace",
+            "apellido": "Final",
+            "dni": "TF-1781618423486",
+            "email": "tf1781618423486@hotel.com",
+            "whatsapp": "2230000000",
+            "createdAt": "2026-06-16T14:00:23.864Z",
+            "__v": 0,
+            "fullName": "Trace Final",
+            "id": "6a3156f75faf0df0035c4bb3"
+          },
+          "checkIn": "2026-06-16T00:00:00.000Z",
+          "checkOut": "2026-06-17T00:00:00.000Z",
+          "status": "checkout",
+          "mode": "production",
+          "paymentHistory": [],
+          "extras": [],
+          "createdAt": "2026-06-16T14:00:23.875Z",
+          "__v": 2,
+          "id": "6a3156f75faf0df0035c4bb9"
+        }
+      }
+    },
+    {
+      "step": "backup",
+      "status": 200,
+      "requestIdSent": "d00e5aac-9375-4067-9be0-f8da099a91d3",
+      "requestIdRecv": "d00e5aac-9375-4067-9be0-f8da099a91d3",
+      "backupBody": {
+        "success": true,
+        "backup": {
+          "success": true,
+          "file": "c:\\Users\\user\\matydev\\pms-diva\\pms2\\backend\\backups\\backup_json_20260616-110024.json",
+          "size": "0.02",
+          "timestamp": "20260616-110024",
+          "stats": {
+            "rooms": 16,
+            "users": 2,
+            "clients": 21,
+            "reservations": 9
+          }
+        }
+      }
+    }
+  ],
+  "checks": {
+    "requestIds": [
+      "ccb26f7a-e612-43c7-867a-3ffe62f2cd37",
+      "26f91c38-313d-4fff-a7f8-e6c952f38a1a",
+      "202b91e7-7291-4ffa-afed-6ee7791acd67",
+      "b44a7723-2a31-410a-83f2-11fb10311b8a",
+      "c2b73d4b-5534-4d9d-846b-af4869454852",
+      "d00e5aac-9375-4067-9be0-f8da099a91d3"
+    ],
+    "auditCount": 6,
+    "audits": [
+      {
+        "action": "LOGIN",
+        "entity": "User",
+        "entityId": "6934d52e426cf4288415b31b",
+        "userEmail": "admin@hotel.com",
+        "timestamp": "2026-06-16T14:00:23.841Z",
+        "requestId": "ccb26f7a-e612-43c7-867a-3ffe62f2cd37"
+      },
+      {
+        "action": "CREATE_RESERVATION",
+        "entity": "Reservation",
+        "entityId": "6a3156f75faf0df0035c4bb9",
+        "userEmail": "tf1781618423486@hotel.com",
+        "timestamp": "2026-06-16T14:00:23.900Z",
+        "requestId": "26f91c38-313d-4fff-a7f8-e6c952f38a1a"
+      },
+      {
+        "action": "UPDATE_RESERVATION",
+        "entity": "Reservation",
+        "entityId": "6a3156f75faf0df0035c4bb9",
+        "userEmail": "sistema",
+        "timestamp": "2026-06-16T14:00:23.989Z",
+        "requestId": "202b91e7-7291-4ffa-afed-6ee7791acd67"
+      },
+      {
+        "action": "ROOM_CHANGE",
+        "entity": "Reservation",
+        "entityId": "6a3156f75faf0df0035c4bb9",
+        "userEmail": "sistema",
+        "timestamp": "2026-06-16T14:00:24.073Z",
+        "requestId": "b44a7723-2a31-410a-83f2-11fb10311b8a"
+      },
+      {
+        "action": "CHECKOUT_REALIZADO",
+        "entity": "Reservation",
+        "entityId": "6a3156f75faf0df0035c4bb9",
+        "userEmail": "sistema",
+        "timestamp": "2026-06-16T14:00:24.103Z",
+        "requestId": "c2b73d4b-5534-4d9d-846b-af4869454852"
+      },
+      {
+        "action": "BACKUP_MANUAL",
+        "entity": "System",
+        "entityId": "20260616-110024",
+        "userEmail": "sistema",
+        "timestamp": "2026-06-16T14:00:24.130Z",
+        "requestId": "d00e5aac-9375-4067-9be0-f8da099a91d3"
+      }
+    ],
+    "expected": {
+      "login": true,
+      "createReservation": true,
+      "updateReservation": true,
+      "roomChange": true,
+      "checkout": true,
+      "backup": true
+    },
+    "correlation6of6": true
+  }
+}

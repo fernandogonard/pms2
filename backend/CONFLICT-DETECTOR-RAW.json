@@ -1,0 +1,195 @@
+{
+  "generatedAt": "2026-06-16T14:12:13.253Z",
+  "result": {
+    "total": 18,
+    "byType": {
+      "OVERBOOKING": 6,
+      "ROOM_BLOCKED_WITH_RESERVATION": 5,
+      "MAINTENANCE_DURING_STAY": 4,
+      "CHECKIN_BEFORE_CLEANING": 2,
+      "LATE_CHECKOUT_CONFLICT": 1
+    },
+    "conflicts": [
+      {
+        "type": "OVERBOOKING",
+        "severity": "critical",
+        "roomId": "6a3159bde1dd3f60f07c78eb",
+        "reservationIds": [
+          "6a3159bde1dd3f60f07c78fb",
+          "6a3159bde1dd3f60f07c78fc"
+        ],
+        "message": "Overbooking detectado en habitación 6a3159bde1dd3f60f07c78eb"
+      },
+      {
+        "type": "OVERBOOKING",
+        "severity": "critical",
+        "roomId": "6a3159bde1dd3f60f07c78eb",
+        "reservationIds": [
+          "6a3159bde1dd3f60f07c78fb",
+          "6a3159bde1dd3f60f07c78fe"
+        ],
+        "message": "Overbooking detectado en habitación 6a3159bde1dd3f60f07c78eb"
+      },
+      {
+        "type": "OVERBOOKING",
+        "severity": "critical",
+        "roomId": "6a3159bde1dd3f60f07c78eb",
+        "reservationIds": [
+          "6a3159bde1dd3f60f07c78fb",
+          "6a3159bde1dd3f60f07c78ff"
+        ],
+        "message": "Overbooking detectado en habitación 6a3159bde1dd3f60f07c78eb"
+      },
+      {
+        "type": "OVERBOOKING",
+        "severity": "critical",
+        "roomId": "6a3159bde1dd3f60f07c78eb",
+        "reservationIds": [
+          "6a3159bde1dd3f60f07c78fc",
+          "6a3159bde1dd3f60f07c78fe"
+        ],
+        "message": "Overbooking detectado en habitación 6a3159bde1dd3f60f07c78eb"
+      },
+      {
+        "type": "OVERBOOKING",
+        "severity": "critical",
+        "roomId": "6a3159bde1dd3f60f07c78eb",
+        "reservationIds": [
+          "6a3159bde1dd3f60f07c78fc",
+          "6a3159bde1dd3f60f07c78ff"
+        ],
+        "message": "Overbooking detectado en habitación 6a3159bde1dd3f60f07c78eb"
+      },
+      {
+        "type": "OVERBOOKING",
+        "severity": "critical",
+        "roomId": "6a3159bde1dd3f60f07c78eb",
+        "reservationIds": [
+          "6a3159bde1dd3f60f07c78fe",
+          "6a3159bde1dd3f60f07c78ff"
+        ],
+        "message": "Overbooking detectado en habitación 6a3159bde1dd3f60f07c78eb"
+      },
+      {
+        "type": "ROOM_BLOCKED_WITH_RESERVATION",
+        "severity": "high",
+        "roomId": "6a3159bde1dd3f60f07c78eb",
+        "reservationIds": [
+          "6a3159bde1dd3f60f07c78fb"
+        ],
+        "message": "Habitación 9501 en mantenimiento con reserva activa"
+      },
+      {
+        "type": "ROOM_BLOCKED_WITH_RESERVATION",
+        "severity": "high",
+        "roomId": "6a3159bde1dd3f60f07c78eb",
+        "reservationIds": [
+          "6a3159bde1dd3f60f07c78fc"
+        ],
+        "message": "Habitación 9501 en mantenimiento con reserva activa"
+      },
+      {
+        "type": "ROOM_BLOCKED_WITH_RESERVATION",
+        "severity": "high",
+        "roomId": "6a3159bde1dd3f60f07c78eb",
+        "reservationIds": [
+          "6a3159bde1dd3f60f07c78fd"
+        ],
+        "message": "Habitación 9501 en mantenimiento con reserva activa"
+      },
+      {
+        "type": "ROOM_BLOCKED_WITH_RESERVATION",
+        "severity": "high",
+        "roomId": "6a3159bde1dd3f60f07c78eb",
+        "reservationIds": [
+          "6a3159bde1dd3f60f07c78fe"
+        ],
+        "message": "Habitación 9501 en mantenimiento con reserva activa"
+      },
+      {
+        "type": "ROOM_BLOCKED_WITH_RESERVATION",
+        "severity": "high",
+        "roomId": "6a3159bde1dd3f60f07c78eb",
+        "reservationIds": [
+          "6a3159bde1dd3f60f07c78ff"
+        ],
+        "message": "Habitación 9501 en mantenimiento con reserva activa"
+      },
+      {
+        "type": "MAINTENANCE_DURING_STAY",
+        "severity": "high",
+        "roomId": "6a3159bde1dd3f60f07c78eb",
+        "reservationIds": [
+          "6a3159bde1dd3f60f07c78fb"
+        ],
+        "message": "Mantenimiento superpuesto con estadía en habitación 9501"
+      },
+      {
+        "type": "MAINTENANCE_DURING_STAY",
+        "severity": "high",
+        "roomId": "6a3159bde1dd3f60f07c78eb",
+        "reservationIds": [
+          "6a3159bde1dd3f60f07c78fc"
+        ],
+        "message": "Mantenimiento superpuesto con estadía en habitación 9501"
+      },
+      {
+        "type": "MAINTENANCE_DURING_STAY",
+        "severity": "high",
+        "roomId": "6a3159bde1dd3f60f07c78eb",
+        "reservationIds": [
+          "6a3159bde1dd3f60f07c78fe"
+        ],
+        "message": "Mantenimiento superpuesto con estadía en habitación 9501"
+      },
+      {
+        "type": "MAINTENANCE_DURING_STAY",
+        "severity": "high",
+        "roomId": "6a3159bde1dd3f60f07c78eb",
+        "reservationIds": [
+          "6a3159bde1dd3f60f07c78ff"
+        ],
+        "message": "Mantenimiento superpuesto con estadía en habitación 9501"
+      },
+      {
+        "type": "CHECKIN_BEFORE_CLEANING",
+        "severity": "high",
+        "roomId": "6a3159bde1dd3f60f07c78eb",
+        "reservationIds": [
+          "6a3159bde1dd3f60f07c78fd"
+        ],
+        "message": "Check-in en habitación pendiente de limpieza (9501)"
+      },
+      {
+        "type": "CHECKIN_BEFORE_CLEANING",
+        "severity": "high",
+        "roomId": "6a3159bde1dd3f60f07c78eb",
+        "reservationIds": [
+          "6a3159bde1dd3f60f07c78ff"
+        ],
+        "message": "Check-in en habitación pendiente de limpieza (9501)"
+      },
+      {
+        "type": "LATE_CHECKOUT_CONFLICT",
+        "severity": "critical",
+        "roomId": "6a3159bde1dd3f60f07c78eb",
+        "reservationIds": [
+          "6a3159bde1dd3f60f07c78fd",
+          "6a3159bde1dd3f60f07c78fb",
+          "6a3159bde1dd3f60f07c78fc",
+          "6a3159bde1dd3f60f07c78fe",
+          "6a3159bde1dd3f60f07c78ff"
+        ],
+        "message": "Late checkout con nueva reserva en habitación 6a3159bde1dd3f60f07c78eb"
+      }
+    ]
+  },
+  "expectedTypes": [
+    "OVERBOOKING",
+    "ROOM_BLOCKED_WITH_RESERVATION",
+    "MAINTENANCE_DURING_STAY",
+    "CHECKIN_BEFORE_CLEANING",
+    "LATE_CHECKOUT_CONFLICT"
+  ],
+  "allExpectedPresent": true
+}

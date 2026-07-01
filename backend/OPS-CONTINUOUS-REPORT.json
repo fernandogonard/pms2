@@ -1,0 +1,86 @@
+{
+  "startedAt": "2026-06-16T16:22:50.321Z",
+  "baseUrl": "http://localhost:3001",
+  "durationMinutesRequested": 1,
+  "intervalSeconds": 15,
+  "ticks": [
+    {
+      "index": 1,
+      "at": "2026-06-16T16:22:50.616Z",
+      "healthStatus": 200,
+      "healthOk": true,
+      "healthLatencyMs": 8,
+      "reservationsStatus": 200,
+      "reservationsOk": true,
+      "reservationsLatencyMs": 17,
+      "heapUsedMB": 69.4,
+      "rssMB": 130.23,
+      "errors": []
+    },
+    {
+      "index": 2,
+      "at": "2026-06-16T16:23:05.646Z",
+      "healthStatus": 200,
+      "healthOk": true,
+      "healthLatencyMs": 8,
+      "reservationsStatus": 200,
+      "reservationsOk": true,
+      "reservationsLatencyMs": 13,
+      "heapUsedMB": 69.86,
+      "rssMB": 129.89,
+      "errors": []
+    },
+    {
+      "index": 3,
+      "at": "2026-06-16T16:23:20.674Z",
+      "healthStatus": 200,
+      "healthOk": true,
+      "healthLatencyMs": 7,
+      "reservationsStatus": 200,
+      "reservationsOk": true,
+      "reservationsLatencyMs": 14,
+      "heapUsedMB": 69.8,
+      "rssMB": 130.23,
+      "errors": []
+    },
+    {
+      "index": 4,
+      "at": "2026-06-16T16:23:35.699Z",
+      "healthStatus": 200,
+      "healthOk": true,
+      "healthLatencyMs": 8,
+      "reservationsStatus": 200,
+      "reservationsOk": true,
+      "reservationsLatencyMs": 13,
+      "heapUsedMB": 70.26,
+      "rssMB": 130.57,
+      "errors": []
+    }
+  ],
+  "summary": {
+    "totalTicks": 4,
+    "crashes": 0,
+    "httpFailures": 0,
+    "memoryLeakSuspected": false,
+    "memoryTrendMB": [
+      69.4,
+      69.86,
+      69.8,
+      70.26
+    ],
+    "memoryDeltaMB": 0.86,
+    "healthLatency": {
+      "avgMs": 7.75,
+      "p95Ms": 8,
+      "maxMs": 8
+    },
+    "reservationsLatency": {
+      "avgMs": 14.25,
+      "p95Ms": 17,
+      "maxMs": 17
+    }
+  },
+  "verdict": "GO",
+  "endedAt": "2026-06-16T16:23:35.715Z",
+  "durationMs": 45394
+}

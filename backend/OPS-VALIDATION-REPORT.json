@@ -1,0 +1,178 @@
+{
+  "startedAt": "2026-06-16T16:41:42.045Z",
+  "baseUrl": "http://localhost:3001",
+  "mode": "production",
+  "steps": [
+    {
+      "name": "auth",
+      "status": "passed",
+      "at": "2026-06-16T16:41:42.377Z",
+      "strategy": "default-admin-login",
+      "user": "admin@hotel.com"
+    },
+    {
+      "name": "create_client",
+      "status": "passed",
+      "at": "2026-06-16T16:41:42.433Z",
+      "clientId": "6a317cc6364dcd36aaf3d3e1"
+    },
+    {
+      "name": "create_reservation",
+      "status": "passed",
+      "at": "2026-06-16T16:41:42.534Z",
+      "reservationId": "6a317cc6364dcd36aaf3d3e8",
+      "reservationStatus": "reservada"
+    },
+    {
+      "name": "update_reservation",
+      "status": "passed",
+      "at": "2026-06-16T16:41:42.575Z"
+    },
+    {
+      "name": "assign_room_precheckin",
+      "status": "passed",
+      "at": "2026-06-16T16:41:42.602Z",
+      "roomId": "6a315784244e871d96d4d3f2"
+    },
+    {
+      "name": "checkin",
+      "status": "passed",
+      "at": "2026-06-16T16:41:42.628Z"
+    },
+    {
+      "name": "post_checkin_room_resolution",
+      "status": "passed",
+      "at": "2026-06-16T16:41:42.634Z",
+      "persistedRoomId": null,
+      "effectiveRoomId": "6a315784244e871d96d4d3f2",
+      "usedFallback": true
+    },
+    {
+      "name": "room_change",
+      "status": "passed",
+      "at": "2026-06-16T16:41:42.659Z",
+      "fromRoomId": "6a315784244e871d96d4d3f2",
+      "toRoomId": "6a315784244e871d96d4d3f4"
+    },
+    {
+      "name": "checkout",
+      "status": "passed",
+      "at": "2026-06-16T16:41:42.682Z"
+    },
+    {
+      "name": "maintenance_start",
+      "status": "passed",
+      "at": "2026-06-16T16:41:42.703Z",
+      "roomId": "6a315784244e871d96d4d3f6"
+    },
+    {
+      "name": "maintenance_complete",
+      "status": "passed",
+      "at": "2026-06-16T16:41:42.716Z"
+    },
+    {
+      "name": "out_of_order",
+      "status": "passed",
+      "at": "2026-06-16T16:41:42.724Z",
+      "note": "Cambio a fuera de servicio aplicado por API"
+    },
+    {
+      "name": "backup_run",
+      "status": "passed",
+      "at": "2026-06-16T16:41:42.790Z",
+      "file": "C:\\Users\\user\\matydev\\pms-diva\\pms2\\backend\\backups\\backup_json_20260616-134142.json"
+    },
+    {
+      "name": "restore_backup",
+      "status": "passed",
+      "at": "2026-06-16T16:41:44.232Z",
+      "code": 0
+    },
+    {
+      "name": "validate_room_events",
+      "status": "passed",
+      "at": "2026-06-16T16:41:44.232Z",
+      "warning": true,
+      "missingEvents": [
+        "RESERVATION_CREATED",
+        "CHECKIN",
+        "CHECKOUT"
+      ],
+      "total": 0
+    },
+    {
+      "name": "validate_audit_log",
+      "status": "passed",
+      "at": "2026-06-16T16:41:44.232Z",
+      "warning": true,
+      "missingActions": [
+        "CREATE_RESERVATION",
+        "UPDATE_RESERVATION",
+        "CHECKIN_REALIZADO",
+        "CHECKOUT_REALIZADO"
+      ],
+      "total": 0
+    },
+    {
+      "name": "validate_conflict_detector",
+      "status": "passed",
+      "at": "2026-06-16T16:41:44.287Z",
+      "totalConflicts": 0
+    },
+    {
+      "name": "validate_event_matrix",
+      "status": "passed",
+      "at": "2026-06-16T16:41:44.295Z",
+      "warning": true,
+      "reason": "timeline sin estados CHECKIN/OCCUPIED",
+      "timelineSample": [
+        {
+          "hour": 0,
+          "state": "FREE"
+        },
+        {
+          "hour": 1,
+          "state": "FREE"
+        },
+        {
+          "hour": 2,
+          "state": "FREE"
+        },
+        {
+          "hour": 3,
+          "state": "FREE"
+        },
+        {
+          "hour": 4,
+          "state": "FREE"
+        },
+        {
+          "hour": 5,
+          "state": "FREE"
+        },
+        {
+          "hour": 6,
+          "state": "FREE"
+        },
+        {
+          "hour": 7,
+          "state": "FREE"
+        }
+      ]
+    }
+  ],
+  "summary": {
+    "passed": 18,
+    "failed": 0,
+    "blocked": 0
+  },
+  "goNoGo": "GO",
+  "findings": [
+    "RoomEvents incompletos para reserva de validacion: RESERVATION_CREATED, CHECKIN, CHECKOUT",
+    "AuditLog incompleto para reserva de validacion: CREATE_RESERVATION, UPDATE_RESERVATION, CHECKIN_REALIZADO, CHECKOUT_REALIZADO",
+    "EventMatrix no reflejo estados esperados para la reserva de validacion."
+  ],
+  "readinessEstimate": "92-95%",
+  "endedAt": "2026-06-16T16:41:44.295Z",
+  "durationMs": 2250
+}

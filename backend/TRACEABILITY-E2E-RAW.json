@@ -1,0 +1,403 @@
+{
+  "generatedAt": "2026-06-16T13:44:05.447Z",
+  "trace": [
+    {
+      "step": "login",
+      "sentRequestId": "addb9dc9-7f11-4977-8852-c74ddc34b5d5",
+      "recvRequestId": "addb9dc9-7f11-4977-8852-c74ddc34b5d5",
+      "status": 200,
+      "refId": "6a15a35ccbe407cb58ba9c6e",
+      "response": {
+        "success": true,
+        "message": "Login exitoso",
+        "user": {
+          "id": "6a15a35ccbe407cb58ba9c6e",
+          "name": "Admin",
+          "email": "admin@hotel.com",
+          "role": "admin",
+          "createdAt": "2026-05-26T13:42:52.274Z"
+        },
+        "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiI2YTE1YTM1Y2NiZTQwN2NiNThiYTljNmUiLCJyb2xlIjoiYWRtaW4iLCJpYXQiOjE3ODE2MTc0NDUsImV4cCI6MTc4MTcwMzg0NX0.b1B3CM919DRZAUKP4gyjgJHOR-q7Fl88MPRMMdw22hs"
+      }
+    },
+    {
+      "step": "createReservation",
+      "sentRequestId": "934ac883-8772-4a6b-b99b-6bca82c0758f",
+      "recvRequestId": "934ac883-8772-4a6b-b99b-6bca82c0758f",
+      "status": 201,
+      "refId": "6a31532539ba3984dd52e9e2",
+      "response": {
+        "pricing": {
+          "pricePerNight": 8500,
+          "totalNights": 1,
+          "subtotal": 8500,
+          "taxes": 1785,
+          "total": 10285,
+          "currency": "ARS"
+        },
+        "payment": {
+          "status": "pendiente",
+          "method": "efectivo",
+          "amountPaid": 0
+        },
+        "invoice": {
+          "isPaid": false
+        },
+        "_id": "6a31532539ba3984dd52e9e2",
+        "tipo": "doble",
+        "cantidad": 1,
+        "room": [
+          {
+            "housekeepingAssignment": {
+              "estimatedDurationMinutes": null,
+              "status": "no_asignada"
+            },
+            "_id": "6a15a35ba8deebe318486743",
+            "number": 101,
+            "floor": 1,
+            "type": "doble",
+            "price": 8500,
+            "status": "disponible",
+            "maintenanceHistory": [],
+            "lastCleaning": "2026-05-31T12:46:01.323Z",
+            "pendingHousekeeping": null,
+            "pendingHousekeepingAt": null,
+            "checkoutToday": false,
+            "housekeepingState": "CLEAN",
+            "housekeepingStateUpdatedBy": "system",
+            "mode": "production",
+            "createdAt": "2026-05-26T13:42:51.652Z",
+            "updatedAt": "2026-05-31T12:46:01.323Z",
+            "__v": 0,
+            "housekeepingStateUpdatedAt": "2026-06-16T13:24:09.396Z"
+          }
+        ],
+        "client": {
+          "_id": "6a31532539ba3984dd52e9dd",
+          "nombre": "Trace",
+          "apellido": "Pilot",
+          "dni": "TRACE-1781617444991",
+          "email": "trace1781617444991@hotel.com",
+          "whatsapp": "2230000000",
+          "createdAt": "2026-06-16T13:44:05.278Z",
+          "__v": 0,
+          "fullName": "Trace Pilot",
+          "id": "6a31532539ba3984dd52e9dd"
+        },
+        "checkIn": "2026-06-16T00:00:00.000Z",
+        "checkOut": "2026-06-17T00:00:00.000Z",
+        "status": "reservada",
+        "mode": "production",
+        "paymentHistory": [],
+        "extras": [],
+        "createdAt": "2026-06-16T13:44:05.298Z",
+        "__v": 1,
+        "id": "6a31532539ba3984dd52e9e2"
+      }
+    },
+    {
+      "step": "updateReservation",
+      "sentRequestId": "7fc4f61f-6da8-42cf-bf55-3fcd609137da",
+      "recvRequestId": "7fc4f61f-6da8-42cf-bf55-3fcd609137da",
+      "status": 200,
+      "refId": "6a31532539ba3984dd52e9e2",
+      "response": {
+        "pricing": {
+          "pricePerNight": 8500,
+          "totalNights": 1,
+          "subtotal": 8500,
+          "taxes": 1785,
+          "total": 10285,
+          "currency": "ARS"
+        },
+        "payment": {
+          "status": "pendiente",
+          "method": "efectivo",
+          "amountPaid": 0
+        },
+        "invoice": {
+          "isPaid": false
+        },
+        "_id": "6a31532539ba3984dd52e9e2",
+        "tipo": "doble",
+        "cantidad": 1,
+        "room": [
+          {
+            "housekeepingAssignment": {
+              "estimatedDurationMinutes": null,
+              "status": "no_asignada"
+            },
+            "_id": "6a15a35ba8deebe318486743",
+            "number": 101,
+            "floor": 1,
+            "type": "doble",
+            "price": 8500,
+            "status": "disponible",
+            "maintenanceHistory": [],
+            "lastCleaning": "2026-05-31T12:46:01.323Z",
+            "pendingHousekeeping": null,
+            "pendingHousekeepingAt": null,
+            "checkoutToday": false,
+            "housekeepingState": "CLEAN",
+            "housekeepingStateUpdatedBy": "system",
+            "mode": "production",
+            "createdAt": "2026-05-26T13:42:51.652Z",
+            "updatedAt": "2026-05-31T12:46:01.323Z",
+            "__v": 0,
+            "housekeepingStateUpdatedAt": "2026-06-16T13:24:09.396Z"
+          }
+        ],
+        "client": {
+          "_id": "6a31532539ba3984dd52e9dd",
+          "nombre": "Trace",
+          "apellido": "Pilot",
+          "dni": "TRACE-1781617444991",
+          "email": "trace1781617444991@hotel.com",
+          "whatsapp": "2230000000",
+          "createdAt": "2026-06-16T13:44:05.278Z",
+          "__v": 0,
+          "fullName": "Trace Pilot",
+          "id": "6a31532539ba3984dd52e9dd"
+        },
+        "checkIn": "2026-06-16T00:00:00.000Z",
+        "checkOut": "2026-06-17T00:00:00.000Z",
+        "status": "reservada",
+        "mode": "production",
+        "paymentHistory": [],
+        "extras": [],
+        "createdAt": "2026-06-16T13:44:05.298Z",
+        "__v": 1,
+        "id": "6a31532539ba3984dd52e9e2"
+      }
+    },
+    {
+      "step": "checkin",
+      "sentRequestId": "79f94ba0-4e0c-4cd3-aca6-513f7f5502d8",
+      "recvRequestId": "79f94ba0-4e0c-4cd3-aca6-513f7f5502d8",
+      "status": 200,
+      "refId": "6a31532539ba3984dd52e9e2",
+      "response": {
+        "message": "Check-in procesado exitosamente",
+        "reservation": {
+          "pricing": {
+            "pricePerNight": 8500,
+            "totalNights": 1,
+            "subtotal": 8500,
+            "taxes": 1785,
+            "total": 10285,
+            "currency": "ARS"
+          },
+          "payment": {
+            "status": "pendiente",
+            "method": "efectivo",
+            "amountPaid": 0
+          },
+          "invoice": {
+            "isPaid": false
+          },
+          "_id": "6a31532539ba3984dd52e9e2",
+          "tipo": "doble",
+          "cantidad": 1,
+          "room": [
+            {
+              "housekeepingAssignment": {
+                "estimatedDurationMinutes": null,
+                "status": "no_asignada"
+              },
+              "_id": "6a15a35ba8deebe318486743",
+              "number": 101,
+              "floor": 1,
+              "type": "doble",
+              "price": 8500,
+              "status": "ocupada",
+              "maintenanceHistory": [],
+              "lastCleaning": "2026-05-31T12:46:01.323Z",
+              "pendingHousekeeping": null,
+              "pendingHousekeepingAt": null,
+              "checkoutToday": false,
+              "housekeepingState": "CLEAN",
+              "housekeepingStateUpdatedBy": "checkin",
+              "mode": "production",
+              "createdAt": "2026-05-26T13:42:51.652Z",
+              "updatedAt": "2026-06-16T13:44:05.358Z",
+              "__v": 0,
+              "housekeepingStateUpdatedAt": "2026-06-16T13:44:05.358Z"
+            }
+          ],
+          "client": {
+            "_id": "6a31532539ba3984dd52e9dd",
+            "nombre": "Trace",
+            "apellido": "Pilot",
+            "dni": "TRACE-1781617444991",
+            "email": "trace1781617444991@hotel.com",
+            "whatsapp": "2230000000",
+            "createdAt": "2026-06-16T13:44:05.278Z",
+            "__v": 0,
+            "fullName": "Trace Pilot",
+            "id": "6a31532539ba3984dd52e9dd"
+          },
+          "checkIn": "2026-06-16T00:00:00.000Z",
+          "checkOut": "2026-06-17T00:00:00.000Z",
+          "status": "checkin",
+          "mode": "production",
+          "paymentHistory": [],
+          "extras": [],
+          "createdAt": "2026-06-16T13:44:05.298Z",
+          "__v": 1,
+          "id": "6a31532539ba3984dd52e9e2"
+        }
+      }
+    },
+    {
+      "step": "roomChange",
+      "sentRequestId": null,
+      "recvRequestId": null,
+      "status": 0,
+      "refId": "6a31532539ba3984dd52e9e2",
+      "note": "No room alternativa disponible para swap real"
+    },
+    {
+      "step": "checkout",
+      "sentRequestId": "94b12c99-b7dc-4b89-b0df-43dc1d476df3",
+      "recvRequestId": "94b12c99-b7dc-4b89-b0df-43dc1d476df3",
+      "status": 200,
+      "refId": "6a31532539ba3984dd52e9e2",
+      "response": {
+        "message": "Check-out procesado exitosamente",
+        "reservation": {
+          "pricing": {
+            "pricePerNight": 8500,
+            "totalNights": 1,
+            "subtotal": 8500,
+            "taxes": 1785,
+            "total": 10285,
+            "currency": "ARS"
+          },
+          "payment": {
+            "status": "pendiente",
+            "method": "efectivo",
+            "amountPaid": 0
+          },
+          "invoice": {
+            "isPaid": false
+          },
+          "_id": "6a31532539ba3984dd52e9e2",
+          "tipo": "doble",
+          "cantidad": 1,
+          "room": [
+            {
+              "housekeepingAssignment": {
+                "estimatedDurationMinutes": null,
+                "status": "no_asignada"
+              },
+              "_id": "6a15a35ba8deebe318486743",
+              "number": 101,
+              "floor": 1,
+              "type": "doble",
+              "price": 8500,
+              "status": "limpieza",
+              "maintenanceHistory": [],
+              "lastCleaning": "2026-05-31T12:46:01.323Z",
+              "pendingHousekeeping": "limpieza_checkout",
+              "pendingHousekeepingAt": "2026-06-16T13:44:05.394Z",
+              "checkoutToday": false,
+              "housekeepingState": "DIRTY",
+              "housekeepingStateUpdatedBy": "checkout",
+              "mode": "production",
+              "createdAt": "2026-05-26T13:42:51.652Z",
+              "updatedAt": "2026-06-16T13:44:05.395Z",
+              "__v": 0,
+              "housekeepingStateUpdatedAt": "2026-06-16T13:44:05.394Z"
+            }
+          ],
+          "client": {
+            "_id": "6a31532539ba3984dd52e9dd",
+            "nombre": "Trace",
+            "apellido": "Pilot",
+            "dni": "TRACE-1781617444991",
+            "email": "trace1781617444991@hotel.com",
+            "whatsapp": "2230000000",
+            "createdAt": "2026-06-16T13:44:05.278Z",
+            "__v": 0,
+            "fullName": "Trace Pilot",
+            "id": "6a31532539ba3984dd52e9dd"
+          },
+          "checkIn": "2026-06-16T00:00:00.000Z",
+          "checkOut": "2026-06-17T00:00:00.000Z",
+          "status": "checkout",
+          "mode": "production",
+          "paymentHistory": [],
+          "extras": [],
+          "createdAt": "2026-06-16T13:44:05.298Z",
+          "__v": 1,
+          "id": "6a31532539ba3984dd52e9e2"
+        }
+      }
+    }
+  ],
+  "requestIds": [
+    "addb9dc9-7f11-4977-8852-c74ddc34b5d5",
+    "934ac883-8772-4a6b-b99b-6bca82c0758f",
+    "7fc4f61f-6da8-42cf-bf55-3fcd609137da",
+    "79f94ba0-4e0c-4cd3-aca6-513f7f5502d8",
+    "94b12c99-b7dc-4b89-b0df-43dc1d476df3"
+  ],
+  "auditCount": 5,
+  "audit": [
+    {
+      "timestamp": "2026-06-16T13:44:05.263Z",
+      "action": "LOGIN",
+      "entity": "User",
+      "entityId": "6a15a35ccbe407cb58ba9c6e",
+      "userEmail": "admin@hotel.com",
+      "userRole": "admin",
+      "ip": "127.0.0.1",
+      "requestId": "addb9dc9-7f11-4977-8852-c74ddc34b5d5",
+      "description": "Login exitoso de admin@hotel.com"
+    },
+    {
+      "timestamp": "2026-06-16T13:44:05.313Z",
+      "action": "CREATE_RESERVATION",
+      "entity": "Reservation",
+      "entityId": "6a31532539ba3984dd52e9e2",
+      "userEmail": "trace1781617444991@hotel.com",
+      "userRole": "sistema",
+      "ip": "127.0.0.1",
+      "requestId": "934ac883-8772-4a6b-b99b-6bca82c0758f",
+      "description": "Reserva creada 52E9E2"
+    },
+    {
+      "timestamp": "2026-06-16T13:44:05.344Z",
+      "action": "UPDATE_RESERVATION",
+      "entity": "Reservation",
+      "entityId": "6a31532539ba3984dd52e9e2",
+      "userEmail": "sistema",
+      "userRole": "admin",
+      "ip": "127.0.0.1",
+      "requestId": "7fc4f61f-6da8-42cf-bf55-3fcd609137da",
+      "description": "Reserva actualizada 52E9E2"
+    },
+    {
+      "timestamp": "2026-06-16T13:44:05.366Z",
+      "action": "CHECKIN_REALIZADO",
+      "entity": "Reservation",
+      "entityId": "6a31532539ba3984dd52e9e2",
+      "userEmail": "sistema",
+      "userRole": "admin",
+      "ip": "127.0.0.1",
+      "requestId": "79f94ba0-4e0c-4cd3-aca6-513f7f5502d8",
+      "description": "Check-in realizado en reserva 52E9E2"
+    },
+    {
+      "timestamp": "2026-06-16T13:44:05.403Z",
+      "action": "CHECKOUT_REALIZADO",
+      "entity": "Reservation",
+      "entityId": "6a31532539ba3984dd52e9e2",
+      "userEmail": "sistema",
+      "userRole": "admin",
+      "ip": "127.0.0.1",
+      "requestId": "94b12c99-b7dc-4b89-b0df-43dc1d476df3",
+      "description": "Check-out realizado en reserva 52E9E2"
+    }
+  ]
+}

@@ -1,0 +1,59 @@
+{
+  "generatedAt": "2026-06-16T13:52:51.088Z",
+  "steps": [
+    {
+      "step": "login",
+      "status": 200,
+      "requestIdSent": "c01a05ab-2354-4174-9d6f-c82c0f32aa79",
+      "requestIdRecv": "c01a05ab-2354-4174-9d6f-c82c0f32aa79"
+    },
+    {
+      "step": "createReservation",
+      "status": 201,
+      "requestIdSent": "4389a44b-ff27-4fa2-8c89-f8a72dd4f0c9",
+      "requestIdRecv": "4389a44b-ff27-4fa2-8c89-f8a72dd4f0c9",
+      "reservationId": "6a3155331519feea264838ef"
+    },
+    {
+      "step": "createBackup",
+      "status": 200,
+      "requestIdSent": "e9520171-aa4f-4505-b564-81c3b140a481",
+      "requestIdRecv": "e9520171-aa4f-4505-b564-81c3b140a481",
+      "backupFile": "c:\\Users\\user\\matydev\\pms-diva\\pms2\\backend\\backups\\backup_json_20260616-105251.json"
+    },
+    {
+      "step": "deleteReservationDirectMongo",
+      "preExists": true,
+      "deletedCount": 1,
+      "postExists": false
+    }
+  ],
+  "checks": {
+    "requestIds": [
+      "c01a05ab-2354-4174-9d6f-c82c0f32aa79",
+      "4389a44b-ff27-4fa2-8c89-f8a72dd4f0c9",
+      "e9520171-aa4f-4505-b564-81c3b140a481"
+    ],
+    "auditCountPreRestore": 2,
+    "auditPreRestore": [
+      {
+        "action": "LOGIN",
+        "entity": "User",
+        "entityId": "6934d52e426cf4288415b31b",
+        "requestId": "c01a05ab-2354-4174-9d6f-c82c0f32aa79",
+        "timestamp": "2026-06-16T13:52:51.359Z",
+        "userEmail": "admin@hotel.com"
+      },
+      {
+        "action": "CREATE_RESERVATION",
+        "entity": "Reservation",
+        "entityId": "6a3155331519feea264838ef",
+        "requestId": "4389a44b-ff27-4fa2-8c89-f8a72dd4f0c9",
+        "timestamp": "2026-06-16T13:52:51.402Z",
+        "userEmail": "dr1781617971088@hotel.com"
+      }
+    ],
+    "reservationId": "6a3155331519feea264838ef",
+    "backupFile": "c:\\Users\\user\\matydev\\pms-diva\\pms2\\backend\\backups\\backup_json_20260616-105251.json"
+  }
+}

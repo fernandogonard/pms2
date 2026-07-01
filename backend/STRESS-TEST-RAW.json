@@ -1,0 +1,116 @@
+{
+  "generatedAt": "2026-06-16T16:12:43.493Z",
+  "dataset": {
+    "rooms": 500,
+    "reservationsInserted": 1000,
+    "clientsInserted": 1000
+  },
+  "stress": {
+    "concurrentUsers": 50,
+    "iterationsPerUser": 20,
+    "totalRequests": 1000,
+    "totalDurationMs": 10607.29,
+    "requestsPerSecond": 94.27,
+    "statusCounts": {
+      "health:200": 296,
+      "reservationsList:200": 25,
+      "availability:200": 94,
+      "reservationsList:429": 162,
+      "availability:429": 423
+    },
+    "endpoints": {
+      "health": {
+        "requests": 296,
+        "p50Ms": 86.29,
+        "p95Ms": 560.89,
+        "p99Ms": 1266.54,
+        "maxMs": 1341.6,
+        "avgMs": 154.3
+      },
+      "availability": {
+        "requests": 517,
+        "p50Ms": 71.2,
+        "p95Ms": 1247.33,
+        "p99Ms": 2118.08,
+        "maxMs": 3394.06,
+        "avgMs": 207.89
+      },
+      "reservationsList": {
+        "requests": 187,
+        "p50Ms": 48.01,
+        "p95Ms": 496.72,
+        "p99Ms": 2320.37,
+        "maxMs": 2557.31,
+        "avgMs": 173.28
+      }
+    },
+    "timelineResolution": {
+      "roomsMeasured": 500,
+      "datesMeasuredPerRoom": 7,
+      "timelineRequests": 3500,
+      "avgMs": 0.72,
+      "p95Ms": 0.83,
+      "maxMs": 3.46,
+      "totalMs": 2512.43
+    },
+    "diagnostics": {
+      "diagFile": "C:\\Users\\user\\matydev\\pms-diva\\pms2\\backend\\tmp\\http-error-diagnostics.ndjson",
+      "totalHttpErrors": 585,
+      "totalEndpointDiagnostics": 0,
+      "top10Errors": [
+        {
+          "category": "Rate limiter",
+          "endpoint": "availability",
+          "status": 429,
+          "occurrences": 423,
+          "stacktraceSummary": null,
+          "sourceFile": null,
+          "sourceLine": null,
+          "sampleMessage": "Por favor, espera antes de intentar nuevamente"
+        },
+        {
+          "category": "Rate limiter",
+          "endpoint": "reservationsList",
+          "status": 429,
+          "occurrences": 162,
+          "stacktraceSummary": null,
+          "sourceFile": null,
+          "sourceLine": null,
+          "sampleMessage": "Por favor, espera antes de intentar nuevamente"
+        }
+      ]
+    },
+    "memory": {
+      "before": {
+        "rssBytes": 92315648,
+        "heapUsedBytes": 42510248,
+        "heapTotalBytes": 46686208,
+        "externalBytes": 20745249,
+        "rssMB": 88.04,
+        "heapUsedMB": 40.54,
+        "heapTotalMB": 44.52
+      },
+      "after": {
+        "rssBytes": 376164352,
+        "heapUsedBytes": 106692496,
+        "heapTotalBytes": 141320192,
+        "externalBytes": 146986345,
+        "rssMB": 358.74,
+        "heapUsedMB": 101.75,
+        "heapTotalMB": 134.77
+      }
+    }
+  },
+  "bottlenecks": [
+    {
+      "endpoint": "health",
+      "p95Ms": 560.89,
+      "note": "P95 excede 500ms"
+    },
+    {
+      "endpoint": "availability",
+      "p95Ms": 1247.33,
+      "note": "P95 excede 500ms"
+    }
+  ]
+}

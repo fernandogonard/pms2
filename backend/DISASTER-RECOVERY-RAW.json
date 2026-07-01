@@ -1,0 +1,76 @@
+{
+  "generatedAt": "2026-06-16T13:52:15.621Z",
+  "steps": [
+    {
+      "step": "login",
+      "requestIdSent": "1428e4bb-b426-4d6a-9846-0595ab63f5b9",
+      "requestIdRecv": "1428e4bb-b426-4d6a-9846-0595ab63f5b9",
+      "status": 200
+    },
+    {
+      "step": "createReservation",
+      "requestIdSent": "06703666-c380-4997-9b0e-5f42c18f1819",
+      "requestIdRecv": "06703666-c380-4997-9b0e-5f42c18f1819",
+      "status": 201,
+      "reservationId": "6a3155101519feea264838d2"
+    },
+    {
+      "step": "createBackup",
+      "requestIdSent": "2ed8c069-4bcb-4459-91a8-45d10fa616af",
+      "requestIdRecv": "2ed8c069-4bcb-4459-91a8-45d10fa616af",
+      "status": 200,
+      "backupFile": "c:\\Users\\user\\matydev\\pms-diva\\pms2\\backend\\backups\\backup_json_20260616-105216.json"
+    },
+    {
+      "step": "deleteReservationDirectMongo",
+      "deletedCount": 0,
+      "existsAfterDelete": false
+    },
+    {
+      "step": "restoreBackup",
+      "exitCode": 0,
+      "stdoutTail": [
+        "",
+        "⚠️ ¡ADVERTENCIA! La restauración sobrescribirá la base de datos actual.",
+        "¿Está seguro de que desea continuar? (y/N): 🏨 Conectando a la base de datos...",
+        "✅ Conectado a MongoDB",
+        "",
+        "🔄 Cargando datos del backup backup_json_20260616-105216.json...",
+        "� Estadísticas del backup a restaurar:",
+        "  • Habitaciones: 10",
+        "  • Usuarios: 2",
+        "  • Clientes: 13",
+        "  • Reservaciones: 3",
+        "🔌 Desconectado de MongoDB",
+        "🔌 Proceso de restauración finalizado",
+        ""
+      ],
+      "stderrTail": [
+        "❌ Error restaurando backup: Error [ERR_USE_AFTER_CLOSE]: readline was closed",
+        "    at [kQuestion] (node:internal/readline/interface:404:13)",
+        "    at Interface.question (node:readline:158:20)",
+        "    at c:\\Users\\user\\matydev\\pms-diva\\pms2\\backend\\scripts\\restoreBackup.js:27:57",
+        "    at new Promise (<anonymous>)",
+        "    at question (c:\\Users\\user\\matydev\\pms-diva\\pms2\\backend\\scripts\\restoreBackup.js:27:29)",
+        "    at restoreBackup (c:\\Users\\user\\matydev\\pms-diva\\pms2\\backend\\scripts\\restoreBackup.js:114:32)",
+        "    at process.processTicksAndRejections (node:internal/process/task_queues:105:5) {",
+        "  code: 'ERR_USE_AFTER_CLOSE'",
+        "}",
+        ""
+      ]
+    }
+  ],
+  "checks": {
+    "reservationRestored": false,
+    "auditByRequestIdCount": 0,
+    "requestIds": [
+      "1428e4bb-b426-4d6a-9846-0595ab63f5b9",
+      "06703666-c380-4997-9b0e-5f42c18f1819",
+      "2ed8c069-4bcb-4459-91a8-45d10fa616af"
+    ],
+    "audit": []
+  },
+  "verdict": {
+    "success": false
+  }
+}
