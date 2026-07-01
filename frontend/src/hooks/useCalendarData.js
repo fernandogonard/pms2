@@ -2,9 +2,11 @@
 // Hook para manejar datos del calendario con cache y debounce
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { apiFetch } from '../utils/api';
+import { getAppMode, withModeQuery } from '../config/appMode';
 
 export const useCalendarData = (startDate, days = 14) => {
   const resolvedStart = startDate || new Date().toISOString().slice(0, 10);
+  const appMode = getAppMode();
   const [data, setData] = useState([]);
   const [reservationsMap, setReservationsMap] = useState({});
   const [loading, setLoading] = useState(true);
@@ -24,15 +26,21 @@ export const useCalendarData = (startDate, days = 14) => {
 
       // Intentar endpoint primario, fallback al anterior si falla
       let response = await apiFetch(
-        `/api/rooms/calendar-status?start=${resolvedStart}&days=${days}`,
-        { signal: abortControllerRef.current.signal }
+        withModeQuery(`/api/rooms/calendar-status?start=${resolvedStart}&days=${days}`),
+        {
+          signal: abortControllerRef.current.signal,
+          headers: { 'X-App-Mode': appMode }
+        }
       );
 
       if (!response.ok) {
         // Fallback: endpoint autenticado (compatible con deploys anteriores)
         response = await apiFetch(
-          `/api/rooms/status?start=${resolvedStart}&days=${days}`,
-          { signal: abortControllerRef.current.signal }
+          withModeQuery(`/api/rooms/status?start=${resolvedStart}&days=${days}`),
+          {
+            signal: abortControllerRef.current.signal,
+            headers: { 'X-App-Mode': appMode }
+          }
         );
       }
 
@@ -44,7 +52,10 @@ export const useCalendarData = (startDate, days = 14) => {
       let checkoutMap = {}; // { roomId: checkoutInfo }
       
       try {
-        const resResp = await apiFetch('/api/reservations', { signal: abortControllerRef.current.signal });
+        const resResp = await apiFetch(withModeQuery('/api/reservations'), {
+          signal: abortControllerRef.current.signal,
+          headers: { 'X-App-Mode': appMode }
+        });
         if (resResp.ok) {
           const reservations = await resResp.json();
           const activeRes = (Array.isArray(reservations) ? reservations : (reservations?.data || []))
@@ -76,7 +87,10 @@ export const useCalendarData = (startDate, days = 14) => {
 
       // Traer checkouts de hoy para enriquecer calendario
       try {
-        const checkoutResp = await apiFetch('/api/cleaning/checkouts/today', { signal: abortControllerRef.current.signal });
+        const checkoutResp = await apiFetch(withModeQuery('/api/cleaning/checkouts/today'), {
+          signal: abortControllerRef.current.signal,
+          headers: { 'X-App-Mode': appMode }
+        });
         if (checkoutResp.ok) {
           const checkoutData = await checkoutResp.json();
           const checkouts = Array.isArray(checkoutData?.data) ? checkoutData.data : [];
@@ -107,7 +121,7 @@ export const useCalendarData = (startDate, days = 14) => {
       }
       const normalized = Array.isArray(items) ? items.map(item => {
         // Formato calendar-status: ya tiene roomId + dates array
-        if (item.roomId && Array.isArray(item.dates)) return { ...item, checkoutInfo: checkoutMap[item.roomId] };
+        if (item.roomId && Array.isArray(item.dates)) return { ...item, checkoutInfo: checkoutMap[item.roomId], housekeepingState: item.housekeepingState };
 
         // Formato Railway /status: {_id, number, type, calendar:{date:status}}
         // o formato alterno:       {_id, number, type, states:{date:status}}
@@ -123,6 +137,7 @@ export const useCalendarData = (startDate, days = 14) => {
             roomFloor: item.floor,
             lastCleaning: item.lastCleaning,
             pendingHousekeeping: item.pendingHousekeeping,
+            housekeepingState: item.housekeepingState,
             currentMaintenance: item.currentMaintenance,
             checkoutInfo: checkoutMap[roomId],
             checkoutToday: item.checkoutToday,
@@ -160,7 +175,7 @@ export const useCalendarData = (startDate, days = 14) => {
     } finally {
       setLoading(false);
     }
-  }, [resolvedStart, days]);
+  }, [resolvedStart, days, appMode]);
 
   const debouncedFetch = useCallback(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);

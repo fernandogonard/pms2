@@ -7,6 +7,7 @@ const Client = require('../models/Client');
 const BillingService = require('./billingService');
 const { assignRoomsToReservation } = require('./roomAssignmentService');
 const { logger } = require('./loggerService');
+const { buildModeQuery } = require('./appModeService');
 
 class ReservationService {
 
@@ -33,7 +34,7 @@ class ReservationService {
    * Usa UNA sola query de aggregation en lugar de N queries (1 por día).
    * Retorna { available: true } o { available: false, details: {...} }
    */
-  static async validateAvailability({ tipo, cantidad, checkIn, checkOut }) {
+  static async validateAvailability({ tipo, cantidad, checkIn, checkOut, mode = 'production' }) {
     const cantidadSolicitada = cantidad || 1;
 
     // Normalizar fechas por si vienen como Date objects (de Joi)
@@ -41,7 +42,10 @@ class ReservationService {
     const checkOutStr = checkOut instanceof Date ? checkOut.toISOString().slice(0, 10) : checkOut;
 
     // 1. Contar habitaciones del tipo (1 query)
+    const modeQuery = buildModeQuery(mode);
+
     const totalHabitaciones = await Room.countDocuments({
+      ...modeQuery,
       type: tipo,
       status: { $nin: ['mantenimiento', 'limpieza'] }
     });
@@ -55,6 +59,7 @@ class ReservationService {
 
     // 2. UNA sola query: obtener todas las reservas que solapan con el rango completo
     const reservasSolapadas = await Reservation.find({
+      ...modeQuery,
       tipo,
       status: { $nin: ['checkout', 'cancelada'] },
       checkIn: { $lt: fechaFin },
@@ -105,7 +110,7 @@ class ReservationService {
    * @throws {Error} - Con message y statusCode si hay error de negocio
    */
   static async createReservation(data, options = {}) {
-    const { session, userId, isStaff } = options;
+    const { session, userId, isStaff, mode = 'production' } = options;
     let { tipo, cantidad, checkIn, checkOut, nombre, apellido, dni, email, whatsapp } = data;
 
     // Joi date().iso() convierte strings a Date objects — normalizar de vuelta a YYYY-MM-DD
@@ -150,7 +155,7 @@ class ReservationService {
     const client = await this.resolveClient({ nombre, apellido, dni, email, whatsapp });
 
     // Validar disponibilidad
-    const availability = await this.validateAvailability({ tipo, cantidad, checkIn, checkOut });
+    const availability = await this.validateAvailability({ tipo, cantidad, checkIn, checkOut, mode });
     if (!availability.available) {
       const err = new Error(availability.message);
       err.statusCode = availability.statusCode;
@@ -184,7 +189,8 @@ class ReservationService {
       },
       invoice: {
         isPaid: false
-      }
+      },
+      mode
     });
 
     const saveOptions = session ? { session } : undefined;

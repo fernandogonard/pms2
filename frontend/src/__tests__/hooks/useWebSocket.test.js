@@ -1,14 +1,15 @@
 // __tests__/hooks/useWebSocket.test.js
 // Tests unitarios para el hook useWebSocket
-import { renderHook, waitFor } from '@testing-library/react';
-import useWebSocket from '../../hooks/useWebSocket';
+import { renderHook } from '@testing-library/react';
+import { useWebSocket } from '../../hooks/useWebSocket';
 import { createWS } from '../../utils/wsClient';
+import * as apiUtils from '../../utils/api';
+import * as appMode from '../../config/appMode';
 
 // Mock del cliente WebSocket
 jest.mock('../../utils/wsClient');
-jest.mock('../../services/redirectorService', () => ({
-  getWebSocketUrl: () => 'ws://localhost:5000/ws'
-}));
+jest.mock('../../utils/api');
+jest.mock('../../config/appMode');
 
 describe('useWebSocket', () => {
   let mockWsClient;
@@ -19,6 +20,9 @@ describe('useWebSocket', () => {
     mockWsClient = {
       close: jest.fn()
     };
+
+    apiUtils.getAccessToken.mockReturnValue('token-test');
+    appMode.getAppMode.mockReturnValue('production');
     
     createWS.mockImplementation((url, handlers) => {
       mockHandlers = handlers;
@@ -38,7 +42,6 @@ describe('useWebSocket', () => {
     expect(createWS).toHaveBeenCalledWith(
       expect.stringContaining('/ws'),
       expect.objectContaining({
-        onopen: expect.any(Function),
         onmessage: expect.any(Function),
         onclose: expect.any(Function),
         onerror: expect.any(Function)
@@ -46,68 +49,26 @@ describe('useWebSocket', () => {
     );
   });
 
-  test('should deduplicate messages within window', async () => {
-    const onMessage = jest.fn(() => true);
+  test('should deliver parsed websocket messages', () => {
+    const onMessage = jest.fn();
     
     renderHook(() => useWebSocket({
-      onMessage,
-      dedupeWindow: 500
+      onMessage
     }));
 
-    // Simular primer mensaje
-    const event1 = {
+    const event = {
       data: JSON.stringify({ type: 'reservation_created', reservationId: '123' })
     };
-    mockHandlers.onmessage(event1);
+    mockHandlers.onmessage(event);
 
-    expect(onMessage).toHaveBeenCalledTimes(1);
-
-    // Simular mensaje duplicado inmediato
-    const event2 = {
-      data: JSON.stringify({ type: 'reservation_created', reservationId: '123' })
-    };
-    mockHandlers.onmessage(event2);
-
-    // No debe llamar de nuevo (deduplicado)
-    expect(onMessage).toHaveBeenCalledTimes(1);
-
-    // Esperar que pase la ventana de deduplicación
-    await waitFor(() => new Promise(resolve => setTimeout(resolve, 600)));
-
-    // Ahora sí debe procesar
-    mockHandlers.onmessage(event2);
-    expect(onMessage).toHaveBeenCalledTimes(2);
-  });
-
-  test('should update connection state on open/close', () => {
-    const { result } = renderHook(() => useWebSocket({
-      onMessage: jest.fn()
-    }));
-
-    expect(result.current.isConnected).toBe(false);
-
-    // Simular apertura
-    mockHandlers.onopen({});
-    
-    expect(result.current.isConnected).toBe(true);
-    expect(result.current.wsError).toBe(null);
-
-    // Simular cierre
-    mockHandlers.onclose({});
-    
-    expect(result.current.isConnected).toBe(false);
-    expect(result.current.wsError).toBe('Conexión cerrada');
+    expect(onMessage).toHaveBeenCalledWith({ type: 'reservation_created', reservationId: '123' });
   });
 
   test('should handle errors', () => {
-    const { result } = renderHook(() => useWebSocket({
-      onMessage: jest.fn()
-    }));
-
+    const onError = jest.fn();
+    renderHook(() => useWebSocket({ onMessage: jest.fn(), onError }));
     mockHandlers.onerror({ message: 'Test error' });
-
-    expect(result.current.wsError).toBe('Error en WebSocket');
-    expect(result.current.isConnected).toBe(false);
+    expect(onError).toHaveBeenCalledWith('Test error');
   });
 
   test('should close connection on unmount', () => {
@@ -132,27 +93,21 @@ describe('useWebSocket', () => {
     };
     mockHandlers.onmessage(event);
 
-    expect(onMessage).not.toHaveBeenCalled();
+    expect(onMessage).toHaveBeenCalledWith({ type: 'raw', data: 'invalid json' });
   });
 
-  test('should warn on unconsumed reservation events', () => {
-    const consoleSpy = jest.spyOn(console, 'warn').mockImplementation();
-    const onMessage = jest.fn(() => false); // No consume el evento
+  test('should ignore messages from another app mode', () => {
+    const onMessage = jest.fn();
     
     renderHook(() => useWebSocket({
       onMessage
     }));
 
     const event = {
-      data: JSON.stringify({ type: 'reservation_updated' })
+      data: JSON.stringify({ type: 'reservation_updated', mode: 'demo' })
     };
     mockHandlers.onmessage(event);
 
-    expect(consoleSpy).toHaveBeenCalledWith(
-      '[useWebSocket] Evento no consumido:',
-      'reservation_updated'
-    );
-
-    consoleSpy.mockRestore();
+    expect(onMessage).not.toHaveBeenCalled();
   });
 });

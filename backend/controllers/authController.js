@@ -76,7 +76,8 @@ exports.login = async (req, res) => {
       userEmail: email,
       userRole: result.user.role || 'sistema',
       description: `Login exitoso de ${email}`,
-      ip
+      ip,
+      requestId: req.requestId
     });
 
     // Refresh token va en httpOnly cookie
@@ -218,6 +219,18 @@ exports.logout = async (req, res) => {
   try {
     const token = req.headers.authorization?.split(' ')[1];
     await authService.logout(token);
+
+    auditService.log({
+      action: 'LOGOUT',
+      entity: 'User',
+      entityId: req.user?.userId || req.user?.id,
+      userId: req.user?.userId || req.user?.id,
+      userEmail: req.user?.email || 'sistema',
+      userRole: req.user?.role || 'sistema',
+      description: `Logout de ${req.user?.email || 'usuario desconocido'}`,
+      ip: req.ip,
+      requestId: req.requestId
+    });
     
     // Limpiar cookie del refresh token
     clearRefreshTokenCookie(res);
@@ -295,7 +308,8 @@ exports.forgotPassword = async (req, res) => {
       userEmail: user.email,
       userRole: user.role,
       description: 'Solicitud de reseteo de contraseña',
-      metadata: { ip: req.ip }
+      metadata: { ip: req.ip },
+      requestId: req.requestId
     });
 
     res.json({ success: true, message: 'Si el email existe, recibirás un enlace de recuperación.' });
@@ -342,6 +356,7 @@ exports.resetPassword = async (req, res) => {
     user.passwordResetToken = undefined;
     user.passwordResetExpires = undefined;
     await user.save({ validateBeforeSave: false });
+    await User.findByIdAndUpdate(user._id, { $inc: { tokenVersion: 1 } });
 
     logger.info('Contraseña reseteada exitosamente', { userId: user._id, ip: req.ip });
     auditService.log({
@@ -351,7 +366,8 @@ exports.resetPassword = async (req, res) => {
       userEmail: user.email,
       userRole: user.role,
       description: 'Contraseña reseteada por token',
-      metadata: { ip: req.ip }
+      metadata: { ip: req.ip },
+      requestId: req.requestId
     });
 
     res.json({ success: true, message: 'Contraseña actualizada correctamente. Ya podés iniciar sesión.' });

@@ -114,7 +114,8 @@ class AuthService {
   generateRefreshToken(user) {
     const payload = {
       userId: user._id,
-      type: 'refresh'
+      type: 'refresh',
+      tokenVersion: Number(user.tokenVersion || 0)
     };
 
     return jwt.sign(payload, process.env.JWT_REFRESH_SECRET, {
@@ -297,21 +298,37 @@ class AuthService {
         };
       }
 
-      const newToken = this.generateToken(user);
-      const newRefreshToken = this.generateRefreshToken(user);
+      const currentVersion = Number(user.tokenVersion || 0);
+      if (decoded.tokenVersion !== currentVersion) {
+        return {
+          success: false,
+          message: 'Sesión invalidada'
+        };
+      }
+
+      // Incrementar tokenVersion y guardar
+      user.tokenVersion = currentVersion + 1;
+      await user.save();
+      this.clearUserCache(user._id);
+
+      // Generar nuevo access token con tokenVersion actualizado
+      const newAccessToken = this.generateAccessToken(user._id, user.tokenVersion);
+
+      logger.info('Token renovado exitosamente', {
+        userId: user._id,
+        newTokenVersion: user.tokenVersion
+      });
 
       return {
         success: true,
-        token: newToken,
-        refreshToken: newRefreshToken,
+        accessToken: newAccessToken,
         user: {
           id: user._id,
-          name: user.name,
           email: user.email,
+          name: user.name,
           role: user.role
         }
       };
-
     } catch (error) {
       logger.error('Error renovando token', { error: error.message });
       return {
@@ -383,6 +400,7 @@ class AuthService {
       // Actualizar contraseña
       user.password = hashedNewPassword;
       await user.save();
+      await User.findByIdAndUpdate(userId, { $inc: { tokenVersion: 1 } });
       
       // Limpiar caché del usuario después de cambio
       this.clearUserCache(userId);
@@ -403,7 +421,7 @@ class AuthService {
     }
   }
 
-  // Logout — invalida el token añadiéndolo a la blacklist
+  // Logout — invalida el token añadiéndolo a la blacklist y revoca refresh tokens previos
   async logout(token) {
     try {
       if (token) {
@@ -411,6 +429,7 @@ class AuthService {
       }
       const decoded = this.verifyToken(token);
       if (decoded) {
+        await User.findByIdAndUpdate(decoded.userId, { $inc: { tokenVersion: 1 } });
         this.clearUserCache(decoded.userId);
         logger.info('Logout exitoso', { userId: decoded.userId });
       }

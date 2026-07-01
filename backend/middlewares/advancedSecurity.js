@@ -177,8 +177,15 @@ const sanitizeInput = (req, res, next) => {
   });
 };
 
-// Rate limiting por usuario
-const rateLimitByUser = createUserBasedLimiter(60 * 1000, 120);
+// Rate limiting por usuario — excluye endpoints de monitoreo
+const _rawRateLimitByUser = createUserBasedLimiter(60 * 1000, 120);
+const RATE_LIMIT_EXCLUDED_PATHS = ['/api/system/health', '/health', '/api/health'];
+const rateLimitByUser = (req, res, next) => {
+  if (RATE_LIMIT_EXCLUDED_PATHS.some(p => req.path === p || req.path.startsWith(p + '?'))) {
+    return next();
+  }
+  return _rawRateLimitByUser(req, res, next);
+};
 
 module.exports = {
   securityConfig,

@@ -5,6 +5,12 @@
 const { logger, logHelpers } = require('./logger');
 const os = require('os');
 
+let metricsIntervalId = null;
+let globalHandlersSetup = false;
+let uncaughtExceptionHandler = null;
+let unhandledRejectionHandler = null;
+let sigtermHandler = null;
+
 // Configuración específica para producción
 const productionLoggerConfig = {
   // Métricas del sistema
@@ -204,7 +210,10 @@ const advancedRequestLogger = (req, res, next) => {
 // Configurar logs periódicos de métricas (cada 5 minutos en producción)
 const startPeriodicMetricsLogging = () => {
   if (process.env.NODE_ENV === 'production') {
-    setInterval(() => {
+    if (metricsIntervalId) {
+      return metricsIntervalId;
+    }
+    metricsIntervalId = setInterval(() => {
       try {
         productionLoggerConfig.logSystemMetrics();
       } catch (error) {
@@ -219,12 +228,18 @@ const startPeriodicMetricsLogging = () => {
       interval: '5 minutes',
       event: 'METRICS_LOGGING_STARTED'
     });
+    return metricsIntervalId;
   }
+  return null;
 };
 
 // Manejador global de errores no capturados con contexto adicional
 const setupGlobalErrorHandlers = () => {
-  process.on('uncaughtException', (error) => {
+  if (globalHandlersSetup) {
+    return;
+  }
+
+  uncaughtExceptionHandler = (error) => {
     // IMPORTANTE: NO hacer process.exit() — deja el servidor vivo en Railway
     // Solo err fatales de red/binding deben matar el proceso (manejados en server.js)
     logger.error('Uncaught Exception (servidor continúa)', {
@@ -234,22 +249,27 @@ const setupGlobalErrorHandlers = () => {
       uptime: process.uptime(),
       event: 'UNCAUGHT_EXCEPTION'
     });
-  });
+  };
+  process.on('uncaughtException', uncaughtExceptionHandler);
 
-  process.on('unhandledRejection', (reason, promise) => {
+  unhandledRejectionHandler = (reason, promise) => {
     logger.error('Unhandled Rejection', {
       reason: reason ? reason.toString() : 'Unknown',
       pid: process.pid,
       event: 'UNHANDLED_REJECTION'
     });
-  });
+  };
+  process.on('unhandledRejection', unhandledRejectionHandler);
 
-  process.on('SIGTERM', () => {
+  sigtermHandler = () => {
     logger.info('SIGTERM received, shutting down gracefully', {
       event: 'GRACEFUL_SHUTDOWN'
     });
     productionLoggerConfig.logSystemMetrics();
-  });
+  };
+  process.on('SIGTERM', sigtermHandler);
+
+  globalHandlersSetup = true;
 
   // Deshabilitar manejador redundante de SIGINT
   // process.on('SIGINT', () => {
@@ -260,9 +280,33 @@ const setupGlobalErrorHandlers = () => {
   // });
 };
 
+const cleanupLoggerResources = () => {
+  if (metricsIntervalId) {
+    clearInterval(metricsIntervalId);
+    metricsIntervalId = null;
+  }
+
+  if (globalHandlersSetup) {
+    if (uncaughtExceptionHandler) {
+      process.removeListener('uncaughtException', uncaughtExceptionHandler);
+    }
+    if (unhandledRejectionHandler) {
+      process.removeListener('unhandledRejection', unhandledRejectionHandler);
+    }
+    if (sigtermHandler) {
+      process.removeListener('SIGTERM', sigtermHandler);
+    }
+    uncaughtExceptionHandler = null;
+    unhandledRejectionHandler = null;
+    sigtermHandler = null;
+    globalHandlersSetup = false;
+  }
+};
+
 module.exports = {
   productionLoggerConfig,
   advancedRequestLogger,
   startPeriodicMetricsLogging,
-  setupGlobalErrorHandlers
+  setupGlobalErrorHandlers,
+  cleanupLoggerResources
 };

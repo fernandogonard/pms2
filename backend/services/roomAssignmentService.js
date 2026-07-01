@@ -8,6 +8,7 @@ const {
   validateReservationStateTransition, 
   validateReservationBusinessRules 
 } = require('./stateValidationService');
+const { buildModeQuery } = require('./appModeService');
 
 /**
  * Asigna habitaciones automáticamente a una reserva
@@ -26,9 +27,11 @@ async function assignRoomsToReservation(reservation, options = {}) {
 
     const { session } = options;
     const cantidadNeeded = reservation.cantidad || 1;
+    const modeQuery = buildModeQuery(reservation.mode || 'production');
     
     // Buscar habitaciones disponibles del tipo correcto
     const roomQuery = Room.find({
+      ...modeQuery,
       type: reservation.tipo,
       status: 'disponible' // Solo habitaciones disponibles
     });
@@ -50,6 +53,7 @@ async function assignRoomsToReservation(reservation, options = {}) {
 
       // Verificar si esta habitación tiene conflictos con otras reservas
       const conflictQuery = Reservation.findOne({
+        ...modeQuery,
         _id: { $ne: reservation._id }, // Excluir la reserva actual
         room: room._id,
         status: { $in: ['reservada', 'checkin'] },
@@ -81,7 +85,12 @@ async function assignRoomsToReservation(reservation, options = {}) {
       if (reservation.status === 'checkin') {
         for (const roomId of roomsToAssign) {
           const updateOptions = session ? { session } : undefined;
-          await Room.findByIdAndUpdate(roomId, { status: 'ocupada' }, updateOptions);
+          await Room.findByIdAndUpdate(roomId, {
+            status: 'ocupada',
+            housekeepingState: 'CLEAN',
+            housekeepingStateUpdatedAt: new Date(),
+            housekeepingStateUpdatedBy: 'assignRoomsToReservation'
+          }, updateOptions);
           let roomQueryById = Room.findById(roomId);
           if (session) roomQueryById = roomQueryById.session(session);
           const room = await roomQueryById;
@@ -153,7 +162,12 @@ async function processCheckin(reservationId, options = {}) {
     if (reservation.room && reservation.room.length > 0) {
       for (const roomId of reservation.room) {
         const updateOptions = session ? { session } : undefined;
-        await Room.findByIdAndUpdate(roomId, { status: 'ocupada' }, updateOptions);
+        await Room.findByIdAndUpdate(roomId, {
+          status: 'ocupada',
+          housekeepingState: 'CLEAN',
+          housekeepingStateUpdatedAt: new Date(),
+          housekeepingStateUpdatedBy: 'checkin'
+        }, updateOptions);
         let roomQuery = Room.findById(roomId);
         if (session) roomQuery = roomQuery.session(session);
         const room = await roomQuery;
@@ -213,7 +227,10 @@ async function processCheckout(reservationId, options = {}) {
         await Room.findByIdAndUpdate(roomId, {
           status: 'limpieza',
           pendingHousekeeping: 'limpieza_checkout',
-          pendingHousekeepingAt: new Date()
+          pendingHousekeepingAt: new Date(),
+          housekeepingState: 'DIRTY',
+          housekeepingStateUpdatedAt: new Date(),
+          housekeepingStateUpdatedBy: 'checkout'
         }, updateOptions);
         let roomQuery = Room.findById(roomId);
         if (session) roomQuery = roomQuery.session(session);
@@ -252,6 +269,9 @@ async function markRoomAsClean(roomId) {
     room.lastCleaning = new Date();
     room.pendingHousekeeping = null;
     room.pendingHousekeepingAt = null;
+    room.housekeepingState = 'CLEAN';
+    room.housekeepingStateUpdatedAt = new Date();
+    room.housekeepingStateUpdatedBy = 'housekeeping';
     await room.save();
 
     logger.info(`✨ Habitación #${room.number} marcada como DISPONIBLE después de limpieza`);

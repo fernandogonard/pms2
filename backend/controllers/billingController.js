@@ -6,6 +6,7 @@ const RoomType = require('../models/RoomType');
 const BillingService = require('../services/billingService');
 const { logger } = require('../services/loggerService');
 const auditService = require('../services/auditService');
+const { resolveAppMode } = require('../services/appModeService');
 
 /**
  * Obtener tipos de habitación con precios
@@ -163,11 +164,13 @@ const processPayment = async (req, res) => {
     
     // Emitir evento WebSocket
     const wss = req.app.get('wss');
+    const appMode = resolveAppMode(req);
     if (wss) {
       wss.clients.forEach(client => {
         if (client.readyState === 1) {
           client.send(JSON.stringify({
             type: 'payment_processed',
+            mode: appMode,
             reservationId: id,
             payment: result.payment
           }));
@@ -185,7 +188,8 @@ const processPayment = async (req, res) => {
       userRole: req.user?.role || 'sistema',
       description: `Pago $_{ parseFloat(amount)} por ${method} registrado en reserva ${String(id).slice(-6).toUpperCase()}`,
       details: { amount: parseFloat(amount), method, transactionId, notes },
-      ip: req.ip
+      ip: req.ip,
+      requestId: req.requestId
     });
 
     res.json({
@@ -286,9 +290,10 @@ const addCharge = async (req, res) => {
       category
     });
     const wss = req.app.get('wss');
+    const appMode = resolveAppMode(req);
     if (wss) {
       wss.clients.forEach(c => {
-        if (c.readyState === 1) c.send(JSON.stringify({ type: 'charge_added', reservationId: id, extras: result.extras }));
+        if (c.readyState === 1) c.send(JSON.stringify({ type: 'charge_added', mode: appMode, reservationId: id, extras: result.extras }));
       });
     }
     auditService.log({
@@ -300,7 +305,8 @@ const addCharge = async (req, res) => {
       userRole: req.user?.role || 'sistema',
       description: `Cargo extra "${description}" $${parseFloat(amount)} en reserva ${String(id).slice(-6).toUpperCase()}`,
       details: { description, amount: parseFloat(amount), category },
-      ip: req.ip
+      ip: req.ip,
+      requestId: req.requestId
     });
 
     res.json({ success: true, message: 'Cargo agregado correctamente', data: result });
@@ -321,9 +327,10 @@ const deletePayment = async (req, res) => {
     }
     const result = await BillingService.deletePayment(id, idx);
     const wss = req.app.get('wss');
+    const appMode = resolveAppMode(req);
     if (wss) {
       wss.clients.forEach(c => {
-        if (c.readyState === 1) c.send(JSON.stringify({ type: 'payment_deleted', reservationId: id }));
+        if (c.readyState === 1) c.send(JSON.stringify({ type: 'payment_deleted', mode: appMode, reservationId: id }));
       });
     }
     auditService.log({
@@ -335,7 +342,8 @@ const deletePayment = async (req, res) => {
       userRole: req.user?.role || 'sistema',
       description: `Pago #${idx + 1} eliminado de reserva ${String(id).slice(-6).toUpperCase()}`,
       details: { paymentIndex: idx },
-      ip: req.ip
+      ip: req.ip,
+      requestId: req.requestId
     });
     res.json({ success: true, message: 'Pago eliminado', data: result.reservation });
   } catch (error) {
@@ -359,9 +367,10 @@ const editPayment = async (req, res) => {
     }
     const result = await BillingService.editPayment(id, idx, parseFloat(amount));
     const wss = req.app.get('wss');
+    const appMode = resolveAppMode(req);
     if (wss) {
       wss.clients.forEach(c => {
-        if (c.readyState === 1) c.send(JSON.stringify({ type: 'payment_edited', reservationId: id }));
+        if (c.readyState === 1) c.send(JSON.stringify({ type: 'payment_edited', mode: appMode, reservationId: id }));
       });
     }
     auditService.log({
@@ -373,7 +382,8 @@ const editPayment = async (req, res) => {
       userRole: req.user?.role || 'sistema',
       description: `Pago #${idx + 1} editado a $${parseFloat(amount)} en reserva ${String(id).slice(-6).toUpperCase()}`,
       details: { paymentIndex: idx, newAmount: parseFloat(amount) },
-      ip: req.ip
+      ip: req.ip,
+      requestId: req.requestId
     });
     res.json({ success: true, message: 'Pago actualizado', data: result.reservation });
   } catch (error) {

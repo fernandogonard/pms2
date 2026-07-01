@@ -317,6 +317,47 @@ async function processWebhook(data) {
       }
     });
 
+  } else if (['refunded', 'charged_back'].includes(payment.status)) {
+    const oldAmountPaid = reservation.payment?.amountPaid || 0;
+    const newAmountPaid = Math.max(0, oldAmountPaid - amount);
+    const newPaymentStatus = newAmountPaid <= 0 ? 'pendiente' : 'reembolsado';
+
+    await Reservation.findByIdAndUpdate(reservationId, {
+      'payment.status': newPaymentStatus,
+      'payment.amountPaid': newAmountPaid,
+      'payment.transactionId': String(paymentId),
+      'payment.method': 'tarjeta',
+      $push: {
+        paymentHistory: {
+          amount: -amount,
+          method: 'tarjeta',
+          date: new Date(),
+          transactionId: String(paymentId),
+          status: 'reembolsado',
+          notes: `Mercado Pago — ${paymentType} — Estado: ${payment.status}`
+        }
+      }
+    });
+
+    logger.warn('Reserva actualizada por reembolso/contracargo MP', {
+      reservationId,
+      amount,
+      oldAmountPaid,
+      newAmountPaid,
+      paymentType,
+      status: payment.status
+    });
+
+    auditService.log({
+      action: 'PAYMENT_MP_REFUNDED',
+      entity: 'Reservation',
+      entityId: reservationId,
+      userEmail: 'sistema',
+      userRole: 'sistema',
+      description: `Pago MP reembolsado/contracargo. Monto: $${amount}. Total pagado: $${newAmountPaid}`,
+      metadata: { paymentId, paymentType, status: payment.status }
+    });
+
   } else if (['rejected', 'cancelled'].includes(payment.status)) {
     logger.warn('Pago MP rechazado/cancelado', { reservationId, paymentId, status: payment.status });
     auditService.log({

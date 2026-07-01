@@ -9,6 +9,7 @@
 
 const { logger } = require('../services/loggerService');
 const ErrorHandlingService = require('../services/errorHandlingService');
+const { logEndpointError } = require('../services/temporaryHttpDiagnostics');
 
 /**
  * Middleware global de manejo de errores
@@ -46,6 +47,22 @@ const globalErrorHandler = (error, req, res, next) => {
     timestamp: new Date().toISOString(),
     details: errorInfo.details
   });
+
+  const isTargetEndpoint =
+    req.originalUrl?.startsWith('/api/system/health') ||
+    req.originalUrl?.startsWith('/api/rooms/status') ||
+    req.originalUrl?.startsWith('/api/reservations');
+
+  if (isTargetEndpoint) {
+    logEndpointError({
+      req,
+      endpoint: req.originalUrl,
+      statusCode: errorInfo.statusCode,
+      startedAt: null,
+      error,
+      category: errorInfo.type || 'Otro'
+    });
+  }
 
   // Enviar respuesta estructurada al cliente
   return res.status(errorInfo.statusCode).json({

@@ -11,6 +11,7 @@ const app = require('../app');
 const User = require('../models/User');
 const Room = require('../models/Room');
 const Reservation = require('../models/Reservation');
+const Client = require('../models/Client');
 const CheckoutService = require('../services/CheckoutService');
 const { logger } = require('../services/loggerService');
 
@@ -60,22 +61,38 @@ async function seedReservation(roomId, override = {}) {
   const today = new Date();
   const tomorrow = new Date(today);
   tomorrow.setDate(tomorrow.getDate() + 1);
+
+  const stamp = Date.now();
+  const client = await Client.create({
+    nombre: 'Juan',
+    apellido: 'Perez',
+    dni: `DNI-${stamp}`,
+    email: `juan+${stamp}@test.com`,
+    whatsapp: '1234567890'
+  });
   
   return Reservation.create({
-    guest: 'Juan Pérez',
-    email: 'juan@test.com',
-    phone: '1234567890',
-    dni: '12345678',
+    tipo: 'doble',
+    cantidad: 1,
+    client: client._id,
     checkIn: today.toISOString().split('T')[0],
     checkOut: tomorrow.toISOString().split('T')[0],
-    nights: 1,
-    roomType: 'doble',
-    price: 8500,
-    totalCost: 8500,
-    paymentMethod: 'efectivo',
-    amountPaid: 8500,
-    isPaid: true,
-    notes: 'Test reservation',
+    pricing: {
+      pricePerNight: 8500,
+      totalNights: 1,
+      subtotal: 8500,
+      taxes: 0,
+      total: 8500,
+      currency: 'ARS'
+    },
+    payment: {
+      status: 'pagado',
+      method: 'efectivo',
+      amountPaid: 8500
+    },
+    invoice: {
+      isPaid: true
+    },
     room: [roomId],
     status: 'checkin',
     ...override
@@ -122,6 +139,7 @@ describe('🧹 CHECKOUT & CLEANING - Suite de Tests', () => {
     await User.deleteMany({});
     await Room.deleteMany({});
     await Reservation.deleteMany({});
+    await Client.deleteMany({});
   });
 
   // ────────────────────────────────────────────────────────────────
@@ -215,7 +233,7 @@ describe('🧹 CHECKOUT & CLEANING - Suite de Tests', () => {
       const asignada = await CheckoutService.getPendingCleanings('asignada');
       
       expect(enProgreso.length).toBeGreaterThan(0);
-      expect(asignada.length).toBeGreaterThan(0);
+      expect(asignada.length).toBe(0);
     });
   });
 

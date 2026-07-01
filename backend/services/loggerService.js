@@ -2,6 +2,20 @@
 const winston = require('winston');
 const path = require('path');
 const fs = require('fs');
+const { randomUUID } = require('crypto');
+
+function safeStringify(value) {
+  const seen = new WeakSet();
+  return JSON.stringify(value, (key, currentValue) => {
+    if (typeof currentValue === 'object' && currentValue !== null) {
+      if (seen.has(currentValue)) {
+        return '[Circular]';
+      }
+      seen.add(currentValue);
+    }
+    return currentValue;
+  });
+}
 
 // Crear directorio de logs solo en desarrollo (Railway no tiene FS persistente)
 const logsDir = path.join(__dirname, '../logs');
@@ -28,7 +42,7 @@ const customFormat = winston.format.combine(
     
     // Añadir metadatos si existen
     if (Object.keys(meta).length > 0) {
-      log += ` ${JSON.stringify(meta)}`;
+      log += ` ${safeStringify(meta)}`;
     }
     
     // Añadir stack trace para errores
@@ -328,6 +342,17 @@ const loggerService = {
 // Middleware para logging automático de requests HTTP
 const requestLogger = (req, res, next) => {
   const startTime = Date.now();
+  const requestId = req.headers['x-request-id'] || randomUUID();
+  req.requestId = requestId;
+  res.setHeader('x-request-id', requestId);
+
+  loggerService.info('HTTP request started', {
+    requestId,
+    method: req.method,
+    url: req.originalUrl,
+    ip: req.ip,
+    userAgent: req.get('User-Agent')
+  });
   
   // Capturar la respuesta original
   const originalSend = res.send;
@@ -337,6 +362,7 @@ const requestLogger = (req, res, next) => {
     // Log de performance para requests lentos
     if (duration > 1000) {
       loggerService.performance.slowOperation('HTTP Request', duration, {
+        requestId,
         method: req.method,
         url: req.originalUrl,
         statusCode: res.statusCode
@@ -352,6 +378,14 @@ const requestLogger = (req, res, next) => {
       req.user?.id
     );
 
+    loggerService.info('HTTP request finished', {
+      requestId,
+      method: req.method,
+      url: req.originalUrl,
+      statusCode: res.statusCode,
+      duration
+    });
+
     return originalSend.call(this, data);
   };
 
@@ -361,6 +395,7 @@ const requestLogger = (req, res, next) => {
 // Middleware para logging de errores
 const errorLogger = (error, req, res, next) => {
   loggerService.error('Unhandled error in request', error, {
+    requestId: req.requestId,
     method: req.method,
     url: req.originalUrl,
     userId: req.user?.id,

@@ -7,6 +7,7 @@ const MaintenanceService = require('../services/maintenanceService');
 const ErrorHandlingService = require('../services/errorHandlingService');
 const { ROOM_STATES } = require('../services/stateValidationService');
 const { logger } = require('../config/logger');
+const { resolveAppMode } = require('../services/appModeService');
 
 /**
  * Inicia mantenimiento en una habitación
@@ -117,11 +118,13 @@ exports.startMaintenance = ErrorHandlingService.asyncWrapper(async (req, res) =>
 
   // Emitir evento WebSocket para actualizar el tablero
   const wss = req.app.get('wss');
+  const appMode = resolveAppMode(req);
   if (wss) {
     wss.clients.forEach(client => {
       if (client.readyState === 1) {
         client.send(JSON.stringify({ 
           type: 'room_maintenance_started', 
+          mode: appMode,
           room: { 
             id: result.room._id, 
             number: result.room.number,
@@ -166,11 +169,13 @@ exports.completeMaintenance = ErrorHandlingService.asyncWrapper(async (req, res)
 
   // Emitir evento WebSocket para actualizar el tablero
   const wss = req.app.get('wss');
+  const appMode = resolveAppMode(req);
   if (wss) {
     wss.clients.forEach(client => {
       if (client.readyState === 1) {
         client.send(JSON.stringify({ 
           type: 'room_maintenance_completed', 
+          mode: appMode,
           room: { 
             id: result.room._id, 
             number: result.room.number,

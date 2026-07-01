@@ -1,8 +1,16 @@
 // components/RoomCalendar.js
-// Calendario visual de ocupación — popover al hover con datos de reserva/limpieza/mantenimiento
+// Calendario visual de ocupación con virtualización de filas + columnas para 500x365
 import React, { useMemo, useState, useCallback, useRef, useEffect } from 'react';
+import { useVirtualizer } from '@tanstack/react-virtual';
 import { useCalendarData } from '../hooks/useCalendarData';
 import { useWebSocket } from '../hooks/useWebSocket';
+
+// ── Constantes de layout ──────────────────────────────
+const ROOM_COL_WIDTH = 150;
+const DAY_COL_WIDTH  = 55;
+const ROW_HEIGHT     = 34;
+const HEADER_HEIGHT  = 42;
+const GRID_HEIGHT    = 540; // altura visible del grid en px
 
 const STATUS_CONFIG = {
   // 9 ESTADOS DISTINTOS CON COLORES CLAROS Y DIFERENCIADOS
@@ -28,7 +36,51 @@ const getStatusStyle = (status) => STATUS_CONFIG[status] || { bg: '#374151', lab
 
 const today = new Date().toISOString().split('T')[0];
 
-// ── Popover flotante ────────────────────────────────────
+// ── Celda memoizada ────────────────────────────────────
+// React.memo evita re-renders de celdas que no cambiaron.
+const GridCell = React.memo(({ room, date, dayData, isToday, onCellClick, onCellEnter, onCellLeave }) => {
+  const status = dayData ? dayData.status : 'available';
+  let finalStatus = status;
+  let guestName = dayData?.reservation?.guestName || null;
+
+  if (room.checkoutToday && date === today) {
+    finalStatus = 'checkout_hoy';
+    guestName = room.checkoutInfo?.guestName || guestName;
+  }
+
+  const cfg = getStatusStyle(finalStatus);
+
+  return (
+    <div
+      onClick={() => onCellClick(room, date, finalStatus, dayData)}
+      onMouseEnter={(e) => onCellEnter(e, room, date, finalStatus, dayData)}
+      onMouseLeave={onCellLeave}
+      style={{
+        background: cfg.bg,
+        textAlign: 'center',
+        cursor: 'pointer',
+        width: '100%',
+        height: '100%',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        opacity: status === 'available' || status === 'disponible' ? 0.65 : 1,
+        outline: isToday ? '2px solid #60a5fa' : 'none',
+        outlineOffset: -2,
+        borderRight: '1px solid rgba(0,0,0,0.12)',
+        boxSizing: 'border-box',
+      }}
+    >
+      <div style={{ fontSize: 14, lineHeight: 1 }}>{cfg.icon}</div>
+      {guestName && (
+        <div style={{ fontSize: 9, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 48 }}>
+          {guestName.split(' ')[0]}
+        </div>
+      )}
+    </div>
+  );
+});
 const CellPopover = ({ info, position }) => {
   if (!info) return null;
   const { room, date, status, dayData } = info;
@@ -180,8 +232,13 @@ const CellPopover = ({ info, position }) => {
         )}
 
         {/* Limpieza */}
-        {(room.pendingHousekeeping || room.lastCleaning) && status !== 'limpieza' && (
+        {(room.pendingHousekeeping || room.lastCleaning || room.housekeepingState || dayData?.tooltip?.housekeepingStatus) && status !== 'limpieza' && (
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', fontSize: 11 }}>
+            {(dayData?.tooltip?.housekeepingStatus || room.housekeepingState) && (
+              <span style={{ color: '#c4b5fd', background: '#2e1065', padding: '2px 8px', borderRadius: 4 }}>
+                HK: {dayData?.tooltip?.housekeepingStatus || room.housekeepingState}
+              </span>
+            )}
             {room.pendingHousekeeping && (
               <span style={{ color: '#a78bfa', background: '#1e1b4b', padding: '2px 8px', borderRadius: 4 }}>
                 🧹 Limpieza pendiente
@@ -223,40 +280,78 @@ export const RoomCalendar = ({ startDate: startDateProp, days = 14 }) => {
   const startDate = startDateProp || new Date().toISOString().slice(0, 10);
   const { data, loading, error, refetch } = useCalendarData(startDate, days);
   const [selectedRoom, setSelectedRoom] = useState(null);
-  const [popover, setPopover] = useState(null);
+  const [popover, setPopover]           = useState(null);
   const popoverTimeout = useRef(null);
+  const parentRef      = useRef(null);
 
-  // Auto-refetch cada 15 segundos para actualizar estado en tiempo real
+  // ── Auto-refetch cada 15 s ──────────────────────────
   useEffect(() => {
-    const interval = setInterval(() => {
-      refetch();
-    }, 15000);
-    
+    const interval = setInterval(refetch, 15000);
     return () => clearInterval(interval);
   }, [refetch]);
 
   useWebSocket({
     onMessage: (payload) => {
-      if (payload.type?.startsWith('reservation_') || payload.type?.startsWith('room_') || payload.type === 'cleaning_updated') {
-        refetch();
-      }
+      if (
+        payload.type?.startsWith('reservation_') ||
+        payload.type?.startsWith('room_') ||
+        payload.type === 'cleaning_updated'
+      ) { refetch(); }
     },
-    onError: (msg) => console.error('WS Error:', msg),
-    onClose: () => console.log('WS Closed')
+    onError:  (msg) => console.error('WS Error:', msg),
+    onClose:  ()    => console.log('WS Closed'),
   });
 
+  // ── Fechas del rango ────────────────────────────────
+  const dates = useMemo(() => {
+    const arr = [];
+    for (let i = 0; i < days; i++) {
+      const d = new Date(startDate);
+      d.setUTCDate(d.getUTCDate() + i);
+      arr.push(d.toISOString().split('T')[0]);
+    }
+    return arr;
+  }, [startDate, days]);
+
+  // ── Índice O(1): roomId → { date → dayData } ───────
+  const roomDatesMap = useMemo(() => {
+    const map = {};
+    data.forEach(room => {
+      const byDate = {};
+      (room.dates || []).forEach(d => { byDate[d.date] = d; });
+      map[room.roomId] = byDate;
+    });
+    return map;
+  }, [data]);
+
+  // ── Virtualizadores ─────────────────────────────────
+  const rowVirtualizer = useVirtualizer({
+    count:           data.length,
+    getScrollElement: () => parentRef.current,
+    estimateSize:    () => ROW_HEIGHT,
+    overscan:        5,
+  });
+
+  const columnVirtualizer = useVirtualizer({
+    count:           dates.length,
+    getScrollElement: () => parentRef.current,
+    estimateSize:    () => DAY_COL_WIDTH,
+    overscan:        3,
+    horizontal:      true,
+  });
+
+  // ── Handlers memoizados ─────────────────────────────
   const handleCellEnter = useCallback((e, room, date, status, dayData) => {
     clearTimeout(popoverTimeout.current);
     const rect = e.currentTarget.getBoundingClientRect();
-    // Posicionar el popover: arriba de la celda si hay espacio, sino abajo
     const popY = rect.top > 280 ? rect.top - 10 : rect.bottom + 10;
     const popX = Math.min(rect.left, window.innerWidth - 330);
     popoverTimeout.current = setTimeout(() => {
       setPopover({
-        info: { room, date, status, dayData },
-        position: { x: Math.max(10, popX), y: popY > 280 ? popY : rect.bottom + 10 }
+        info:     { room, date, status, dayData },
+        position: { x: Math.max(10, popX), y: popY > 280 ? popY : rect.bottom + 10 },
       });
-    }, 250); // delay breve para evitar parpadeo
+    }, 250);
   }, []);
 
   const handleCellLeave = useCallback(() => {
@@ -264,152 +359,221 @@ export const RoomCalendar = ({ startDate: startDateProp, days = 14 }) => {
     setPopover(null);
   }, []);
 
-  const dates = useMemo(() => {
-    const arr = [];
-    for (let i = 0; i < days; i++) {
-      const date = new Date(startDate);
-      date.setUTCDate(date.getUTCDate() + i);
-      arr.push(date.toISOString().split('T')[0]);
-    }
-    return arr;
-  }, [startDate, days]);
+  const handleCellClick = useCallback((room, date, status, dayData) => {
+    setSelectedRoom({ ...room, selectedDate: date, selectedStatus: status, dayData });
+  }, []);
 
+  // ── Renders de carga / error ────────────────────────
   if (loading) return (
-    <div style={{ padding: '40px', textAlign: 'center', color: '#9ca3af' }}>
-      <div className="spinner-border" role="status" style={{ marginBottom: 10 }}></div>
+    <div style={{ padding: 40, textAlign: 'center', color: '#9ca3af' }}>
+      <div className="spinner-border" role="status" style={{ marginBottom: 10 }} />
       <div>Cargando calendario...</div>
     </div>
   );
-  if (error) return <div className="alert alert-danger">Error: {error}</div>;
+  if (error)     return <div className="alert alert-danger">Error: {error}</div>;
   if (!data.length) return <div className="alert alert-warning">No hay habitaciones para mostrar</div>;
+
+  const totalColSize = columnVirtualizer.getTotalSize();
+  const totalRowSize = rowVirtualizer.getTotalSize();
+  const totalWidth   = ROOM_COL_WIDTH + totalColSize;
+  const totalHeight  = HEADER_HEIGHT  + totalRowSize;
+
+  const virtualRows    = rowVirtualizer.getVirtualItems();
+  const virtualColumns = columnVirtualizer.getVirtualItems();
 
   return (
     <div>
+      {/* ── Leyenda ────────────────────────────────── */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
         <h2 style={{ margin: 0 }}>Calendario de Habitaciones</h2>
         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-          {Object.entries(STATUS_CONFIG).filter(([k]) => !['disponible'].includes(k)).map(([key, val]) => (
-            <span key={key} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, color: '#ccc' }}>
-              <span style={{ width: 12, height: 12, borderRadius: 2, background: val.bg, display: 'inline-block' }}></span>
-              {val.label}
-            </span>
-          ))}
+          {Object.entries(STATUS_CONFIG)
+            .filter(([k]) => k !== 'disponible')
+            .map(([key, val]) => (
+              <span key={key} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, color: '#ccc' }}>
+                <span style={{ width: 12, height: 12, borderRadius: 2, background: val.bg, display: 'inline-block' }} />
+                {val.label}
+              </span>
+            ))}
         </div>
       </div>
 
-      <div style={{ overflowX: 'auto', borderRadius: 8, border: '1px solid #374151' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, tableLayout: 'fixed', minWidth: days * 55 + 150 }}>
-          <thead>
-            <tr>
-              <th style={{ background: '#1f2937', color: '#e5e7eb', padding: '8px 10px', textAlign: 'left', position: 'sticky', left: 0, zIndex: 2, width: 150, borderBottom: '2px solid #374151' }}>
-                Habitación
-              </th>
-              {dates.map(date => {
-                const d = new Date(date + 'T12:00:00');
+      {/* ── Grid virtualizado ──────────────────────── */}
+      <div
+        ref={parentRef}
+        style={{
+          height:       GRID_HEIGHT,
+          overflow:     'auto',
+          border:       '1px solid #374151',
+          borderRadius: 8,
+          position:     'relative',
+        }}
+      >
+        {/* Contenedor interno que define el espacio total de scroll */}
+        <div style={{ width: totalWidth, height: totalHeight, position: 'relative' }}>
+
+          {/* ── Header pegajoso ─────────────────────── */}
+          <div style={{
+            position:      'sticky',
+            top:           0,
+            zIndex:        3,
+            height:        HEADER_HEIGHT,
+            display:       'flex',
+            background:    '#1f2937',
+            borderBottom:  '2px solid #374151',
+            width:         totalWidth,
+          }}>
+            {/* Celda "Habitación" doblemente pegajosa (top + left) */}
+            <div style={{
+              position:   'sticky',
+              left:       0,
+              zIndex:     4,
+              width:      ROOM_COL_WIDTH,
+              flexShrink: 0,
+              background: '#1f2937',
+              display:    'flex',
+              alignItems: 'center',
+              padding:    '0 10px',
+              borderRight:'1px solid #374151',
+              color:      '#e5e7eb',
+              fontWeight: 600,
+              fontSize:   12,
+            }}>
+              Habitación
+            </div>
+
+            {/* Cabeceras de fechas virtualizadas */}
+            <div style={{ position: 'relative', width: totalColSize, height: '100%', flexShrink: 0 }}>
+              {virtualColumns.map(col => {
+                const date    = dates[col.index];
+                const d       = new Date(date + 'T12:00:00');
                 const isToday = date === today;
                 return (
-                  <th key={date} style={{
-                    background: isToday ? '#1e3a5f' : '#1f2937',
-                    color: isToday ? '#60a5fa' : '#9ca3af',
-                    padding: '6px 2px',
-                    textAlign: 'center',
-                    fontWeight: isToday ? 700 : 500,
-                    borderBottom: '2px solid #374151',
-                    whiteSpace: 'nowrap',
-                    fontSize: 11
+                  <div key={col.key} style={{
+                    position:       'absolute',
+                    left:           col.start,
+                    width:          col.size,
+                    height:         '100%',
+                    display:        'flex',
+                    flexDirection:  'column',
+                    alignItems:     'center',
+                    justifyContent: 'center',
+                    background:     isToday ? '#1e3a5f' : 'transparent',
+                    color:          isToday ? '#60a5fa' : '#9ca3af',
+                    fontSize:       11,
+                    fontWeight:     isToday ? 700 : 500,
+                    borderRight:    '1px solid #2d3748',
                   }}>
                     <div>{d.toLocaleDateString('es-ES', { weekday: 'short' })}</div>
                     <div style={{ fontSize: 13, fontWeight: 700 }}>{d.getDate()}</div>
-                  </th>
+                  </div>
                 );
               })}
-            </tr>
-          </thead>
-          <tbody>
-            {data.map(room => (
-              <tr key={room.roomId} style={{ borderBottom: '1px solid #2d3748' }}>
-                <td style={{
-                  background: '#111827',
-                  color: '#e5e7eb',
-                  padding: '6px 10px',
-                  position: 'sticky',
-                  left: 0,
-                  zIndex: 1,
-                  fontWeight: 600,
-                  whiteSpace: 'nowrap',
-                  cursor: 'pointer',
-                  borderRight: '1px solid #374151'
-                }}
-                  onClick={() => setSelectedRoom(room)}
+            </div>
+          </div>
+
+          {/* ── Filas virtualizadas ──────────────────── */}
+          <div style={{ position: 'relative', height: totalRowSize }}>
+            {virtualRows.map(row => {
+              const room = data[row.index];
+              const byDate = roomDatesMap[room.roomId] || {};
+              return (
+                <div
+                  key={row.key}
+                  data-index={row.index}
+                  style={{
+                    position:    'absolute',
+                    top:         row.start,
+                    height:      row.size,
+                    width:       totalWidth,
+                    display:     'flex',
+                    borderBottom:'1px solid #2d3748',
+                  }}
                 >
-                  <span style={{ color: '#60a5fa' }}>#{room.roomNumber}</span>
-                  <span style={{ color: '#6b7280', fontWeight: 400, marginLeft: 4, fontSize: 10, textTransform: 'capitalize' }}>
-                    {room.roomType}
-                  </span>
-                  {room.pendingHousekeeping && <span title="Pendiente limpieza" style={{ marginLeft: 4 }}>🧹</span>}
-                </td>
-                {dates.map((date) => {
-                  const dayData = (room.dates || []).find(d => d.date === date);
-                  const status = dayData ? dayData.status : 'available';
-                  
-                  // Si es checkout hoy y la fecha es hoy, mostrar checkout_hoy
-                  let finalStatus = status;
-                  let guestName = dayData?.reservation?.guest || null;
-                  
-                  if (room.checkoutToday && date === today) {
-                    finalStatus = 'checkout_hoy';
-                    guestName = room.checkoutInfo?.guestName || guestName;
-                  }
-                  
-                  const cfg = getStatusStyle(finalStatus);
-                  const isToday = date === today;
-                  return (
-                    <td
-                      key={date}
-                      onClick={() => setSelectedRoom({ ...room, selectedDate: date, selectedStatus: finalStatus, dayData })}
-                      onMouseEnter={(e) => handleCellEnter(e, room, date, finalStatus, dayData)}
-                      onMouseLeave={handleCellLeave}
-                      style={{
-                        background: cfg.bg,
-                        textAlign: 'center',
-                        cursor: 'pointer',
-                        padding: '4px 2px',
-                        transition: 'filter 0.15s',
-                        opacity: status === 'available' || status === 'disponible' ? 0.65 : 1,
-                        outline: isToday ? '2px solid #60a5fa' : 'none',
-                        outlineOffset: -2,
-                        position: 'relative'
-                      }}
-                    >
-                      <div style={{ fontSize: 14, lineHeight: 1 }}>{cfg.icon}</div>
-                      {guestName && (
-                        <div style={{ fontSize: 9, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 50, margin: '0 auto' }}>
-                          {guestName.split(' ')[0]}
+                  {/* Etiqueta de habitación pegajosa al lado izquierdo */}
+                  <div
+                    onClick={() => setSelectedRoom(room)}
+                    style={{
+                      position:   'sticky',
+                      left:       0,
+                      zIndex:     1,
+                      width:      ROOM_COL_WIDTH,
+                      flexShrink: 0,
+                      background: '#111827',
+                      display:    'flex',
+                      alignItems: 'center',
+                      padding:    '0 10px',
+                      cursor:     'pointer',
+                      borderRight:'1px solid #374151',
+                      fontSize:   12,
+                      fontWeight: 600,
+                      whiteSpace: 'nowrap',
+                      gap:        4,
+                    }}
+                  >
+                    <span style={{ color: '#60a5fa' }}>#{room.roomNumber}</span>
+                    <span style={{ color: '#6b7280', fontWeight: 400, fontSize: 10, textTransform: 'capitalize' }}>
+                      {room.roomType}
+                    </span>
+                    {room.pendingHousekeeping && (
+                      <span title="Limpieza pendiente">🧹</span>
+                    )}
+                  </div>
+
+                  {/* Celdas de días virtualizadas */}
+                  <div style={{ position: 'relative', width: totalColSize, height: '100%', flexShrink: 0 }}>
+                    {virtualColumns.map(col => {
+                      const date    = dates[col.index];
+                      const dayData = byDate[date] || null;
+                      const isToday = date === today;
+                      return (
+                        <div
+                          key={col.key}
+                          style={{
+                            position: 'absolute',
+                            left:     col.start,
+                            width:    col.size,
+                            height:   '100%',
+                          }}
+                        >
+                          <GridCell
+                            room={room}
+                            date={date}
+                            dayData={dayData}
+                            isToday={isToday}
+                            onCellClick={handleCellClick}
+                            onCellEnter={handleCellEnter}
+                            onCellLeave={handleCellLeave}
+                          />
                         </div>
-                      )}
-                    </td>
-                  );
-                })}
-              </tr>
-            ))}
-          </tbody>
-        </table>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
       </div>
 
-      {/* Popover flotante */}
+      {/* ── Popover flotante ─────────────────────────── */}
       {popover && <CellPopover info={popover.info} position={popover.position} />}
 
+      {/* ── Panel de habitación seleccionada ─────────── */}
       {selectedRoom && (
-        <div style={{ marginTop: 16, padding: 16, background: '#1f2937', borderRadius: 8, color: '#e5e7eb', border: '1px solid #374151' }}>
+        <div style={{
+          marginTop: 16, padding: 16,
+          background: '#1f2937', borderRadius: 8,
+          color: '#e5e7eb', border: '1px solid #374151',
+        }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
             <h3 style={{ margin: 0 }}>
               <span style={{ color: '#60a5fa' }}>#{selectedRoom.roomNumber}</span>
-              <span style={{ fontWeight: 400, color: '#9ca3af', marginLeft: 8, textTransform: 'capitalize' }}>{selectedRoom.roomType}</span>
+              <span style={{ fontWeight: 400, color: '#9ca3af', marginLeft: 8, textTransform: 'capitalize' }}>
+                {selectedRoom.roomType}
+              </span>
             </h3>
-            <button
-              className="btn btn-sm btn-outline-secondary"
-              onClick={() => setSelectedRoom(null)}
-            >✕</button>
+            <button className="btn btn-sm btn-outline-secondary" onClick={() => setSelectedRoom(null)}>✕</button>
           </div>
           {selectedRoom.selectedDate && (
             <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', fontSize: 13 }}>
@@ -424,9 +588,14 @@ export const RoomCalendar = ({ startDate: startDateProp, days = 14 }) => {
                 <span><strong>Huésped:</strong> {selectedRoom.dayData.reservation.guest}</span>
               )}
               {selectedRoom.dayData?.reservation?.checkIn && (
-                <span><strong>Estadía:</strong> {selectedRoom.dayData.reservation.checkIn} → {selectedRoom.dayData.reservation.checkOut}</span>
+                <span>
+                  <strong>Estadía:</strong>{' '}
+                  {selectedRoom.dayData.reservation.checkIn} → {selectedRoom.dayData.reservation.checkOut}
+                </span>
               )}
-              {selectedRoom.pendingHousekeeping && <span style={{ color: '#a855f7' }}>🧹 Limpieza pendiente</span>}
+              {selectedRoom.pendingHousekeeping && (
+                <span style={{ color: '#a855f7' }}>🧹 Limpieza pendiente</span>
+              )}
             </div>
           )}
         </div>
@@ -436,7 +605,7 @@ export const RoomCalendar = ({ startDate: startDateProp, days = 14 }) => {
       <style>{`
         @keyframes fadeIn {
           from { opacity: 0; transform: translateY(4px); }
-          to { opacity: 1; transform: translateY(0); }
+          to   { opacity: 1; transform: translateY(0); }
         }
       `}</style>
     </div>

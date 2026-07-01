@@ -127,6 +127,13 @@ const reservationSchema = new mongoose.Schema({
   createdAt: {
     type: Date,
     default: Date.now
+  },
+  // Segmentación funcional demo/producción persistente
+  mode: {
+    type: String,
+    enum: ['demo', 'production'],
+    default: 'production',
+    index: true
   }
 });
 
@@ -222,5 +229,9 @@ reservationSchema.index({ status: 1, checkIn: 1, checkOut: 1 });// query princip
 reservationSchema.index({ client: 1 });                         // reservas de un cliente
 reservationSchema.index({ room: 1 });                           // habitaciones de una reserva
 reservationSchema.index({ 'payment.status': 1 });               // facturas pendientes
-
+reservationSchema.index({ mode: 1, checkIn: 1, checkOut: 1 });  // rango por entorno funcional
+reservationSchema.index({ room: 1, checkIn: 1, checkOut: 1 });  // calendario por habitación
+reservationSchema.index({ status: 1, createdAt: -1 });          // consultas operativas recientes
+reservationSchema.index({ tipo: 1, mode: 1, status: 1, checkIn: 1, checkOut: 1 }); // disponibilidad
+reservationSchema.index({ user: 1 });
 module.exports = mongoose.model('Reservation', reservationSchema);

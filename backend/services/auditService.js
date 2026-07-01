@@ -16,7 +16,9 @@ const log = async ({
   userRole,
   description,
   details,
-  ip
+  metadata,
+  ip,
+  requestId
 }) => {
   try {
     await AuditLog.create({
@@ -27,8 +29,9 @@ const log = async ({
       userEmail: userEmail || 'sistema',
       userRole: userRole || 'sistema',
       description,
-      details,
-      ip
+      details: details || metadata,
+      ip,
+      requestId
     });
   } catch (err) {
     // La auditoría nunca debe interrumpir el flujo principal

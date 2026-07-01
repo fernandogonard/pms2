@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const bcrypt = require('bcryptjs');
 const fs = require('fs');
 const path = require('path');
 const dotenv = require('dotenv');
@@ -117,6 +118,15 @@ async function restoreBackup(backupFile = null) {
       rl.close();
     }
     
+    // Preparar datos restaurables antes de tocar la base actual.
+    // Si falta password en usuarios del backup, usar hash de fallback para evitar fallo de validación.
+    const fallbackPassword = process.env.RESTORE_FALLBACK_PASSWORD || 'RestoreTemp#2026';
+    const fallbackHash = await bcrypt.hash(fallbackPassword, 10);
+    const restoredUsers = backupData.users.map((user) => ({
+      ...user,
+      password: user.password || fallbackHash
+    }));
+
     // PROCESO DE RESTAURACIÓN
     console.log('\n🗑️ Eliminando datos actuales...');
     
@@ -130,7 +140,7 @@ async function restoreBackup(backupFile = null) {
     
     // Restaurar datos
     await Room.insertMany(backupData.rooms);
-    await User.insertMany(backupData.users);
+    await User.insertMany(restoredUsers);
     await Client.insertMany(backupData.clients);
     await Reservation.insertMany(backupData.reservations);
     

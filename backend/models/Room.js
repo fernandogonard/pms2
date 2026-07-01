@@ -4,6 +4,8 @@
 const mongoose = require('mongoose');
 const { VALID_ROOM_TYPES, VALID_ROOM_STATUS } = require('../constants/businessConstants');
 
+const VALID_HOUSEKEEPING_STATE = ['DIRTY', 'CLEAN', 'INSPECTED', 'IN_PROGRESS', 'DND'];
+
 // Esquema para el historial de mantenimiento
 const maintenanceHistorySchema = new mongoose.Schema({
   reason: {
@@ -68,8 +70,7 @@ const currentMaintenanceSchema = new mongoose.Schema({
 const roomSchema = new mongoose.Schema({
   number: {
     type: Number,
-    required: true,
-    unique: true
+    required: true
   },
   floor: {
     type: Number,
@@ -144,6 +145,29 @@ const roomSchema = new mongoose.Schema({
       default: 'no_asignada'
     },
     notes: String
+  },
+
+  // Estado operacional de housekeeping (independiente del estado comercial de la habitacion)
+  housekeepingState: {
+    type: String,
+    enum: VALID_HOUSEKEEPING_STATE,
+    default: 'CLEAN'
+  },
+  housekeepingStateUpdatedAt: {
+    type: Date,
+    default: Date.now
+  },
+  housekeepingStateUpdatedBy: {
+    type: String,
+    default: 'system'
+  },
+
+  // Segmentación funcional demo/producción persistente
+  mode: {
+    type: String,
+    enum: ['demo', 'production'],
+    default: 'production',
+    index: true
   }
 }, { timestamps: true });
 
@@ -151,5 +175,8 @@ const roomSchema = new mongoose.Schema({
 roomSchema.index({ status: 1 });                  // filtrar por estado
 roomSchema.index({ type: 1 });                    // filtrar por tipo
 roomSchema.index({ status: 1, type: 1 });         // filtrar por estado + tipo
-
+roomSchema.index({ number: 1, mode: 1 }, { unique: true }); // numero único por entorno funcional
+roomSchema.index({ mode: 1, status: 1, type: 1 }); // dashboards por entorno
+roomSchema.index({ mode: 1, createdAt: -1 });      // consultas operativas por entorno
+roomSchema.index({ mode: 1, type: 1 });
 module.exports = mongoose.model('Room', roomSchema);

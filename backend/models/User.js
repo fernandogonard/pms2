@@ -29,8 +29,12 @@ const userSchema = new mongoose.Schema({
   },
   role: {
     type: String,
-    enum: ['admin', 'recepcionista', 'cliente'],
+    enum: ['admin', 'recepcionista', 'limpieza', 'cliente'],
     default: 'cliente'
+  },
+  tokenVersion: {
+    type: Number,
+    default: 0
   },
   createdAt: {
     type: Date,

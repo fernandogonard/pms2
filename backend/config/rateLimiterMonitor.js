@@ -14,6 +14,8 @@ class RateLimiterMonitor {
       byIP: {},
       lastReset: new Date()
     };
+    this._metricsResetInterval = null;
+    this._periodicMetricsInterval = null;
     
     this.setupMetricsCollection();
   }
@@ -21,9 +23,30 @@ class RateLimiterMonitor {
   // Configurar recolección de métricas
   setupMetricsCollection() {
     // Reset métricas cada hora
-    setInterval(() => {
+    if (this._metricsResetInterval) {
+      clearInterval(this._metricsResetInterval);
+    }
+    this._metricsResetInterval = setInterval(() => {
       this.resetMetrics();
     }, 60 * 60 * 1000);
+  }
+
+  setPeriodicMetricsInterval(intervalId) {
+    if (this._periodicMetricsInterval) {
+      clearInterval(this._periodicMetricsInterval);
+    }
+    this._periodicMetricsInterval = intervalId;
+  }
+
+  cleanup() {
+    if (this._metricsResetInterval) {
+      clearInterval(this._metricsResetInterval);
+      this._metricsResetInterval = null;
+    }
+    if (this._periodicMetricsInterval) {
+      clearInterval(this._periodicMetricsInterval);
+      this._periodicMetricsInterval = null;
+    }
   }
 
   // Registrar un request bloqueado
@@ -167,13 +190,16 @@ const rateLimiterMonitor = new RateLimiterMonitor();
 
 // Configurar logging periódico de métricas de rate limiting
 const startRateLimitMetricsLogging = () => {
-  setInterval(() => {
+  const intervalId = setInterval(() => {
     const metrics = rateLimiterMonitor.getMetrics();
     
     if (metrics.summary.totalRequests > 0) {
       productionLoggerConfig.logBusinessEvent('RATE_LIMIT_METRICS', metrics, null, 'info');
     }
   }, 10 * 60 * 1000); // Cada 10 minutos
+
+  rateLimiterMonitor.setPeriodicMetricsInterval(intervalId);
+  return intervalId;
 };
 
 // Funciones de testing para rate limiting

@@ -23,6 +23,15 @@ router.get('/real-data', adminLimiter, protect, authorize('admin'), validateReal
 // Verificación de sistema listo para producción - Acceso público para CI/CD
 router.get('/ready-check', systemController.systemReadyCheck);
 
+// Health endpoint operativo para monitoreo
+router.get('/health', systemController.healthCheck);
+
+// Operaciones de backup (admin)
+router.get('/backups', adminLimiter, protect, authorize('admin'), systemController.listBackups);
+router.get('/backups/latest', adminLimiter, protect, authorize('admin'), systemController.getLatestBackup);
+router.post('/backups/run', adminLimiter, protect, authorize('admin'), systemController.runBackupNow);
+router.get('/backups/validate-latest', adminLimiter, protect, authorize('admin'), systemController.validateLatestBackup);
+
 /**
  * @route GET /api/system/port
  * @desc Obtiene el puerto actual del servidor

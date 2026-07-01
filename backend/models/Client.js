@@ -23,6 +23,8 @@ clientSchema.virtual('fullName').get(function() {
 // Índices para búsqueda y rendimiento
 clientSchema.index({ nombre: 1, apellido: 1 });
 clientSchema.index({ createdAt: -1 });
+clientSchema.index({ dni: 1 });
+clientSchema.index({ email: 1 });
 
 // Asegurar que los virtuales se incluyan en JSON
 clientSchema.set('toJSON', { virtuals: true });

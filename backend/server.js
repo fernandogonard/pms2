@@ -9,6 +9,8 @@ const WebSocket = require('ws');
 const http = require('http');
 const { logger, logHelpers } = require('./config/logger');
 const { initScheduledJobs } = require('./scheduledJobs');
+const { cleanupLoggerResources } = require('./config/productionLogger');
+const { rateLimiterMonitor } = require('./config/rateLimiterMonitor');
 const User = require('./models/User');
 
 dotenv.config({ path: './config/.env' });
@@ -326,6 +328,13 @@ mongoose.connection.on('error', (err) => {
 // ─── Graceful shutdown ───────────────────────────────────────────────────────
 const shutdown = async (signal) => {
   logger.info(`${signal} recibido. Cerrando servidor...`);
+
+  try {
+    cleanupLoggerResources();
+    rateLimiterMonitor.cleanup();
+  } catch (err) {
+    logger.warn('Error limpiando recursos de logging/rate limiter', err);
+  }
 
   server.close(() => {
     logger.info('Servidor HTTP cerrado');

@@ -12,11 +12,14 @@ const ReservationService = require('../services/ReservationService');
 const AvailabilityEngine = require('../services/availabilityEngine');
 const wsManager = require('../utils/wsManager');
 const notificationService = require('../services/notificationService');
+const { resolveAppMode } = require('../services/appModeService');
 
 // 🆕 Importar nuevo sistema de logging Winston
 const { logger } = require('../services/loggerService');
 const lockService = require('../services/lockService');
 const auditService = require('../services/auditService');
+const roomEventService = require('../services/roomEventService');
+const { logEndpointError } = require('../services/temporaryHttpDiagnostics');
 
 /**
  * Obtiene las reservas con checkout pendiente (que deberían haber terminado pero siguen activas)
@@ -129,11 +132,13 @@ const createReservation = async (req, res) => {
     let result;
     await lockService.withLock(lockKey, 15000, async () => {
       const isStaff = req.user?.role && ['admin', 'recepcionista'].includes(req.user.role);
+      const appMode = resolveAppMode(req);
 
       result = await ReservationService.createReservation(req.body, {
         session: txSupported ? session : undefined,
         userId: user,
-        isStaff
+        isStaff,
+        mode: appMode
       });
 
       // Broadcast WebSocket
@@ -141,7 +146,7 @@ const createReservation = async (req, res) => {
       if (wss) {
         wss.clients.forEach(wsclient => {
           if (wsclient.readyState === 1) {
-            wsclient.send(JSON.stringify({ type: 'reservation_created', reservation: result }));
+            wsclient.send(JSON.stringify({ type: 'reservation_created', mode: appMode, reservation: result }));
           }
         });
       }
@@ -158,6 +163,29 @@ const createReservation = async (req, res) => {
       { tipo, cantidad, checkIn, checkOut, totalPrice: result?.pricing?.total, roomsAssigned: result?.room?.length || 0, duration }
     );
     logger.performance.requestTime(req.method, req.originalUrl, duration, 201, user);
+
+    auditService.log({
+      action: 'CREATE_RESERVATION',
+      entity: 'Reservation',
+      entityId: result?._id,
+      userId: user,
+      userEmail: req.user?.email || req.body?.email || 'sistema',
+      userRole: req.user?.role || 'sistema',
+      description: `Reserva creada ${result?._id ? String(result._id).slice(-6).toUpperCase() : ''}`.trim(),
+      details: {
+        mode: resolveAppMode(req),
+        checkIn,
+        checkOut,
+        tipo,
+        cantidad
+      },
+      ip: req.ip,
+      requestId: req.requestId
+    });
+
+    await roomEventService.emitReservationCreated(result, {
+      requestId: req.requestId
+    });
 
     // Email confirmación — no bloquea la respuesta
     setImmediate(async () => {
@@ -265,6 +293,15 @@ const getReservations = async (req, res) => {
     });
   } catch (error) {
     const duration = Date.now() - startTime;
+    logEndpointError({
+      req,
+      endpoint: '/api/reservations',
+      statusCode: 500,
+      startedAt: startTime,
+      error,
+      category: 'Otro'
+    });
+
     logger.error('Error al obtener reservas', error, {
       userId: req.user.id,
       ip: req.ip,
@@ -372,13 +409,31 @@ const updateReservation = async (req, res) => {
 
     // Emitir evento WebSocket
     const wss = req.app.get('wss');
+    const appMode = resolveAppMode(req);
     if (wss) {
       wss.clients.forEach(client => {
         if (client.readyState === 1) {
-          client.send(JSON.stringify({ type: 'reservation_updated', reservation: finalReservation }));
+          client.send(JSON.stringify({ type: 'reservation_updated', mode: appMode, reservation: finalReservation }));
         }
       });
     }
+
+    auditService.log({
+      action: 'UPDATE_RESERVATION',
+      entity: 'Reservation',
+      entityId: finalReservation?._id,
+      userId: req.user?.userId || req.user?.id,
+      userEmail: req.user?.email || 'sistema',
+      userRole: req.user?.role || 'sistema',
+      description: `Reserva actualizada ${finalReservation?._id ? String(finalReservation._id).slice(-6).toUpperCase() : ''}`.trim(),
+      details: {
+        mode: appMode,
+        updates
+      },
+      ip: req.ip,
+      requestId: req.requestId
+    });
+
     res.json(finalReservation);
   } catch (error) {
     res.status(500).json({ message: 'Error al actualizar reserva.', error: error.message });
@@ -539,12 +594,45 @@ const assignRoomToReservation = async (req, res) => {
 
     // Lectura final y WebSocket fuera de la transacción
     const updatedReservation = await Reservation.findById(reservationId).populate('room client');
+    const appMode = resolveAppMode(req);
+
+    const previousRooms = existingRooms;
+    const currentRooms = Array.isArray(updatedReservation?.room)
+      ? updatedReservation.room.map(r => (r?._id ? String(r._id) : String(r)))
+      : [];
+
+    auditService.log({
+      action: 'ROOM_CHANGE',
+      entity: 'Reservation',
+      entityId: reservationId,
+      userId: req.user?.userId || req.user?.id,
+      userEmail: req.user?.email || 'sistema',
+      userRole: req.user?.role || 'sistema',
+      description: `Cambio de habitación en reserva ${String(reservationId).slice(-6).toUpperCase()}`,
+      details: {
+        mode: appMode,
+        replace,
+        previousRooms,
+        currentRooms,
+        replacedRooms: roomsToRelease,
+        incomingRooms
+      },
+      ip: req.ip,
+      requestId: req.requestId
+    });
+
+    await roomEventService.emitRoomChange(updatedReservation, {
+      previousRoomIds: previousRooms,
+      currentRoomIds: currentRooms,
+      requestId: req.requestId,
+      timestamp: new Date()
+    });
 
     const wss = req.app.get('wss');
     if (wss) {
       wss.clients.forEach(client => {
         if (client.readyState === 1) {
-          client.send(JSON.stringify({ type: 'reservation_updated', reservation: updatedReservation }));
+          client.send(JSON.stringify({ type: 'reservation_updated', mode: appMode, reservation: updatedReservation }));
         }
       });
     }
@@ -661,11 +749,13 @@ const unassignRoomsFromReservation = async (req, res) => {
 
     // WebSocket y respuesta fuera de la transacción
     const wss = req.app.get('wss');
+    const appMode = resolveAppMode(req);
     if (wss) {
       wss.clients.forEach(client => {
         if (client.readyState === 1) {
           client.send(JSON.stringify({
             type: 'reservation_unassigned',
+            mode: appMode,
             reservation: reservation,
             unassignedRooms: rooms
           }));
@@ -738,13 +828,35 @@ const deleteReservation = async (req, res) => {
     }
     
     const wss = req.app.get('wss');
+    const appMode = resolveAppMode(req);
     if (wss) {
       wss.clients.forEach(client => {
         if (client.readyState === 1) {
-          client.send(JSON.stringify({ type: 'reservation_deleted', reservationId: req.params.id }));
+          client.send(JSON.stringify({ type: 'reservation_deleted', mode: appMode, reservationId: req.params.id }));
         }
       });
     }
+
+    auditService.log({
+      action: 'DELETE_RESERVATION',
+      entity: 'Reservation',
+      entityId: deletedReservation?._id,
+      userId: req.user?.userId || req.user?.id,
+      userEmail: req.user?.email || 'sistema',
+      userRole: req.user?.role || 'sistema',
+      description: `Reserva eliminada ${deletedReservation?._id ? String(deletedReservation._id).slice(-6).toUpperCase() : ''}`.trim(),
+      details: {
+        mode: appMode,
+        status: deletedReservation?.status
+      },
+      ip: req.ip,
+      requestId: req.requestId
+    });
+
+    await roomEventService.emitReservationCancelled(deletedReservation, {
+      requestId: req.requestId
+    });
+
     res.json({ message: 'Reserva eliminada.' });
   } catch (error) {
     res.status(500).json({ message: 'Error al eliminar reserva.', error });
@@ -923,10 +1035,11 @@ const checkinReservation = async (req, res) => {
 
     // Emitir evento WebSocket (fuera de la transacción)
     const wss = req.app.get('wss');
+    const appMode = resolveAppMode(req);
     if (wss) {
       wss.clients.forEach(client => {
         if (client.readyState === 1) {
-          client.send(JSON.stringify({ type: 'reservation_checkin', reservation }));
+          client.send(JSON.stringify({ type: 'reservation_checkin', mode: appMode, reservation }));
         }
       });
     }
@@ -939,8 +1052,14 @@ const checkinReservation = async (req, res) => {
       userEmail: req.user?.email || 'sistema',
       userRole: req.user?.role || 'sistema',
       description: `Check-in realizado en reserva ${String(id).slice(-6).toUpperCase()}`,
-      ip: req.ip
+      ip: req.ip,
+      requestId: req.requestId
     });
+
+    await roomEventService.emitCheckin(reservation, {
+      requestId: req.requestId
+    });
+
     res.json({
       message: 'Check-in procesado exitosamente',
       reservation
@@ -974,10 +1093,11 @@ const checkoutReservation = async (req, res) => {
 
     // Emitir evento WebSocket (fuera de la transacción)
     const wss = req.app.get('wss');
+    const appMode = resolveAppMode(req);
     if (wss) {
       wss.clients.forEach(client => {
         if (client.readyState === 1) {
-          client.send(JSON.stringify({ type: 'reservation_checkout', reservation }));
+          client.send(JSON.stringify({ type: 'reservation_checkout', mode: appMode, reservation }));
         }
       });
     }
@@ -1002,8 +1122,14 @@ const checkoutReservation = async (req, res) => {
       userEmail: req.user?.email || 'sistema',
       userRole: req.user?.role || 'sistema',
       description: `Check-out realizado en reserva ${String(id).slice(-6).toUpperCase()}`,
-      ip: req.ip
+      ip: req.ip,
+      requestId: req.requestId
     });
+
+    await roomEventService.emitCheckout(reservation, {
+      requestId: req.requestId
+    });
+
     res.json({
       message: 'Check-out procesado exitosamente',
       reservation

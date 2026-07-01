@@ -8,7 +8,8 @@ const ROOM_STATES = {
   DISPONIBLE: 'disponible',
   OCUPADA: 'ocupada', 
   LIMPIEZA: 'limpieza',
-  MANTENIMIENTO: 'mantenimiento'
+  MANTENIMIENTO: 'mantenimiento',
+  FUERA_DE_SERVICIO: 'fuera de servicio'
 };
 
 /**
@@ -29,20 +30,29 @@ const ROOM_TRANSITIONS = {
   [ROOM_STATES.DISPONIBLE]: [
     ROOM_STATES.OCUPADA,      // Check-in
     ROOM_STATES.LIMPIEZA,     // Limpieza manual
-    ROOM_STATES.MANTENIMIENTO // Mantenimiento
+    ROOM_STATES.MANTENIMIENTO, // Mantenimiento
+    ROOM_STATES.FUERA_DE_SERVICIO // Bloqueo operativo
   ],
   [ROOM_STATES.OCUPADA]: [
     ROOM_STATES.LIMPIEZA,     // Check-out normal
     ROOM_STATES.DISPONIBLE,   // Check-out sin limpieza (excepcional)
-    ROOM_STATES.MANTENIMIENTO // Emergencia
+    ROOM_STATES.MANTENIMIENTO, // Emergencia
+    ROOM_STATES.FUERA_DE_SERVICIO // Incidencia operativa crítica
   ],
   [ROOM_STATES.LIMPIEZA]: [
     ROOM_STATES.DISPONIBLE,   // Limpieza completada
-    ROOM_STATES.MANTENIMIENTO // Problema detectado durante limpieza
+    ROOM_STATES.MANTENIMIENTO, // Problema detectado durante limpieza
+    ROOM_STATES.FUERA_DE_SERVICIO // Falla detectada durante limpieza
   ],
   [ROOM_STATES.MANTENIMIENTO]: [
     ROOM_STATES.DISPONIBLE,   // Mantenimiento completado
-    ROOM_STATES.LIMPIEZA      // Requiere limpieza después de mantenimiento
+    ROOM_STATES.LIMPIEZA,      // Requiere limpieza después de mantenimiento
+    ROOM_STATES.FUERA_DE_SERVICIO // Escalada de incidente
+  ],
+  [ROOM_STATES.FUERA_DE_SERVICIO]: [
+    ROOM_STATES.MANTENIMIENTO, // Reparación técnica en curso
+    ROOM_STATES.DISPONIBLE,    // Habilitación directa
+    ROOM_STATES.LIMPIEZA       // Habilitación con limpieza previa
   ]
 };
 

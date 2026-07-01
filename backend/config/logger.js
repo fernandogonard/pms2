@@ -19,6 +19,14 @@ const logHelpers = {
 	system: {
 		dbConnected: () => logger.info('MongoDB conectado exitosamente'),
 		dbError: (err) => logger.error('Error de conexión MongoDB', { error: serializeError(err) })
+	},
+	security: {
+		rateLimitExceeded: (ip, endpoint) =>
+			logger.warn('Rate limit excedido', { ip, endpoint }),
+		bruteForce: (ip, attempts) =>
+			logger.warn('Posible fuerza bruta detectada', { ip, attempts }),
+		maliciousRequest: (ip, path, value) =>
+			logger.warn('Request malicioso detectado', { ip, path, value })
 	}
 };
 

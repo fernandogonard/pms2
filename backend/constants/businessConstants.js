@@ -17,7 +17,8 @@ const ROOM_STATUS = {
   DISPONIBLE: 'disponible',
   OCUPADA: 'ocupada', 
   LIMPIEZA: 'limpieza',
-  MANTENIMIENTO: 'mantenimiento'
+  MANTENIMIENTO: 'mantenimiento',
+  FUERA_DE_SERVICIO: 'fuera de servicio'
 };
 
 // Array de estados válidos para validaciones

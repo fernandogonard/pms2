@@ -5,8 +5,294 @@ const Room = require('../models/Room');
 const Reservation = require('../models/Reservation');
 const User = require('../models/User');
 const Client = require('../models/Client');
+const mongoose = require('mongoose');
+const fs = require('fs');
+const path = require('path');
 const ErrorHandlingService = require('../services/errorHandlingService');
 const { ROOM_STATES } = require('../services/stateValidationService');
+const { createBackup } = require('../scripts/createBackup');
+const auditService = require('../services/auditService');
+const { logger } = require('../services/loggerService');
+const { logEndpointError } = require('../services/temporaryHttpDiagnostics');
+
+const BACKUP_DIR = path.resolve(__dirname, '../backups');
+
+function getLatestBackupSnapshot() {
+  if (!fs.existsSync(BACKUP_DIR)) {
+    return {
+      directoryExists: false,
+      totalBackups: 0,
+      latestBackup: null
+    };
+  }
+
+  const files = fs.readdirSync(BACKUP_DIR)
+    .filter(file => file.startsWith('backup_json_'));
+
+  if (files.length === 0) {
+    return {
+      directoryExists: true,
+      totalBackups: 0,
+      latestBackup: null
+    };
+  }
+
+  const sorted = files
+    .map(file => {
+      const fullPath = path.join(BACKUP_DIR, file);
+      const stat = fs.statSync(fullPath);
+      return {
+        file,
+        sizeBytes: stat.size,
+        modifiedAt: stat.mtime.toISOString()
+      };
+    })
+    .sort((a, b) => new Date(b.modifiedAt) - new Date(a.modifiedAt));
+
+  return {
+    directoryExists: true,
+    totalBackups: sorted.length,
+    latestBackup: sorted[0]
+  };
+}
+
+/**
+ * Health check operativo para monitoreo real
+ * @route GET /api/system/health
+ */
+exports.healthCheck = ErrorHandlingService.asyncWrapper(async (req, res) => {
+  const startedAt = Date.now();
+  try {
+    const dbState = mongoose.connection.readyState;
+    const dbStatus = ['disconnected', 'connected', 'connecting', 'disconnecting'][dbState] || 'unknown';
+    const pkg = require('../package.json');
+    const mem = process.memoryUsage();
+    const backupSnapshot = getLatestBackupSnapshot();
+
+    let dbPingMs = null;
+    let dbPingOk = false;
+
+    if (dbState === 1 && mongoose.connection.db) {
+      try {
+        const pingStart = Date.now();
+        await mongoose.connection.db.admin().ping();
+        dbPingMs = Date.now() - pingStart;
+        dbPingOk = true;
+      } catch (_err) {
+        dbPingOk = false;
+      }
+    }
+
+    const nowIso = new Date().toISOString();
+    const processHealth = {
+      pid: process.pid,
+      nodeVersion: process.version,
+      platform: process.platform,
+      uptimeSeconds: Math.floor(process.uptime())
+    };
+
+    const components = {
+      database: {
+        status: dbState === 1 && dbPingOk ? 'ok' : 'degraded',
+        connectionState: dbStatus,
+        pingMs: dbPingMs
+      },
+      backups: {
+        status: backupSnapshot.totalBackups > 0 ? 'ok' : 'degraded',
+        ...backupSnapshot
+      }
+    };
+
+    const status = (components.database.status === 'ok') ? 'ok' : 'degraded';
+
+    const payload = {
+      status,
+      service: 'pms-backend',
+      version: pkg.version || '1.0.0',
+      environment: process.env.NODE_ENV || 'development',
+      timestamp: nowIso,
+      process: processHealth,
+      components,
+      memory: {
+        rssBytes: mem.rss,
+        heapUsedBytes: mem.heapUsed,
+        heapTotalBytes: mem.heapTotal,
+        externalBytes: mem.external,
+        rssMB: Number((mem.rss / (1024 * 1024)).toFixed(2)),
+        heapUsedMB: Number((mem.heapUsed / (1024 * 1024)).toFixed(2)),
+        heapTotalMB: Number((mem.heapTotal / (1024 * 1024)).toFixed(2))
+      },
+      checks: {
+        databaseConnected: dbState === 1,
+        databasePing: dbPingOk,
+        backupsAvailable: backupSnapshot.totalBackups > 0
+      }
+    };
+
+    return res.status(status === 'ok' ? 200 : 503).json(payload);
+  } catch (error) {
+    logEndpointError({
+      req,
+      endpoint: '/api/system/health',
+      statusCode: 500,
+      startedAt,
+      error,
+      category: 'Otro'
+    });
+
+    logger.error('healthCheck failed', error, {
+      requestId: req.requestId,
+      endpoint: '/api/system/health',
+      durationMs: Date.now() - startedAt
+    });
+
+    return res.status(500).json({
+      status: 'error',
+      message: 'Health check failed',
+      requestId: req.requestId
+    });
+  }
+});
+
+/**
+ * Retorna metadata del último backup disponible
+ * @route GET /api/system/backups/latest
+ */
+exports.getLatestBackup = ErrorHandlingService.asyncWrapper(async (_req, res) => {
+  const snapshot = getLatestBackupSnapshot();
+  if (!snapshot.latestBackup) {
+    return res.status(404).json({
+      success: false,
+      error: 'No hay backups disponibles'
+    });
+  }
+
+  res.json({
+    success: true,
+    backup: snapshot.latestBackup,
+    totalBackups: snapshot.totalBackups
+  });
+});
+
+/**
+ * Lista backups disponibles
+ * @route GET /api/system/backups
+ */
+exports.listBackups = ErrorHandlingService.asyncWrapper(async (_req, res) => {
+  if (!fs.existsSync(BACKUP_DIR)) {
+    return res.json({ success: true, backups: [], count: 0 });
+  }
+
+  const backups = fs.readdirSync(BACKUP_DIR)
+    .filter(file => file.startsWith('backup_json_'))
+    .map(file => {
+      const fullPath = path.join(BACKUP_DIR, file);
+      const stat = fs.statSync(fullPath);
+      return {
+        file,
+        sizeBytes: stat.size,
+        modifiedAt: stat.mtime.toISOString()
+      };
+    })
+    .sort((a, b) => new Date(b.modifiedAt) - new Date(a.modifiedAt));
+
+  res.json({ success: true, backups, count: backups.length });
+});
+
+/**
+ * Ejecuta backup manual
+ * @route POST /api/system/backups/run
+ */
+exports.runBackupNow = ErrorHandlingService.asyncWrapper(async (req, res) => {
+  const result = await createBackup();
+  if (!result.success) {
+    auditService.log({
+      action: 'BACKUP_MANUAL_FAILED',
+      entity: 'System',
+      userId: req.user?.userId || req.user?.id,
+      userEmail: req.user?.email || 'sistema',
+      userRole: req.user?.role || 'sistema',
+      description: 'Backup manual fallido',
+      details: { error: result.error },
+      ip: req.ip,
+      requestId: req.requestId
+    });
+    return res.status(500).json({ success: false, error: result.error });
+  }
+
+  auditService.log({
+    action: 'BACKUP_MANUAL',
+    entity: 'System',
+    entityId: result?.timestamp,
+    userId: req.user?.userId || req.user?.id,
+    userEmail: req.user?.email || 'sistema',
+    userRole: req.user?.role || 'sistema',
+    description: 'Backup manual ejecutado',
+    details: {
+      file: result?.file,
+      sizeMB: result?.size,
+      stats: result?.stats
+    },
+    ip: req.ip,
+    requestId: req.requestId
+  });
+
+  res.json({ success: true, backup: result });
+});
+
+/**
+ * Valida estructura del último backup para asegurar restaurabilidad
+ * @route GET /api/system/backups/validate-latest
+ */
+exports.validateLatestBackup = ErrorHandlingService.asyncWrapper(async (_req, res) => {
+  if (!fs.existsSync(BACKUP_DIR)) {
+    return res.status(404).json({ success: false, error: 'No existe directorio de backups' });
+  }
+
+  const files = fs.readdirSync(BACKUP_DIR)
+    .filter(file => file.startsWith('backup_json_'))
+    .sort((a, b) => fs.statSync(path.join(BACKUP_DIR, b)).mtime.getTime() - fs.statSync(path.join(BACKUP_DIR, a)).mtime.getTime());
+
+  if (files.length === 0) {
+    return res.status(404).json({ success: false, error: 'No hay backups para validar' });
+  }
+
+  const latestFile = files[0];
+  const fullPath = path.join(BACKUP_DIR, latestFile);
+  const raw = fs.readFileSync(fullPath, 'utf8');
+  const parsed = JSON.parse(raw);
+
+  const hasRequiredShape = !!(
+    parsed &&
+    parsed.metadata &&
+    Array.isArray(parsed.rooms) &&
+    Array.isArray(parsed.users) &&
+    Array.isArray(parsed.clients) &&
+    Array.isArray(parsed.reservations)
+  );
+
+  if (!hasRequiredShape) {
+    return res.status(422).json({
+      success: false,
+      file: latestFile,
+      valid: false,
+      error: 'Estructura inválida de backup'
+    });
+  }
+
+  res.json({
+    success: true,
+    file: latestFile,
+    valid: true,
+    metadata: parsed.metadata,
+    stats: {
+      rooms: parsed.rooms.length,
+      users: parsed.users.length,
+      clients: parsed.clients.length,
+      reservations: parsed.reservations.length
+    }
+  });
+});
 
 /**
  * Obtiene estadísticas generales del sistema

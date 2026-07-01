@@ -7,9 +7,10 @@ const {
   validateRoomBusinessRules,
   getAllowedStates 
 } = require('../services/stateValidationService');
-const { calculateRoomStates } = require('../services/AvailabilityService');
-const RoomCalendar = require('../models/RoomCalendar');
 const AvailabilityEngine = require('../services/availabilityEngine');
+const { resolveAppMode, buildModeQuery } = require('../services/appModeService');
+const auditService = require('../services/auditService');
+const { logEndpointError } = require('../services/temporaryHttpDiagnostics');
 
 // ðŸ†• Importar nuevo sistema de logging Winston
 const { logger } = require('../services/loggerService');
@@ -31,8 +32,10 @@ exports.getRoomTypes = async (req, res) => {
  * SINGLE SOURCE OF TRUTH
  */
 exports.getRoomsStatus = async (req, res) => {
+  const startedAt = Date.now();
   try {
     const { start, days = 14 } = req.query;
+    const appMode = resolveAppMode(req);
 
     // Validar formato de fecha
     if (!start || !/^\d{4}-\d{2}-\d{2}$/.test(start)) {
@@ -56,10 +59,20 @@ exports.getRoomsStatus = async (req, res) => {
     res.set('Cache-Control', 'public, max-age=10, must-revalidate');
     res.set('Vary', 'Accept-Encoding');
 
-    const data = await AvailabilityEngine.getRoomsAvailability(startDate, endDate);
+    const data = await AvailabilityEngine.getRoomsAvailability(startDate, endDate, appMode);
 
+    res.set('X-App-Mode', appMode);
     res.json(data);
   } catch (error) {
+    logEndpointError({
+      req,
+      endpoint: '/api/rooms/status',
+      statusCode: 500,
+      startedAt,
+      error,
+      category: 'Otro'
+    });
+
     logger.error('[RoomsStatus Error]', error);
     res.status(500).json({
       error: 'Failed to fetch availability',
@@ -71,6 +84,7 @@ exports.getRoomsStatus = async (req, res) => {
 // Crear habitaciÃ³n
 exports.createRoom = ErrorHandlingService.asyncWrapper(async (req, res) => {
   const { number, floor, type, price, status } = req.body;
+  const appMode = resolveAppMode(req);
   
   // Validar campos requeridos
   ErrorHandlingService.validateRequiredFields(
@@ -80,7 +94,7 @@ exports.createRoom = ErrorHandlingService.asyncWrapper(async (req, res) => {
   );
   
   // Verificar si ya existe
-  const exists = await Room.findOne({ number });
+  const exists = await Room.findOne({ number, mode: appMode });
   if (exists) {
     throw ErrorHandlingService.createBusinessError(
       'El nÃºmero de habitaciÃ³n ya existe', 
@@ -88,7 +102,7 @@ exports.createRoom = ErrorHandlingService.asyncWrapper(async (req, res) => {
     );
   }
   
-  const room = new Room({ number, floor, type, price, status });
+  const room = new Room({ number, floor, type, price, status, mode: appMode });
   await room.save();
   
   res.status(201).json({
@@ -101,7 +115,9 @@ exports.createRoom = ErrorHandlingService.asyncWrapper(async (req, res) => {
 // Obtener todas las habitaciones
 exports.getRooms = async (req, res) => {
   try {
-    const rooms = await Room.find().sort({ number: 1 }).lean();
+    const appMode = resolveAppMode(req);
+    const rooms = await Room.find(buildModeQuery(appMode)).sort({ number: 1 }).lean();
+    res.set('X-App-Mode', appMode);
     res.json(rooms);
   } catch (error) {
     res.status(500).json({ message: 'Error al obtener habitaciones.', error });
@@ -111,8 +127,10 @@ exports.getRooms = async (req, res) => {
 // Obtener una habitaciÃ³n por ID
 exports.getRoomById = async (req, res) => {
   try {
-    const room = await Room.findById(req.params.id);
+    const appMode = resolveAppMode(req);
+    const room = await Room.findOne({ _id: req.params.id, ...buildModeQuery(appMode) });
     if (!room) return res.status(404).json({ message: 'HabitaciÃ³n no encontrada.' });
+    res.set('X-App-Mode', appMode);
     res.json(room);
   } catch (error) {
     res.status(500).json({ message: 'Error al obtener habitaciÃ³n.', error });
@@ -169,11 +187,13 @@ exports.updateRoom = async (req, res) => {
     // Emitir evento WebSocket si hay cambio de estado
     if (req.body.status && req.body.status !== currentRoom.status) {
       const wss = req.app.get('wss');
+      const appMode = resolveAppMode(req);
       if (wss) {
         wss.clients.forEach(client => {
           if (client.readyState === 1) {
             client.send(JSON.stringify({ 
               type: 'room_state_changed', 
+              mode: appMode,
               room: { 
                 id: room._id, 
                 number: room.number, 
@@ -225,6 +245,7 @@ exports.getAvailableRooms = async (req, res) => {
     });
 
     const { type, checkIn, checkOut, cantidad } = req.query;
+    const appMode = resolveAppMode(req);
     
     // Validar parámetros requeridos usando ValidationService
     const { ValidationService } = require('../services/validationService');
@@ -271,7 +292,7 @@ exports.getAvailableRooms = async (req, res) => {
     // PASO 1: Obtener TODAS las habitaciones del tipo solicitado
     let allRooms;
     try {
-      allRooms = await Room.find({ type }).sort({ number: 1 }).lean();
+      allRooms = await Room.find({ type, ...buildModeQuery(appMode) }).sort({ number: 1 }).lean();
       if (!allRooms || allRooms.length === 0) {
         logger.warn(`[${timestamp}] No se encontraron habitaciones para el tipo solicitado`, { type });
       }
@@ -304,6 +325,7 @@ exports.getAvailableRooms = async (req, res) => {
     let overlappingReservations;
     try {
       overlappingReservations = await Reservation.find({
+        ...buildModeQuery(appMode),
         status: { $in: ['reservada', 'checkin'] },
         checkIn: { $lt: checkOutDate },
         checkOut: { $gt: checkInDate }
@@ -576,11 +598,13 @@ exports.markRoomAsClean = async (req, res) => {
     
     // Emitir evento WebSocket para actualizar calendario
     const wss = req.app.get('wss');
+    const appMode = resolveAppMode(req);
     if (wss) {
       wss.clients.forEach(client => {
         if (client.readyState === 1) {
           client.send(JSON.stringify({ 
-            type: 'room_cleaned', 
+            type: 'room_cleaned',
+            mode: appMode,
             room: { id: room._id, number: room.number, status: room.status }
           }));
         }
@@ -629,13 +653,21 @@ exports.completeHousekeeping = async (req, res) => {
     room.pendingHousekeeping = null;
     room.pendingHousekeepingAt = null;
     room.lastCleaning = new Date();
+    room.housekeepingState = newStatus === 'disponible' ? 'INSPECTED' : 'CLEAN';
+    room.housekeepingStateUpdatedAt = new Date();
+    room.housekeepingStateUpdatedBy = req.user?.id || 'housekeeping';
     await room.save();
 
     const wss = req.app.get('wss');
+    const appMode = resolveAppMode(req);
     if (wss) {
       wss.clients.forEach(client => {
         if (client.readyState === 1) {
-          client.send(JSON.stringify({ type: 'room_task_completed', room: { id: room._id, number: room.number, status: room.status } }));
+          client.send(JSON.stringify({
+            type: 'room_task_completed',
+            mode: appMode,
+            room: { id: room._id, number: room.number, status: room.status, housekeepingState: room.housekeepingState }
+          }));
         }
       });
     }
@@ -662,12 +694,14 @@ exports.markRoomsAsClean = async (req, res) => {
     
     // Emitir evento WebSocket para cada habitaciÃ³n
     const wss = req.app.get('wss');
+    const appMode = resolveAppMode(req);
     if (wss) {
       rooms.forEach(room => {
         wss.clients.forEach(client => {
           if (client.readyState === 1) {
             client.send(JSON.stringify({ 
-              type: 'room_cleaned', 
+              type: 'room_cleaned',
+              mode: appMode,
               room: { id: room._id, number: room.number, status: room.status }
             }));
           }
@@ -691,57 +725,111 @@ exports.markRoomsAsClean = async (req, res) => {
 // PUT /api/rooms/:id/set-status - Cambio manual de estado (admin + recepcionista)
 exports.setRoomStatus = async (req, res) => {
   try {
-    const { status } = req.body;
+    const { status, housekeepingState } = req.body;
     const ALLOWED = ['disponible', 'limpieza', 'mantenimiento', 'ocupada'];
-    if (!status || !ALLOWED.includes(status)) {
+    const ALLOWED_HK = ['DIRTY', 'CLEAN', 'INSPECTED', 'IN_PROGRESS', 'DND'];
+
+    if (!status && !housekeepingState) {
+      return res.status(400).json({ message: 'Debe enviar status o housekeepingState' });
+    }
+
+    if (status && !ALLOWED.includes(status)) {
       return res.status(400).json({ message: `Estado inválido. Valores permitidos: ${ALLOWED.join(', ')}` });
+    }
+
+    if (housekeepingState && !ALLOWED_HK.includes(housekeepingState)) {
+      return res.status(400).json({ message: `housekeepingState inválido. Valores permitidos: ${ALLOWED_HK.join(', ')}` });
     }
     const room = await Room.findById(req.params.id);
     if (!room) return res.status(404).json({ message: 'Habitación no encontrada' });
     const prev = room.status;
+    const prevHousekeepingState = room.housekeepingState;
 
-    // Validar transición de estado permitida
-    const transition = validateRoomStateTransition(prev, status);
-    if (!transition.valid) {
-      return res.status(400).json({ message: transition.message });
-    }
-
-    room.status = status;
-    if (status === 'disponible') {
-      room.lastCleaning = new Date();
-      room.pendingHousekeeping = null;
-      room.pendingHousekeepingAt = null;
-    } else if (status === 'limpieza') {
-      // Asignar tarea de limpieza para evitar estado huérfano
-      if (!room.pendingHousekeeping) {
-        room.pendingHousekeeping = 'limpieza_profunda';
-        room.pendingHousekeepingAt = new Date();
+    if (status) {
+      // Validar transición de estado permitida
+      const transition = validateRoomStateTransition(prev, status);
+      if (!transition.valid) {
+        return res.status(400).json({ message: transition.message });
       }
-    } else if (status === 'ocupada') {
-      // Verificar que exista una reserva activa para esta habitación
-      const Reservation = require('../models/Reservation');
-      const activeRes = await Reservation.findOne({
-        room: room._id,
-        status: 'checkin'
-      });
-      if (!activeRes) {
-        return res.status(400).json({ 
-          message: `No se puede marcar habitación #${room.number} como ocupada sin una reserva con check-in activo. Use el proceso de check-in.` 
+
+      room.status = status;
+      if (status === 'disponible') {
+        room.lastCleaning = new Date();
+        room.pendingHousekeeping = null;
+        room.pendingHousekeepingAt = null;
+        room.housekeepingState = room.housekeepingState === 'DND' ? 'DND' : 'CLEAN';
+      } else if (status === 'limpieza') {
+        // Asignar tarea de limpieza para evitar estado huérfano
+        if (!room.pendingHousekeeping) {
+          room.pendingHousekeeping = 'limpieza_profunda';
+          room.pendingHousekeepingAt = new Date();
+        }
+        room.housekeepingState = 'IN_PROGRESS';
+      } else if (status === 'ocupada') {
+        // Verificar que exista una reserva activa para esta habitación
+        const Reservation = require('../models/Reservation');
+        const activeRes = await Reservation.findOne({
+          room: room._id,
+          status: 'checkin'
         });
+        if (!activeRes) {
+          return res.status(400).json({
+            message: `No se puede marcar habitación #${room.number} como ocupada sin una reserva con check-in activo. Use el proceso de check-in.`
+          });
+        }
+        room.pendingHousekeeping = null;
+        room.pendingHousekeepingAt = null;
+      } else if (status === 'mantenimiento') {
+        // Limpiar tareas de housekeeping pendientes al cambiar a mantenimiento
+        room.pendingHousekeeping = null;
+        room.pendingHousekeepingAt = null;
       }
-      room.pendingHousekeeping = null;
-      room.pendingHousekeepingAt = null;
-    } else if (status === 'mantenimiento') {
-      // Limpiar tareas de housekeeping pendientes al cambiar a mantenimiento
-      room.pendingHousekeeping = null;
-      room.pendingHousekeepingAt = null;
     }
+
+    if (housekeepingState) {
+      room.housekeepingState = housekeepingState;
+    }
+
+    room.housekeepingStateUpdatedAt = new Date();
+    room.housekeepingStateUpdatedBy = req.user?.id || 'manual';
+
     await room.save();
     const wss = req.app.get('wss');
+    const appMode = resolveAppMode(req);
     if (wss) wss.clients.forEach(c => {
-      if (c.readyState === 1) c.send(JSON.stringify({ type: 'room_state_changed', room: { id: room._id, number: room.number, status: room.status, previousStatus: prev } }));
+      if (c.readyState === 1) c.send(JSON.stringify({ type: 'room_state_changed', mode: appMode, room: {
+        id: room._id,
+        number: room.number,
+        status: room.status,
+        previousStatus: prev,
+        housekeepingState: room.housekeepingState,
+        previousHousekeepingState: prevHousekeepingState
+      } }));
     });
-    res.json({ message: `Habitación #${room.number}: ${prev} → ${status}`, room });
+    const message = status
+      ? `Habitación #${room.number}: ${prev} → ${room.status}`
+      : `Housekeeping #${room.number}: ${prevHousekeepingState || 'N/A'} → ${room.housekeepingState}`;
+
+    auditService.log({
+      action: 'ROOM_CHANGE',
+      entity: 'Room',
+      entityId: room._id,
+      userId: req.user?.id || req.user?.userId,
+      userEmail: req.user?.email || 'sistema',
+      userRole: req.user?.role || 'sistema',
+      description: message,
+      details: {
+        mode: appMode,
+        previousStatus: prev,
+        newStatus: room.status,
+        previousHousekeepingState: prevHousekeepingState,
+        newHousekeepingState: room.housekeepingState
+      },
+      ip: req.ip,
+      requestId: req.requestId
+    });
+
+    res.json({ message, room });
   } catch (error) {
     res.status(500).json({ message: 'Error cambiando estado', error: error.message });
   }
@@ -884,6 +972,7 @@ exports.debugRoomStatus = async (req, res) => {
 exports.getRoomStatus = async (req, res) => {
   try {
     const { start = new Date().toISOString().split('T')[0], days = 14, debugRoom } = req.query;
+    const appMode = resolveAppMode(req);
     // Validar formato de fecha
     if (!/^\d{4}-\d{2}-\d{2}$/.test(start)) {
       return res.status(400).json({ error: 'Formato de fecha inválido. Usar YYYY-MM-DD' });
@@ -891,8 +980,10 @@ exports.getRoomStatus = async (req, res) => {
     const daysInt = Math.min(Math.max(1, parseInt(days) || 14), 90);
     const debugRoomNumber = Number.parseInt(debugRoom, 10);
     const status = await AvailabilityEngine.getRoomStatus(start, daysInt, {
-      debugRoomNumber: Number.isNaN(debugRoomNumber) ? null : debugRoomNumber
+      debugRoomNumber: Number.isNaN(debugRoomNumber) ? null : debugRoomNumber,
+      mode: appMode
     });
+    res.set('X-App-Mode', appMode);
     res.json(status);
   } catch (error) {
     logger.error('Error en getRoomStatus', { error: error.message });

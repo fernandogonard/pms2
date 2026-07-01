@@ -5,6 +5,7 @@ const Room = require('../models/Room');
 const { logger } = require('../config/logger');
 const { markRoomAsClean, markRoomsAsClean, getRoomsInCleaning } = require('../services/roomAssignmentService');
 const { validateRoomStateTransition } = require('../services/stateValidationService');
+const { resolveAppMode, buildModeQuery } = require('../services/appModeService');
 
 /**
  * @route   GET /api/rooms/cleaning
@@ -13,7 +14,8 @@ const { validateRoomStateTransition } = require('../services/stateValidationServ
  */
 exports.getRoomsInCleaning = async (req, res) => {
   try {
-    const rooms = await Room.find({ status: 'limpieza' }).sort({ number: 1 });
+    const appMode = resolveAppMode(req);
+    const rooms = await Room.find({ status: 'limpieza', ...buildModeQuery(appMode) }).sort({ number: 1 });
     
     res.json({
       success: true,
@@ -64,11 +66,13 @@ exports.markRoomAsClean = async (req, res) => {
     
     // Notificar por WebSocket
     const wss = req.app.get('wss');
+    const appMode = resolveAppMode(req);
     if (wss) {
       wss.clients.forEach(client => {
         if (client.readyState === 1) {
           client.send(JSON.stringify({
             type: 'room_state_changed',
+            mode: appMode,
             room: {
               id: room._id,
               number: room.number,
@@ -136,11 +140,13 @@ exports.markRoomsAsClean = async (req, res) => {
       
       // Notificar por WebSocket
       const wss = req.app.get('wss');
+      const appMode = resolveAppMode(req);
       if (wss) {
         wss.clients.forEach(client => {
           if (client.readyState === 1) {
             client.send(JSON.stringify({
               type: 'room_state_changed',
+              mode: appMode,
               room: {
                 id: room._id,
                 number: room.number,

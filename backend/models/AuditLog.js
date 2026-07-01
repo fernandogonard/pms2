@@ -15,6 +15,11 @@ const auditLogSchema = new mongoose.Schema({
       'CLIENTE_CREADO', 'CLIENTE_EDITADO', 'CLIENTE_ELIMINADO',
       'USUARIO_CREADO', 'USUARIO_EDITADO', 'USUARIO_ELIMINADO',
       'LOGIN', 'LOGOUT',
+      'CREATE_RESERVATION', 'UPDATE_RESERVATION', 'DELETE_RESERVATION',
+      'CHECKIN', 'CHECKOUT',
+      'ROOM_CHANGE',
+      'BACKUP_MANUAL', 'BACKUP_MANUAL_FAILED',
+      'PASSWORD_RESET_REQUESTED', 'PASSWORD_RESET_COMPLETED',
       'PRECIO_ACTUALIZADO',
       'OTRO'
     ]
@@ -23,10 +28,11 @@ const auditLogSchema = new mongoose.Schema({
   entityId: { type: String },                    // ID del objeto afectado
   userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   userEmail: { type: String, required: true },
-  userRole: { type: String, enum: ['admin', 'recepcionista', 'sistema'], default: 'sistema' },
+  userRole: { type: String, enum: ['admin', 'recepcionista', 'limpieza', 'cliente', 'sistema'], default: 'sistema' },
   description: { type: String, required: true }, // Mensaje legible
   details: { type: mongoose.Schema.Types.Mixed }, // Datos extra (before/after, amounts, etc.)
   ip: { type: String },
+  requestId: { type: String },
   timestamp: { type: Date, default: Date.now }
 }, {
   timestamps: false,
@@ -38,5 +44,7 @@ auditLogSchema.index({ timestamp: -1 });
 auditLogSchema.index({ userId: 1, timestamp: -1 });
 auditLogSchema.index({ entity: 1, entityId: 1 });
 auditLogSchema.index({ action: 1 });
+auditLogSchema.index({ requestId: 1, timestamp: -1 });
+auditLogSchema.index({ entity: 1, action: 1, timestamp: -1 });
 
 module.exports = mongoose.model('AuditLog', auditLogSchema);
