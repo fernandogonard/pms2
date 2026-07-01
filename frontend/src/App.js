@@ -5,7 +5,7 @@ import AppRouter from './AppRouter';
 import PWAStatus, { OfflineBanner, InstallPrompt } from './components/PWAStatus';
 import ErrorBoundary from './components/ErrorBoundary';
 import { useOffline } from './hooks/useOffline';
-import './theme-2026.css';
+
 function App() {
   const { isOnline } = useOffline();
 
