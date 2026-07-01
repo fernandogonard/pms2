@@ -5,7 +5,7 @@ import ReactDOM from 'react-dom/client';
 import './index.css';
 import App from './App';
 import { initMonitoring } from './utils/monitoring';
-
+import './theme-2026.css';
 // Inicializar monitoreo global (error handlers, Sentry si REACT_APP_SENTRY_DSN está configurado)
 initMonitoring();
 
